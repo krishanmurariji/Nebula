@@ -1,80 +1,92 @@
-# \# 🌌 Nebula Music Player
+🌌 Nebula Music Player
+<p align="center"> <b>A Premium Neumorphic Music Experience built with Flutter</b> </p> <p align="center"> 🎵 Gramophone UI • ⚡ Smooth Performance • 🫧 Soft UI • 🌍 YouTube Streaming </p>
+📸 Screenshots
+<!-- Replace these paths with your actual images --> <p align="center"> ![WhatsApp Image 2026-03-24 at 8 02 57 AM](https://github.com/user-attachments/assets/fd27c474-a452-4558-a41a-523f43a63e10)
+<img src="screenshots/home.png" width="250"/> <img src="screenshots/player.png" width="250"/> <img src="screenshots/now_playing.png" width="250"/> </p>
+✨ Features
+🎙️ Interactive Gramophone UI
+Realistic vinyl rotation with dynamic needle interaction based on playback
+🫧 Neumorphic Design System
+Clean soft UI with light & dark mode support
+🎯 Haptic Feedback
+Feel every interaction — skip, play, like
+🔄 Sync-Glow Animation
+Record label glows with playback state
+🌍 YouTube Audio Streaming
+High-quality streaming via youtube_explode_dart
+🛠️ Scalable Architecture
+Powered by Riverpod 2.0
+🛠️ Tech Stack
+Category	Technology
+Framework	Flutter 3.x
+State Management	Riverpod
+Audio Engine	just_audio, audio_service
+API & Networking	http, youtube_explode_dart
+UI/UX	Neumorphism, Custom Animations
+Local Storage	shared_preferences
+🚀 Getting Started
+📌 Prerequisites
+Flutter SDK (latest stable)
+YouTube Data API v3 Key
+⚙️ Installation
+# Clone the repository
+git clone https://github.com/krishanmurariji/nebula_music_player.git
 
-# 
+# Go to project directory
+cd nebula_music_player
 
-# \*\*Nebula\*\* is a premium, high-performance music player built with \*\*Flutter\*\*. It features a stunning \*\*Neumorphic design language\*\* and a unique \*\*Gramophone-inspired interaction model\*\*. Powered by the YouTube API, Nebula offers seamless streaming with a focus on tactile user experience and modern aesthetic.
+# Install dependencies
+flutter pub get
+🔑 Setup API Key
+Open Google Cloud Console
+Enable YouTube Data API v3
+Create API Key
 
-# 
+Then add it in your project:
 
-# \---
+const YOUTUBE_API_KEY = "YOUR_API_KEY_HERE";
+▶️ Run App
+flutter run
+📂 Project Structure
+lib/
+│── core/          # Constants, themes, utils
+│── features/      # Main modules (player, home, search)
+│── services/      # API & audio handling
+│── providers/     # Riverpod state management
+│── widgets/       # Reusable UI components
+🚧 Roadmap
+ 🎵 Offline Playback
+ ❤️ Playlist & Favorites
+ 🔍 Smart Recommendations
+ 🎚️ Equalizer Support
+🤝 Contributing
 
-# 
+Contributions are welcome!
 
-# \## ✨ Key Features
+# Fork the repo
+# Create your branch
+git checkout -b feature/YourFeature
 
-# 
+# Commit changes
+git commit -m "Add YourFeature"
 
-# \* \*\*🎙️ Interactive Gramophone UI:\*\* A custom-engineered vinyl rotation system where the "needle" physically interacts with the record based on playback state.
+# Push
+git push origin feature/YourFeature
 
-# \* \*\*🫧 Neumorphic Experience:\*\* A consistent, "soft-ui" design across all screens, featuring custom shadow physics for both Light and Dark modes.
+Then open a Pull Request 🚀
 
-# \* \*\*🎯 Haptic Interaction:\*\* Integrated `HapticFeedback` for a tactile feel when skipping tracks, liking songs, or interacting with the vinyl.
+📄 License
 
-# \* \*\*🔄 Sync-Glow Technology:\*\* The central record label pulses with a synchronized glow that reacts to the music playback state.
+MIT License
 
-# \* \*\*🌍 YouTube Integration:\*\* Powered by `youtube\_explode\_dart` for high-quality audio streaming without the need for a heavy video player.
+👨‍💻 Author
 
-# \* \*\*🛠️ Advanced State Management:\*\* Built using \*\*Riverpod 2.0\*\* for a reactive, scalable, and testable codebase.
+Krishan Murari
+Flutter Developer • UI/UX Enthusiast • Marvel Fan 🚀
 
-# 
+⭐ Support
 
-# \---
+If you like this project:
 
-# 
-
-# \## 🛠️ Tech Stack
-
-# 
-
-# \* \*\*Framework:\*\* Flutter (3.x+)
-
-# \* \*\*State Management:\*\* Riverpod (Functional Providers)
-
-# \* \*\*Audio Engine:\*\* `just\_audio` \& `audio\_service`
-
-# \* \*\*Networking:\*\* `http`, `youtube\_explode\_dart`
-
-# \* \*\*UI/UX:\*\* Neumorphic design, Custom Painters, Advanced Animation Controllers
-
-# \* \*\*Storage:\*\* `shared\_preferences`
-
-# 
-
-# \---
-
-# 
-
-# \## 🚀 Getting Started
-
-# 
-
-# \### Prerequisites
-
-# 1\.  \*\*Flutter SDK\*\* (Latest stable version)
-
-# 2\.  \*\*YouTube Data API v3 Key\*\* (Obtained via \[Google Cloud Console](https://console.cloud.google.com/))
-
-# 
-
-# \### Installation
-
-# 
-
-# 1\. \*\*Clone the repository:\*\*
-
-# &#x20;  ```bash
-
-# &#x20;  git clone \[https://github.com/krishanmurariji/nebula\_music\_player.git](https://github.com/krishanmurariji/nebula\_music\_player.git)
-
-# &#x20;  cd nebula\_music\_player
-
+👉 Give it a star on GitHub
+👉 Share it with others
