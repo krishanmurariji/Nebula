@@ -1,0 +1,42 @@
+name: nebula_music_player
+description: Nebula - Neumorphic Music Player
+publish_to: none
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.0.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_riverpod: ^2.4.9
+  just_audio: ^0.9.46
+  audio_service: ^0.18.13
+  youtube_explode_dart: ^3.0.0
+  http: ^1.2.0
+  cached_network_image: ^3.3.1
+  shared_preferences: ^2.2.2
+  url_launcher: ^6.3.2
+  font_awesome_flutter: ^11.0.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+  # Added for icon generation
+  flutter_launcher_icons: ^0.14.3
+
+# --- ICON CONFIGURATION ---
+flutter_launcher_icons:
+  android: "launcher_icon"
+  ios: true
+  image_path: "assets/images/app_logo_final.png"
+  # Ensures the icon fits perfectly on modern Android circles/squares
+  adaptive_icon_background: "#0D1117" 
+  adaptive_icon_foreground: "assets/images/app_logo_final.png"
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/
+    - assets/images/app_logo_final.png
