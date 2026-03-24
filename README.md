@@ -1,7 +1,8 @@
 🌌 Nebula Music Player
 <p align="center"> <b>A Premium Neumorphic Music Experience built with Flutter</b> </p> <p align="center"> 🎵 Gramophone UI • ⚡ Smooth Performance • 🫧 Soft UI • 🌍 YouTube Streaming </p>
 📸 Screenshots
-<!-- Replace these paths with your actual images --> <p align="center"> <img src="screenshots/home.png" width="250"/> <img src="screenshots/player.png" width="250"/> <img src="screenshots/now_playing.png" width="250"/> </p>
+<!-- Replace these paths with your actual images --> <p align="center"> ![WhatsApp Image 2026-03-24 at 8 02 57 AM](https://github.com/user-attachments/assets/fd27c474-a452-4558-a41a-523f43a63e10)
+<img src="screenshots/home.png" width="250"/> <img src="screenshots/player.png" width="250"/> <img src="screenshots/now_playing.png" width="250"/> </p>
 ✨ Features
 🎙️ Interactive Gramophone UI
 Realistic vinyl rotation with dynamic needle interaction based on playback
