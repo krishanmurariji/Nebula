@@ -27,9 +27,10 @@ class _CE {
 class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
   final AudioPlayer _player = AudioPlayer();
 
-  // Single YoutubeExplode instance — a pool adds no benefit because all instances
-  // share the same IP. Only the ytClients (User-Agent) parameter matters.
-  final YoutubeExplode _yt = YoutubeExplode();
+  final List<YoutubeExplode> _pool = List.generate(5, (_) => YoutubeExplode());
+  int _pi = 0;
+  YoutubeExplode get _yt => _pool[_pi % _pool.length];
+  void _rotateYt() { _pi++; debugPrint('[N] yt→[${_pi%_pool.length}]'); }
 
   Song?      _current;
   List<Song> _queue = [];
@@ -38,25 +39,13 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
 
   Directory? _cacheDir;
   final Map<String, _CE> _index = {};
+  bool _cacheReady = false;
 
-  // FIX #3: Completer replaces the old bool + busy-wait loop
-  final Completer<void> _cacheReadyCompleter = Completer<void>();
-
-  // androidVr is tried first — in testing it bypasses IP-level rate limits
-  // that block android/ios/mweb. The others are kept as genuine fallbacks.
   static final _clients = [
-    YoutubeApiClient.androidVr,
     YoutubeApiClient.android,
     YoutubeApiClient.ios,
     YoutubeApiClient.mweb,
-  ];
-
-  // Timeout per client: first attempt gets more time, fallbacks get standard time
-  static const _timeouts = [
-    Duration(seconds: 20), // androidVr — not rate limited but can be slow
-    Duration(seconds: 12), // android
-    Duration(seconds: 12), // ios
-    Duration(seconds: 12), // mweb
+    YoutubeApiClient.androidVr,
   ];
 
   NebulaAudioHandler() {
@@ -109,11 +98,10 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
           debugPrint('[N] index: ${_index.length} songs');
         } catch (_) {}
       }
+      _cacheReady = true;
     } catch (e) {
       _cacheDir = Directory.systemTemp;
-    } finally {
-      // FIX #3: Complete exactly once — no more busy-wait
-      if (!_cacheReadyCompleter.isCompleted) _cacheReadyCompleter.complete();
+      _cacheReady = true;
     }
   }
 
@@ -148,13 +136,11 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
     _saveIndex();
   }
 
-  // FIX #3: Zero spin-wait — awaits the Completer with a 5s safety timeout
   Future<void> _ensureCache() async {
-    await _cacheReadyCompleter.future.timeout(
-      const Duration(seconds: 5),
-      onTimeout: () {},
-    );
+    for (int i = 0; i < 50 && !_cacheReady; i++)
+      await Future.delayed(const Duration(milliseconds: 100));
     _cacheDir ??= Directory.systemTemp;
+    _cacheReady = true;
   }
 
   Song?       get currentSong    => _current;
@@ -191,40 +177,50 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
       await _ensureCache();
       if (_tok != tok) return;
 
-      // FIX #1a: Cache hit → instant playback from local file
+      File? file;
       if (_isCached(song.videoId)) {
+        file = _cf(song.videoId);
         _markUsed(song.videoId);
-        debugPrint('[N] cache hit');
-        await _player.setAudioSource(AudioSource.file(_cf(song.videoId).path));
-        if (_tok != tok) { _player.stop(); return; }
-        _current = song;
-        await _player.play();
-        debugPrint('[N] ✓ PLAYING (cached): ${song.title}');
-        _prefetchNext(tok);
-        return;
+        debugPrint('[N] cache hit ${file.lengthSync()}b');
       }
 
-      // FIX #1b: Get stream URL, play IMMEDIATELY, cache in background
-      final info = await _getInfo(song.videoId, tok);
+      if (file == null) {
+        for (int attempt = 0; attempt < 4 && file == null; attempt++) {
+          if (_tok != tok) return;
+          try {
+            final info = await _getInfo(song.videoId, tok);
+            if (info == null) { debugPrint('[N] no info attempt $attempt'); break; }
+            if (_tok != tok) return;
+            file = await _download(info, song.videoId, tok);
+            if (file == null && _tok != tok) return; // cancelled by user
+          } on TimeoutException catch (e) {
+            debugPrint('[N] attempt $attempt timeout: $e');
+            _rotateYt();
+            await Future.delayed(const Duration(milliseconds: 500));
+          } catch (e, st) {
+            debugPrint('[N] attempt $attempt error: $e\n$st');
+            _rotateYt();
+            await Future.delayed(const Duration(milliseconds: 500));
+          }
+        }
+      }
+
       if (_tok != tok) return;
-      if (info == null) {
-        debugPrint('[N] ✗ no stream info for ${song.videoId}');
+
+      if (file == null) {
+        debugPrint('[N] ✗ all attempts failed for ${song.videoId}');
         playbackState.add(playbackState.value.copyWith(
             processingState: AudioProcessingState.error));
         return;
       }
 
-      // Stream directly — playback starts after a few seconds of buffering,
-      // NOT after the full file downloads (was 5–30 sec, now 1–3 sec)
-      debugPrint('[N] streaming from URL: ${song.title}');
-      await _player.setAudioSource(AudioSource.uri(info.url));
+      debugPrint('[N] setting source: ${file.path}');
+      await _player.setAudioSource(AudioSource.file(file.path));
       if (_tok != tok) { _player.stop(); return; }
       _current = song;
       await _player.play();
-      debugPrint('[N] ✓ STREAMING: ${song.title}');
-
-      // Cache in background while song is already playing
-      _cacheInBackground(info, song.videoId, tok);
+      debugPrint('[N] ✓ PLAYING: ${song.title}');
+      _prefetchNext(tok);
 
     } catch (e, st) {
       if (_tok != tok) return;
@@ -234,59 +230,32 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
     }
   }
 
-  // Runs silently while the song is already playing
-  void _cacheInBackground(AudioStreamInfo info, String videoId, int tok) {
-    Future.microtask(() async {
-      try {
-        await _download(info, videoId, tok);
-        debugPrint('[N] bg cache done: $videoId');
-      } catch (e) {
-        debugPrint('[N] bg cache err: $e');
-      }
-    });
-  }
-
-  // FIX #4: Sequential manifest fetch.
-  // Client order: androidVr first (bypasses rate limits that block android/ios/mweb).
-  // On rate limit: wait 2s before next client (IP-level blocks need time to cool).
-  // On timeout: try next client immediately (slow response, not a block).
-  // _rotateYt() removed — swapping YoutubeExplode instances is meaningless since
-  // all instances share the same IP; only the ytClients User-Agent matters.
   Future<AudioStreamInfo?> _getInfo(String videoId, int tok) async {
-    if (_tok != tok) return null;
-    debugPrint('[N] manifest for $videoId');
-
     for (int ci = 0; ci < _clients.length; ci++) {
       if (_tok != tok) return null;
       try {
-        debugPrint('[N] manifest client=$ci (${_clients[ci].runtimeType}) for $videoId');
-        final m = await _yt.videos.streamsClient
-            .getManifest(videoId, ytClients: [_clients[ci]])
-            .timeout(_timeouts[ci]);
-        if (m.audioOnly.isEmpty) {
-          debugPrint('[N] client=$ci no audio streams, trying next');
-          continue;
+        if (ci > 0) {
+          await Future.delayed(Duration(milliseconds: 150 + Random().nextInt(200)));
+          if (_tok != tok) return null;
         }
+        debugPrint('[N] manifest c=$ci yt[${_pi%_pool.length}] $videoId');
+        final m = await _yt.videos.streamsClient.getManifest(videoId, ytClients: [_clients[ci]])
+            .timeout(const Duration(seconds: 15));
+        if (m.audioOnly.isEmpty) { debugPrint('[N] c=$ci no audio'); continue; }
         final mp4 = m.audioOnly
             .where((s) => s.codec.mimeType.contains('mp4'))
             .toList()..sort((a, b) => a.bitrate.compareTo(b.bitrate));
         final chosen = mp4.isNotEmpty
-            ? mp4.firstWhere(
-                (s) => s.bitrate.bitsPerSecond >= 96000,
-                orElse: () => mp4.last)
-            : (m.audioOnly.toList()
-                ..sort((a, b) => a.bitrate.compareTo(b.bitrate))).first;
-        debugPrint('[N] manifest ok client=$ci ${chosen.codec.mimeType} @ ${chosen.bitrate}');
+            ? mp4.firstWhere((s) => s.bitrate.bitsPerSecond >= 96000, orElse: () => mp4.last)
+            : (m.audioOnly.toList()..sort((a, b) => a.bitrate.compareTo(b.bitrate))).first;
+        debugPrint('[N] stream ${chosen.codec.mimeType} @ ${chosen.bitrate} c=$ci');
         return chosen;
       } on RequestLimitExceededException {
-        // IP-level block — wait 2s before trying the next user-agent.
-        // 200ms is not enough; YouTube's burst window is ~1-2 seconds.
-        debugPrint('[N] client=$ci rate limited, waiting 2s before next client');
-        await Future.delayed(const Duration(seconds: 2));
+        debugPrint('[N] rate limit c=$ci'); _rotateYt();
       } on TimeoutException {
-        debugPrint('[N] client=$ci timeout, trying next immediately');
+        debugPrint('[N] manifest timeout c=$ci');
       } catch (e) {
-        debugPrint('[N] client=$ci error: $e');
+        debugPrint('[N] manifest error c=$ci: $e');
       }
     }
     debugPrint('[N] all clients failed for $videoId');
@@ -353,11 +322,11 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
       return result;
 
     } on TimeoutException catch (e) {
-      debugPrint('[N] dl timeout: $e'); sub?.cancel();
+      debugPrint('[N] dl timeout: $e'); sub?.cancel(); _rotateYt();
       if (sink != null) { try { await sink.close(); } catch (_) {} }
       _del(tmp); rethrow;
     } on RequestLimitExceededException catch (e) {
-      debugPrint('[N] dl rate limit: $e'); sub?.cancel();
+      debugPrint('[N] dl rate limit: $e'); sub?.cancel(); _rotateYt();
       if (sink != null) { try { await sink.close(); } catch (_) {} }
       _del(tmp); rethrow;
     } catch (e, st) {
@@ -369,18 +338,12 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
 
   void _del(File? f) { try { f?.deleteSync(); } catch (_) {} }
 
-  // FIX #5: Prefetch next song AFTER a delay so it never fires concurrently
-  // with the current song's manifest fetch (which would cause rate limiting).
-  // 3 seconds gives the current song time to finish its manifest + start playing.
   void _prefetchNext(int ptok) {
     if (_queue.length < 2) return;
     final next = _queue[(_idx + 1) % _queue.length];
     if (next.videoId == _current?.videoId || _isCached(next.videoId)) return;
-    debugPrint('[N] prefetch queued (3s delay): ${next.title}');
-    Future.delayed(const Duration(seconds: 3), () async {
-      if (_tok != ptok) return; // user already switched songs, abort
-      if (_isCached(next.videoId)) return; // cached by now, skip
-      debugPrint('[N] prefetch start: ${next.title}');
+    debugPrint('[N] prefetch: ${next.title}');
+    Future.microtask(() async {
       try {
         final info = await _getInfo(next.videoId, ptok);
         if (info == null || _tok != ptok) return;
@@ -455,7 +418,7 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
     _tok++;
     await _player.stop();
     await _player.dispose();
-    _yt.close();
+    for (final yt in _pool) yt.close();
     try {
       for (final f in _cacheDir!.listSync().whereType<File>()) {
         if (f.path.endsWith('.tmp')) f.deleteSync();

@@ -1,5 +1,4 @@
 import 'dart:math';
-import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; // Required for Haptics
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -59,7 +58,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with TickerProviderStat
 
   @override
   void dispose() {
-    _switchDebounce?.cancel(); // FIX #2: clean up debounce timer
     _ribbonController.dispose();
     _rotationCtrl.dispose();
     _glowCtrl.dispose();
@@ -68,25 +66,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with TickerProviderStat
     super.dispose();
   }
 
-  // FIX #2: debounce timer prevents stacked concurrent loads on fast swipes
-  Timer? _switchDebounce;
-
   Future<void> _handleRibbonSelection(int index, List<Song> queue) async {
     if (_dotIndex == index) return;
-
+    
+    // Haptic feedback for switching songs
     HapticFeedback.mediumImpact();
 
-    // Update visual immediately so the ribbon feels instant
+    setState(() => _isChangingTrack = true); 
+    await Future.delayed(const Duration(milliseconds: 350));
     setState(() {
       _dotIndex = index;
       _isChangingTrack = false;
     });
-
-    // Cancel any previous pending load and wait for the user to settle
-    _switchDebounce?.cancel();
-    _switchDebounce = Timer(const Duration(milliseconds: 350), () {
-      ref.read(playerProvider.notifier).playSong(queue[index], queue: queue);
-    });
+    ref.read(playerProvider.notifier).playSong(queue[index], queue: queue);
   }
 
   void _handleMainTap(Song? currentSong, Song songToPlay, bool isPlaying, List<Song> queue) {

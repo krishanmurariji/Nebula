@@ -27,9 +27,10 @@ class _CE {
 class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
   final AudioPlayer _player = AudioPlayer();
 
-  // Single YoutubeExplode instance — a pool adds no benefit because all instances
-  // share the same IP. Only the ytClients (User-Agent) parameter matters.
-  final YoutubeExplode _yt = YoutubeExplode();
+  final List<YoutubeExplode> _pool = List.generate(5, (_) => YoutubeExplode());
+  int _pi = 0;
+  YoutubeExplode get _yt => _pool[_pi % _pool.length];
+  void _rotateYt() { _pi++; debugPrint('[N] yt→[${_pi%_pool.length}]'); }
 
   Song?      _current;
   List<Song> _queue = [];
@@ -42,21 +43,11 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
   // FIX #3: Completer replaces the old bool + busy-wait loop
   final Completer<void> _cacheReadyCompleter = Completer<void>();
 
-  // androidVr is tried first — in testing it bypasses IP-level rate limits
-  // that block android/ios/mweb. The others are kept as genuine fallbacks.
   static final _clients = [
-    YoutubeApiClient.androidVr,
     YoutubeApiClient.android,
     YoutubeApiClient.ios,
     YoutubeApiClient.mweb,
-  ];
-
-  // Timeout per client: first attempt gets more time, fallbacks get standard time
-  static const _timeouts = [
-    Duration(seconds: 20), // androidVr — not rate limited but can be slow
-    Duration(seconds: 12), // android
-    Duration(seconds: 12), // ios
-    Duration(seconds: 12), // mweb
+    YoutubeApiClient.androidVr,
   ];
 
   NebulaAudioHandler() {
@@ -246,23 +237,25 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
     });
   }
 
-  // FIX #4: Sequential manifest fetch.
-  // Client order: androidVr first (bypasses rate limits that block android/ios/mweb).
-  // On rate limit: wait 2s before next client (IP-level blocks need time to cool).
-  // On timeout: try next client immediately (slow response, not a block).
-  // _rotateYt() removed — swapping YoutubeExplode instances is meaningless since
-  // all instances share the same IP; only the ytClients User-Agent matters.
+  // FIX #4: Sequential manifest fetch with stagger between clients.
+  // DO NOT use Future.any() here — firing all 4 clients simultaneously
+  // causes YouTube to see a burst from one IP and rate-limit immediately.
+  // Sequential + 200ms stagger stays under the burst detection threshold.
   Future<AudioStreamInfo?> _getInfo(String videoId, int tok) async {
     if (_tok != tok) return null;
     debugPrint('[N] manifest for $videoId');
 
     for (int ci = 0; ci < _clients.length; ci++) {
       if (_tok != tok) return null;
+      if (ci > 0) {
+        await Future.delayed(const Duration(milliseconds: 200));
+        if (_tok != tok) return null;
+      }
       try {
-        debugPrint('[N] manifest client=$ci (${_clients[ci].runtimeType}) for $videoId');
+        debugPrint('[N] manifest client=$ci for $videoId');
         final m = await _yt.videos.streamsClient
             .getManifest(videoId, ytClients: [_clients[ci]])
-            .timeout(_timeouts[ci]);
+            .timeout(const Duration(seconds: 12));
         if (m.audioOnly.isEmpty) {
           debugPrint('[N] client=$ci no audio streams, trying next');
           continue;
@@ -279,12 +272,10 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
         debugPrint('[N] manifest ok client=$ci ${chosen.codec.mimeType} @ ${chosen.bitrate}');
         return chosen;
       } on RequestLimitExceededException {
-        // IP-level block — wait 2s before trying the next user-agent.
-        // 200ms is not enough; YouTube's burst window is ~1-2 seconds.
-        debugPrint('[N] client=$ci rate limited, waiting 2s before next client');
-        await Future.delayed(const Duration(seconds: 2));
+        debugPrint('[N] client=$ci rate limited, rotating');
+        _rotateYt();
       } on TimeoutException {
-        debugPrint('[N] client=$ci timeout, trying next immediately');
+        debugPrint('[N] client=$ci timeout');
       } catch (e) {
         debugPrint('[N] client=$ci error: $e');
       }
@@ -353,11 +344,11 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
       return result;
 
     } on TimeoutException catch (e) {
-      debugPrint('[N] dl timeout: $e'); sub?.cancel();
+      debugPrint('[N] dl timeout: $e'); sub?.cancel(); _rotateYt();
       if (sink != null) { try { await sink.close(); } catch (_) {} }
       _del(tmp); rethrow;
     } on RequestLimitExceededException catch (e) {
-      debugPrint('[N] dl rate limit: $e'); sub?.cancel();
+      debugPrint('[N] dl rate limit: $e'); sub?.cancel(); _rotateYt();
       if (sink != null) { try { await sink.close(); } catch (_) {} }
       _del(tmp); rethrow;
     } catch (e, st) {
@@ -455,7 +446,7 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
     _tok++;
     await _player.stop();
     await _player.dispose();
-    _yt.close();
+    for (final yt in _pool) yt.close();
     try {
       for (final f in _cacheDir!.listSync().whereType<File>()) {
         if (f.path.endsWith('.tmp')) f.deleteSync();
