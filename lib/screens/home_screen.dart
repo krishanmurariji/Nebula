@@ -1,7 +1,7 @@
 import 'dart:math';
-import 'dart:async';
+import 'dart:ui';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'; // Required for Haptics
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../models/song.dart';
@@ -10,384 +10,590 @@ import '../providers/library_provider.dart';
 import '../providers/theme_provider.dart';
 import 'mini_player.dart';
 
+// Helper class to easily map our top categories
+class _CategoryItem {
+  final String id;
+  final String title;
+  final String subtitle;
+  final String? imageUrl;
+
+  _CategoryItem({required this.id, required this.title, required this.subtitle, this.imageUrl});
+}
+
 class HomeScreen extends ConsumerStatefulWidget {
   final void Function(int) onNavigate;
   const HomeScreen({super.key, required this.onNavigate});
+
   @override
   ConsumerState<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends ConsumerState<HomeScreen> with TickerProviderStateMixin {
-  int _dotIndex = 0;
-  late PageController _ribbonController;
+class _HomeScreenState extends ConsumerState<HomeScreen> {
+  late PageController _pageController;
+  final double _viewportFraction = 0.115;
 
-  late AnimationController _rotationCtrl;
-  late AnimationController _glowCtrl; 
-  late AnimationController _heartCtrl;
-  late AnimationController _playPauseCtrl;
-  
-  late Animation<double> _heartScale;
-  late Animation<double> _heartOpacity;
-  late Animation<double> _playPauseScale;
-  late Animation<double> _playPauseOpacity;
-  late Animation<double> _glowScale;
+  late PageController _topPageController;
+  final double _topViewportFraction = 0.50; 
 
-  bool _isBrokenHeart = false;
-  bool _showingPlayIcon = false;
-  bool _isChangingTrack = false;
+  String _selectedId = 'recent';
+  bool _showPlaylists = true;
 
   @override
   void initState() {
     super.initState();
-    _ribbonController = PageController(viewportFraction: 0.25, initialPage: _dotIndex);
-    
-    _rotationCtrl = AnimationController(vsync: this, duration: const Duration(seconds: 15));
-    
-    _glowCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 1500));
-    _glowScale = Tween<double>(begin: 0.0, end: 12.0).animate(
-      CurvedAnimation(parent: _glowCtrl, curve: Curves.easeInOutSine)
-    );
-
-    _heartCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 300));
-    _heartScale = Tween<double>(begin: 0.5, end: 1.3).animate(CurvedAnimation(parent: _heartCtrl, curve: Curves.elasticOut));
-    _heartOpacity = Tween<double>(begin: 0.0, end: 1.0).animate(CurvedAnimation(parent: _heartCtrl, curve: Curves.easeOut));
-
-    _playPauseCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 200));
-    _playPauseScale = Tween<double>(begin: 0.5, end: 1.3).animate(CurvedAnimation(parent: _playPauseCtrl, curve: Curves.easeOutBack));
-    _playPauseOpacity = Tween<double>(begin: 0.0, end: 1.0).animate(CurvedAnimation(parent: _playPauseCtrl, curve: Curves.easeOut));
+    _pageController = PageController(viewportFraction: _viewportFraction);
+    _pageController.addListener(_onScroll);
+    _topPageController = PageController(viewportFraction: _topViewportFraction);
   }
 
   @override
   void dispose() {
-    _switchDebounce?.cancel(); // FIX #2: clean up debounce timer
-    _ribbonController.dispose();
-    _rotationCtrl.dispose();
-    _glowCtrl.dispose();
-    _heartCtrl.dispose();
-    _playPauseCtrl.dispose();
+    _pageController.removeListener(_onScroll);
+    _pageController.dispose();
+    _topPageController.dispose();
     super.dispose();
   }
 
-  // FIX #2: debounce timer prevents stacked concurrent loads on fast swipes
-  Timer? _switchDebounce;
-
-  Future<void> _handleRibbonSelection(int index, List<Song> queue) async {
-    if (_dotIndex == index) return;
-
-    HapticFeedback.mediumImpact();
-
-    // Update visual immediately so the ribbon feels instant
-    setState(() {
-      _dotIndex = index;
-      _isChangingTrack = false;
-    });
-
-    // Cancel any previous pending load and wait for the user to settle
-    _switchDebounce?.cancel();
-    _switchDebounce = Timer(const Duration(milliseconds: 350), () {
-      ref.read(playerProvider.notifier).playSong(queue[index], queue: queue);
-    });
-  }
-
-  void _handleMainTap(Song? currentSong, Song songToPlay, bool isPlaying, List<Song> queue) {
-    // Light tap when clicking the record
-    HapticFeedback.lightImpact();
-
-    setState(() => _showingPlayIcon = !isPlaying);
-    if (currentSong == null || currentSong.videoId != songToPlay.videoId || ref.read(playerProvider).status == NebulaPlayerStatus.idle) {
-      ref.read(playerProvider.notifier).playSong(songToPlay, queue: queue);
-    } else {
-      ref.read(playerProvider.notifier).togglePlay();
+  void _onScroll() {
+    if (!_pageController.position.haveDimensions) return;
+    final page = _pageController.page ?? 0;
+    
+    if (page > 0.6 && _showPlaylists) {
+      setState(() => _showPlaylists = false);
+    } else if (page <= 0.6 && !_showPlaylists) {
+      setState(() => _showPlaylists = true);
     }
-    _playPauseCtrl.forward(from: 0.0).then((_) {
-      Future.delayed(const Duration(milliseconds: 400), () {
-        if (mounted) _playPauseCtrl.reverse();
-      });
-    });
   }
 
-  void _handleDoubleTap(Song song, bool isCurrentlyLiked) {
-    HapticFeedback.heavyImpact(); // Strong feel for liking a song
-    setState(() => _isBrokenHeart = isCurrentlyLiked);
-    ref.read(likedProvider.notifier).toggle(song);
-    _heartCtrl.forward(from: 0.0).then((_) {
-      Future.delayed(const Duration(milliseconds: 600), () {
-        if (mounted) _heartCtrl.reverse();
-      });
-    });
+  void _handleTap(Song song, int index, bool isCenter, List<Song> queue) {
+    if (isCenter) {
+      HapticFeedback.lightImpact();
+      final playerNotifier = ref.read(playerProvider.notifier);
+      final ps = ref.read(playerProvider);
+      
+      if (ps.song?.videoId == song.videoId) {
+        playerNotifier.togglePlay();
+      } else {
+        playerNotifier.playSong(song, queue: queue);
+      }
+    } else {
+      HapticFeedback.selectionClick();
+      _pageController.animateToPage(
+        index, 
+        duration: const Duration(milliseconds: 400), 
+        curve: Curves.easeOutBack
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final playlists = ref.watch(playlistProvider);
     final history = ref.watch(historyProvider);
-    final seen = <String>{};
-    final distinct = history.where((s) => seen.add(s.videoId)).toList();
-    
-    final player = ref.watch(playerProvider);
-    final currentSong = player.song;
-    final playing = player.status == NebulaPlayerStatus.playing;
-    final loading = player.status == NebulaPlayerStatus.loading;
-    final isDark = ref.watch(themeProvider) == ThemeMode.dark;
-    
-    final bg = isDark ? const Color(0xFF0D1117) : const Color(0xFFEDF2F7);
-    final textCol = isDark ? Colors.white : const Color(0xFF1A1A2E);
-    final mutedCol = isDark ? Colors.white54 : const Color(0xFF8A9BB0);
-    final cardBg = isDark ? const Color(0xFF161B22) : Colors.white;
-    final shadowD = isDark ? Colors.black54 : const Color(0xFFC8D3DF);
-    final shadowL = isDark ? const Color(0xFF1E2530) : Colors.white;
-    final h = MediaQuery.of(context).size.height;
-    final isLiked = currentSong != null ? ref.watch(isLikedProvider(currentSong.videoId)) : false;
+    final likedSongs = ref.watch(likedSongsProvider);
+    final playerState = ref.watch(playerProvider);
 
-    if (playing && !_isChangingTrack && !loading) {
-      if (!_rotationCtrl.isAnimating) _rotationCtrl.repeat();
-      if (!_glowCtrl.isAnimating) _glowCtrl.repeat(reverse: true);
-    } else {
-      if (_rotationCtrl.isAnimating) _rotationCtrl.stop();
-      if (_glowCtrl.isAnimating) _glowCtrl.stop();
+    final seen = <String>{};
+    final distinctHistory = history.where((s) => seen.add(s.videoId)).toList();
+
+    if (_selectedId != 'recent' && _selectedId != 'liked' && !playlists.any((p) => p.id == _selectedId)) {
+      _selectedId = 'recent';
+      if (_topPageController.hasClients) _topPageController.jumpToPage(0);
     }
 
-    final bool isNeedleOnRecord = playing && !_isChangingTrack && !loading;
-    final double mainDiskSize = h * 0.38;
-    final double needleWidth = 110.0;
-    final double needleHeight = h * 0.26;
+    final List<Song> displaySongs;
+    if (_selectedId == 'recent') {
+      displaySongs = distinctHistory;
+    } else if (_selectedId == 'liked') {
+      displaySongs = likedSongs;
+    } else {
+      displaySongs = playlists.firstWhere((p) => p.id == _selectedId, orElse: () => playlists.first).songs;
+    }
+
+    final List<_CategoryItem> categories = [
+      _CategoryItem(id: 'recent', title: 'History', subtitle: '${distinctHistory.length} songs', imageUrl: distinctHistory.firstOrNull?.thumbnailUrl),
+      _CategoryItem(id: 'liked', title: 'Liked', subtitle: '${likedSongs.length} songs', imageUrl: likedSongs.firstOrNull?.thumbnailUrl),
+      ...playlists.map((p) => _CategoryItem(id: p.id, title: p.name, subtitle: '${p.songs.length} songs', imageUrl: p.songs.firstOrNull?.thumbnailUrl)),
+    ];
+
+    final String currentHeading = categories.firstWhere((c) => c.id == _selectedId, orElse: () => categories.first).title;
+
+    final isDark = ref.watch(themeProvider) == ThemeMode.dark;
+    
+    // UPDATED COLORS to match the Search & Player Screens exactly
+    final bg = isDark ? const Color(0xFF0D1117) : const Color(0xFFF0F4F8); 
+    final textCol = isDark ? Colors.white : const Color(0xFF1A1A2E);
+    final mutedCol = isDark ? Colors.white54 : const Color(0xFF8A9BB0);
+    final cleanPillBg = isDark ? const Color(0xFF161B22) : Colors.white;
+    
+    final topPad = MediaQuery.of(context).padding.top;
+    final screenSize = MediaQuery.of(context).size;
+    
+    const double filterSectionHeight = 200.0; 
+    const accentCol = Color(0xFF4993FC);
 
     return Scaffold(
       backgroundColor: bg,
-      body: SafeArea(
-        bottom: false,
-        child: Stack(
-          children: [
-            Column(
+      body: Stack(
+        children: [
+          // ── 0. Big Background App Logo Watermark ─────────────────────────────
+          Positioned.fill(
+            child: Center(
+              child: Opacity(
+                opacity: isDark ? 0.03 : 0.05, 
+                child: Image.asset(
+                  'assets/images/app_logo_final.png',
+                  width: screenSize.width * 0.85, 
+                  fit: BoxFit.contain,
+                  errorBuilder: (_, __, ___) => const SizedBox(),
+                ),
+              ),
+            ),
+          ),
+
+          // ── 1. Curved Vertical List (Songs) ──────────────────────────────────
+          Positioned.fill(
+            child: displaySongs.isEmpty
+                ? Center(child: Text('Empty list', style: TextStyle(color: mutedCol)))
+                : AnimatedBuilder(
+                    animation: _pageController,
+                    builder: (context, child) {
+                      return PageView.builder(
+                        controller: _pageController,
+                        scrollDirection: Axis.vertical,
+                        physics: const BouncingScrollPhysics(),
+                        itemCount: displaySongs.length,
+                        itemBuilder: (context, index) {
+                          double page = _pageController.position.haveDimensions ? _pageController.page! : 0.0;
+                          double delta = index - page;
+
+                          double curveDx = (delta * delta) * 25.0; 
+                          double scale = (1.0 - (delta.abs() * 0.05)).clamp(0.75, 1.0);
+                          double opacity = (1.0 - (delta.abs() * 0.25)).clamp(0.1, 1.0);
+                          double activeOpacity = (1.0 - (delta.abs() * 2.5)).clamp(0.0, 1.0);
+                          bool isCenter = delta.abs() < 0.4;
+
+                          final song = displaySongs[index];
+                          final isCurrentSong = song.videoId == playerState.song?.videoId;
+                          final isPlaying = playerState.status == NebulaPlayerStatus.playing;
+                          
+                          IconData actionIcon = Icons.play_arrow_rounded;
+                          if (isCurrentSong) {
+                            actionIcon = isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded;
+                          }
+
+                          return GestureDetector(
+                            onTap: () => _handleTap(song, index, isCenter, displaySongs),
+                            behavior: HitTestBehavior.opaque,
+                            child: Transform.translate(
+                              offset: Offset(curveDx, 0),
+                              child: Transform.scale(
+                                scale: scale,
+                                child: Opacity(
+                                  opacity: opacity,
+                                  child: Container(
+                                    margin: const EdgeInsets.symmetric(horizontal: 25, vertical: 0),
+                                    child: Stack(
+                                      alignment: Alignment.centerLeft,
+                                      children: [
+                                        Opacity(
+                                          opacity: activeOpacity,
+                                          child: Container(
+                                            height: 76,
+                                            decoration: BoxDecoration(
+                                              color: cleanPillBg,
+                                              borderRadius: BorderRadius.circular(40),
+                                              boxShadow: [
+                                                BoxShadow(color: Colors.black.withOpacity(isDark ? 0.3 : 0.06), blurRadius: 20, offset: const Offset(0, 8))
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                        Padding(
+                                          padding: const EdgeInsets.symmetric(horizontal: 10),
+                                          child: Row(
+                                            children: [
+                                              _buildListArt(song.thumbnailUrl),
+                                              const SizedBox(width: 15),
+                                              Expanded(
+                                                child: Column(
+                                                  mainAxisAlignment: MainAxisAlignment.center,
+                                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                                  children: [
+                                                    Text(song.title, maxLines: 1, overflow: TextOverflow.ellipsis,
+                                                        style: TextStyle(color: isCurrentSong ? accentCol : textCol, fontWeight: FontWeight.bold, fontSize: 16)),
+                                                    Text(song.artist, maxLines: 1, overflow: TextOverflow.ellipsis,
+                                                        style: TextStyle(color: mutedCol, fontSize: 12)),
+                                                  ],
+                                                ),
+                                              ),
+                                              if (isCenter)
+                                                AnimatedContainer(
+                                                  duration: const Duration(milliseconds: 300),
+                                                  width: 44, height: 44,
+                                                  decoration: BoxDecoration(
+                                                    shape: BoxShape.circle,
+                                                    color: accentCol,
+                                                    boxShadow: [BoxShadow(color: accentCol.withOpacity(0.4), blurRadius: 12, offset: const Offset(0, 4))],
+                                                  ),
+                                                  child: Icon(actionIcon, color: Colors.white, size: 24),
+                                                ),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      );
+                    },
+                  ),
+          ),
+
+          // ── 2. UI Overlay: Header & Dynamic Top Carousel ─────────────────────
+          Positioned(
+            top: 0, left: 0, right: 0,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const SizedBox(height: 60),
-                Expanded(
-                  child: Center(
-                    child: GestureDetector(
-                      onTap: () {
-                        if (distinct.isNotEmpty) {
-                          _handleMainTap(currentSong, distinct[_dotIndex], playing, distinct);
-                        }
-                      },
-                      onDoubleTap: currentSong != null ? () => _handleDoubleTap(currentSong, isLiked) : null,
-                      child: Stack(
-                        alignment: Alignment.center,
+                Container(height: topPad + 10, color: bg),
+                Container(
+                  color: bg,
+                  padding: const EdgeInsets.symmetric(horizontal: 25, vertical: 10),
+                  child: Row(
+                    children: [
+                      Text('Explore', style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: textCol, letterSpacing: -0.5)),
+                      const Spacer(),
+                      _NeuBtn(
+                        icon: Icons.search_rounded,
+                        color: const Color(0xFF4993FC), 
+                        bg: bg,
+                        isDark: isDark,
+                        size: 52, 
+                        onTap: () => widget.onNavigate(1),
+                      ),
+                    ],
+                  ),
+                ),
+                
+                ClipRect(
+                  child: AnimatedAlign(
+                    duration: const Duration(milliseconds: 400),
+                    curve: Curves.easeOutCubic,
+                    alignment: Alignment.topCenter,
+                    heightFactor: _showPlaylists ? 1.0 : 0.0,
+                    child: Container(
+                      height: filterSectionHeight,
+                      color: bg,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          RotationTransition(
-                            turns: _rotationCtrl,
-                            child: _buildMainVinyl(mainDiskSize, bg, currentSong, distinct, _dotIndex, shadowL, shadowD, isDark, playing),
+                          // ── RECORD SLEEVE CAROUSEL ──
+                          Expanded(
+                            child: PageView.builder(
+                              controller: _topPageController,
+                              physics: const BouncingScrollPhysics(),
+                              onPageChanged: (index) {
+                                final selected = categories[index];
+                                setState(() => _selectedId = selected.id);
+                                if (_pageController.hasClients) _pageController.jumpToPage(0);
+                                HapticFeedback.selectionClick();
+                              },
+                              itemCount: categories.length,
+                              itemBuilder: (context, index) {
+                                return AnimatedBuilder(
+                                  animation: _topPageController,
+                                  builder: (context, child) {
+                                    double page = _topPageController.position.haveDimensions ? _topPageController.page! : 0.0;
+                                    double delta = (index - page).clamp(-1.0, 1.0);
+                                    
+                                    double scale = 1.0 - (delta.abs() * 0.18); 
+                                    
+                                    return Transform.scale(
+                                      scale: scale,
+                                      child: GestureDetector(
+                                        onTap: () {
+                                          _topPageController.animateToPage(index, duration: const Duration(milliseconds: 350), curve: Curves.easeOutCubic);
+                                        },
+                                        child: Center(
+                                          child: _buildSleeveCard(categories[index], isDark, textCol, mutedCol, bg),
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                );
+                              },
+                            ),
                           ),
-                          _buildOverlayAnimations(),
+                          
+                          // ── DYNAMIC HEADING ──
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(25, 0, 20, 15),
+                            child: AnimatedSwitcher(
+                              duration: const Duration(milliseconds: 300),
+                              child: Text(
+                                currentHeading,
+                                key: ValueKey<String>(currentHeading),
+                                style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: textCol, letterSpacing: -0.5),
+                              ),
+                            ),
+                          ),
                         ],
                       ),
                     ),
                   ),
                 ),
-
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 8),
-                  child: Column(
-                    children: [
-                      Text(
-                        _display(currentSong, distinct, _dotIndex)?.title ?? 'Select a Song',
-                        maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center,
-                        style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: textCol),
-                      ),
-                      Text(
-                        _display(currentSong, distinct, _dotIndex)?.artist ?? '',
-                        style: const TextStyle(fontSize: 13, color: const Color(0xFF4993FC), fontWeight: FontWeight.w600),
-                      ),
-                    ],
-                  ),
-                ),
-
-                Container(
-                  height: 120,
-                  margin: const EdgeInsets.only(top: 5, bottom: 15),
-                  child: PageView.builder(
-                    controller: _ribbonController,
-                    onPageChanged: (idx) => _handleRibbonSelection(idx, distinct),
-                    itemCount: distinct.length,
-                    physics: const BouncingScrollPhysics(),
-                    itemBuilder: (context, index) {
-                      final isCenter = index == _dotIndex;
-                      return AnimatedScale(
-                        scale: isCenter ? 1.15 : 0.75,
-                        duration: const Duration(milliseconds: 300),
-                        child: Center(
-                          child: GestureDetector(
-                            onTap: () {
-                              HapticFeedback.selectionClick();
-                              _ribbonController.animateToPage(index, 
-                                duration: const Duration(milliseconds: 500), curve: Curves.easeOutCubic);
-                            },
-                            child: _buildSmallRibbonRecord(distinct[index]),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-
-                const MiniPlayer(), 
               ],
             ),
+          ),
 
-            Positioned(
-              top: 16, left: 20,
-              child: _IconPill(icon: Icons.search_rounded, color: mutedCol, bg: cardBg, isDark: isDark, onTap: () => widget.onNavigate(1)),
-            ),
-            Positioned(
-              top: 16, right: 20,
-              child: AnimatedRotation(
-                turns: isNeedleOnRecord ? 0.0 : 0.18,
-                duration: const Duration(milliseconds: 500),
-                curve: Curves.easeOutBack,
-                alignment: FractionalOffset((needleWidth - 26.0) / needleWidth, 26.0 / needleHeight),
-                child: _buildNeedleRight(isDark, needleWidth, needleHeight),
-              ),
-            ),
-          ],
+          // ── Mini Player ──────────────────────────────────────────────────
+          const Positioned(left: 0, right: 0, bottom: 0, child: MiniPlayer()),
+        ],
+      ),
+    );
+  }
+
+  // ── Helper Widgets ───────────────────────────────────────────────────────
+
+  Widget _buildListArt(String url) {
+    return Container(
+      width: 55, height: 55,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle, 
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 8, offset: const Offset(0, 4))],
+      ),
+      child: ClipOval(
+        child: Transform.scale(
+          scale: 1.35, 
+          child: CachedNetworkImage(
+            imageUrl: url,
+            fit: BoxFit.cover,
+            errorWidget: (_, __, ___) => Container(color: Colors.grey[800], child: const Icon(Icons.music_note, color: Colors.white)),
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildMainVinyl(double size, Color bg, Song? current, List<Song> distinct, int idx, Color shadowL, Color shadowD, bool isDark, bool isPlaying) {
-    final songToShow = current ?? (distinct.isNotEmpty ? distinct[idx] : null);
-    final imgSize = size * 0.35;
+  Widget _buildSleeveCard(_CategoryItem item, bool isDark, Color textCol, Color mutedCol, Color appBg) {
+    final bool isSel = _selectedId == item.id;
+    
+    const double sleeveSize = 125.0; 
+    const double diskSize = 115.0;   
+    const double totalWidth = 180.0; 
 
-    return Container(
-      width: size, height: size,
-      decoration: BoxDecoration(
-        color: const Color(0xFF111111), 
-        shape: BoxShape.circle, 
-        boxShadow: [
-          BoxShadow(color: shadowL.withOpacity(0.9), blurRadius: 28, offset: const Offset(-10, -10)),
-          BoxShadow(color: shadowD, blurRadius: 28, offset: const Offset(10, 10)),
-        ]
-      ),
+    return SizedBox(
+      width: totalWidth,
+      height: sleeveSize,
       child: Stack(
-        alignment: Alignment.center,
+        alignment: Alignment.centerLeft,
         children: [
-          Container(width: size * 0.88, decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: Colors.white10, width: 1.5))),
-          Container(width: size * 0.72, decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: Colors.white10, width: 1))),
-          Container(width: size * 0.55, decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: Colors.white10, width: 1.5))),
-          
-          // --- FIXED CENTER IMAGE: ZERO GAPS ---
-          AnimatedBuilder(
-            animation: _glowCtrl,
-            builder: (context, child) {
-              return Container(
-                width: imgSize, height: imgSize,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle, 
-                  boxShadow: [
-                    if (isPlaying)
-                      BoxShadow(
-                        color: const Color(0xFF4993FC).withOpacity(0.4),
-                        blurRadius: _glowScale.value + 12,
-                        spreadRadius: _glowScale.value / 2,
-                      )
+          // 1. Vinyl Record (On Bottom Layer)
+          Positioned(
+            right: 0,
+            child: Container(
+              width: diskSize,
+              height: diskSize,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: isDark ? Colors.black87 : Colors.grey.shade300,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(isDark ? 0.4 : 0.15),
+                    blurRadius: 10,
+                    offset: const Offset(5, 5),
+                  )
+                ],
+              ),
+              child: ClipOval(
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    SizedBox.expand(
+                      child: item.imageUrl != null && item.imageUrl!.isNotEmpty
+                          ? Transform.scale(
+                              scale: 1.35, 
+                              child: CachedNetworkImage(
+                                imageUrl: item.imageUrl!,
+                                fit: BoxFit.cover,
+                                errorWidget: (_, __, ___) => _buildPlaceholder(),
+                              ),
+                            )
+                          : _buildPlaceholder(), 
+                    ),
+                    // Center CD/Vinyl Hole
+                    Container(
+                      width: 20,
+                      height: 20,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: appBg, 
+                        border: Border.all(
+                          color: isDark ? Colors.black54 : Colors.grey.shade400, 
+                          width: 1.5
+                        ),
+                      ),
+                    ),
                   ],
-                ),
-                child: ClipOval(
-                  child: SizedBox.expand( // This forces the thumbnail to occupy 100% of the circle
-                    child: songToShow != null 
-                      ? CachedNetworkImage(
-                          imageUrl: songToShow.thumbnailUrl, 
-                          fit: BoxFit.cover, // Combined with SizedBox.expand, this removes all gaps
-                          placeholder: (context, url) => Container(color: Colors.black),
-                          errorWidget: (_, __, ___) => Container(color: const Color(0xFFE0EAF4), child: const Icon(Icons.music_note)),
-                        )
-                      : Container(color: Colors.grey[800], child: const Icon(Icons.music_note, color: Colors.white24, size: 36)),
-                  ),
-                ),
-              );
-            }
-          ),
-          
-          Container(
-            width: 10, height: 10, 
-            decoration: const BoxDecoration(color: Color(0xFF111111), shape: BoxShape.circle), 
-            child: Center(child: Container(width: 4, height: 4, decoration: const BoxDecoration(color: Colors.white54, shape: BoxShape.circle)))
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSmallRibbonRecord(Song song) {
-    const double miniImgSize = 34.0; 
-    return Container(
-      width: 75, height: 75,
-      decoration: const BoxDecoration(
-        color: Color(0xFF111111), shape: BoxShape.circle, 
-        boxShadow: [BoxShadow(color: Colors.black45, blurRadius: 10, offset: Offset(0, 4))]
-      ),
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          Container(width: 65, decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: Colors.white10))),
-          Container(width: 50, decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: Colors.white10))),
-          
-          SizedBox(
-            width: miniImgSize, height: miniImgSize,
-            child: ClipOval(
-              child: SizedBox.expand( // Fixed mini gaps
-                child: CachedNetworkImage(
-                  imageUrl: song.thumbnailUrl, 
-                  fit: BoxFit.cover, 
-                  errorWidget: (_, __, ___) => const Icon(Icons.music_note, color: Colors.white24, size: 14),
                 ),
               ),
             ),
           ),
-          Container(width: 5, height: 5, decoration: const BoxDecoration(color: Colors.white38, shape: BoxShape.circle)),
+
+          // 2. The Transparent Glassmorphism Sleeve Cover (On Top Layer)
+          Positioned(
+            left: 0,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(20),
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 300),
+                  width: sleeveSize,
+                  height: sleeveSize,
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: isSel 
+                        ? (isDark ? Colors.white.withOpacity(0.15) : Colors.black.withOpacity(0.08))
+                        : Colors.transparent,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: isSel ? const Color(0xFF4993FC) : (isDark ? Colors.white24 : Colors.black26),
+                      width: isSel ? 2 : 1,
+                    ),
+                  ),
+                  child: Stack(
+                    children: [
+                      // TEXT: Top Left Align
+                      Align(
+                        alignment: Alignment.topLeft,
+                        child: Padding(
+                          padding: const EdgeInsets.only(top: 4.0),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                item.title,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: textCol,
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 16,
+                                  height: 1.1,
+                                  letterSpacing: -0.3,
+                                  shadows: [Shadow(color: appBg.withOpacity(0.8), blurRadius: 4)]
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                item.subtitle,
+                                style: TextStyle(
+                                  color: textCol.withOpacity(0.7), 
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  shadows: [Shadow(color: appBg.withOpacity(0.8), blurRadius: 4)]
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      
+                      // APP LOGO: Bottom Left Align (On the cover)
+                      Positioned(
+                        bottom: 0,
+                        left: 0,
+                        child: Container(
+                          width: 36, 
+                          height: 36,
+                          decoration: const BoxDecoration(
+                            shape: BoxShape.circle,
+                          ),
+                          child: ClipOval(
+                            child: Image.asset(
+                              'assets/images/app_logo_final.png',
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => const Icon(Icons.music_note, size: 20, color: Colors.white24),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildNeedleRight(bool isDark, double width, double height) {
-    final armColor = isDark ? const Color(0xFF2A2D3A) : Colors.white;
-    return SizedBox(width: width, height: height, child: Stack(children: [
-      Positioned.fill(child: CustomPaint(painter: _ArmPainterRight(armColor))),
-      Positioned(bottom: 0, left: 12, child: Transform.rotate(angle: -0.25, child: Container(width: 16, height: 42, decoration: BoxDecoration(color: armColor, borderRadius: BorderRadius.circular(8), boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 4, offset: Offset(-2, 2))]), child: Column(mainAxisAlignment: MainAxisAlignment.end, children: [Container(height: 10, width: 4, margin: const EdgeInsets.only(bottom: 6), decoration: BoxDecoration(color: Colors.grey[400], borderRadius: BorderRadius.circular(2)))])))),
-      Positioned(top: 0, right: 0, child: Container(width: 52, height: 52, decoration: BoxDecoration(color: armColor, shape: BoxShape.circle, boxShadow: const [BoxShadow(color: Colors.black38, blurRadius: 8, offset: Offset(0, 4))]), child: Center(child: Container(width: 14, height: 14, decoration: const BoxDecoration(color: Colors.pinkAccent, shape: BoxShape.circle))))),
-    ]));
+  Widget _buildPlaceholder() {
+    return Container(
+      color: const Color(0xFF161B22),
+      width: double.infinity,
+      height: double.infinity,
+      child: Padding(
+        padding: const EdgeInsets.all(24.0),
+        child: Opacity(
+          opacity: 0.6,
+          child: Image.asset(
+            'assets/images/app_logo_final.png',
+            fit: BoxFit.contain,
+            errorBuilder: (_, __, ___) => const Center(child: Icon(Icons.library_music_rounded, color: Colors.white54, size: 30)),
+          ),
+        ),
+      ),
+    );
   }
-
-  Widget _buildOverlayAnimations() => Stack(alignment: Alignment.center, children: [
-    AnimatedBuilder(animation: _heartCtrl, builder: (context, child) => Opacity(opacity: _heartOpacity.value, child: Transform.scale(scale: _heartScale.value, child: Icon(_isBrokenHeart ? Icons.heart_broken_rounded : Icons.favorite_rounded, color: Colors.white, size: 80, shadows: const [Shadow(color: Colors.black45, blurRadius: 20)])))),
-    AnimatedBuilder(animation: _playPauseCtrl, builder: (context, child) => Opacity(opacity: _playPauseOpacity.value, child: Transform.scale(scale: _playPauseScale.value, child: Icon(_showingPlayIcon ? Icons.play_arrow_rounded : Icons.pause_rounded, color: Colors.white, size: 80, shadows: const [Shadow(color: Colors.black45, blurRadius: 20)])))),
-  ]);
-
-  Song? _display(Song? current, List<Song> history, int idx) => current ?? (history.isNotEmpty ? history[idx] : null);
 }
 
-class _ArmPainterRight extends CustomPainter {
-  final Color color;
-  _ArmPainterRight(this.color);
-  @override
-  void paint(Canvas canvas, Size size) {
-    final shadowPaint = Paint()..color = Colors.black.withOpacity(0.2)..strokeWidth = 6..strokeCap = StrokeCap.round..style = PaintingStyle.stroke..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
-    final paint = Paint()..color = color..strokeWidth = 6..strokeCap = StrokeCap.round..style = PaintingStyle.stroke;
-    final path = Path();
-    path.moveTo(size.width - 26, 26);
-    path.quadraticBezierTo(0, size.height * 0.5, 20, size.height - 20);
-    canvas.drawPath(path.shift(const Offset(-2, 4)), shadowPaint);
-    canvas.drawPath(path, paint);
-  }
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}
-
-class _IconPill extends StatelessWidget {
+class _NeuBtn extends StatelessWidget {
   final IconData icon;
   final Color color, bg;
   final bool isDark;
   final VoidCallback onTap;
-  const _IconPill({required this.icon, required this.color, required this.bg, required this.isDark, required this.onTap});
+  final double size;
+  
+  const _NeuBtn({
+    required this.icon,
+    required this.color,
+    required this.bg,
+    required this.isDark,
+    required this.onTap,
+    required this.size,
+  });
+
   @override
-  Widget build(BuildContext context) => GestureDetector(onTap: onTap, behavior: HitTestBehavior.opaque, child: Container(width: 52, height: 52, decoration: BoxDecoration(color: bg, shape: BoxShape.circle, boxShadow: [BoxShadow(color: Colors.black.withOpacity(isDark ? 0.3 : 0.07), blurRadius: 12, offset: const Offset(0, 3))]), child: Icon(icon, color: color, size: 22)));
+  Widget build(BuildContext context) => GestureDetector(
+        onTap: onTap,
+        child: Container(
+          width: size,
+          height: size,
+          decoration: BoxDecoration(
+              color: bg,
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                    color: isDark ? Colors.black54 : Colors.grey[300]!,
+                    blurRadius: 10,
+                    offset: const Offset(5, 5)),
+                BoxShadow(
+                    color: isDark
+                        ? Colors.white.withOpacity(0.05)
+                        : Colors.white,
+                    blurRadius: 10,
+                    offset: const Offset(-5, -5)),
+              ]),
+          child: Icon(icon, color: color, size: size * 0.5),
+        ),
+      );
 }

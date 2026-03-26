@@ -8,64 +8,81 @@ class SongTile extends ConsumerWidget {
   final Song song;
   final bool isPlaying;
   final VoidCallback onTap;
+  final Widget? trailing;
 
   const SongTile({
     super.key,
     required this.song,
     required this.isPlaying,
     required this.onTap,
+    this.trailing,
   });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final isDark   = ref.watch(themeProvider) == ThemeMode.dark;
-    final bg       = isDark ? const Color(0xFF0D1117) : const Color(0xFFEDF2F7);
-    final cardBg   = isDark ? const Color(0xFF161B22) : Colors.white;
-    final textCol  = isDark ? Colors.white : const Color(0xFF1A1A2E);
+    final isDark = ref.watch(themeProvider) == ThemeMode.dark;
+    
+    // Colors matched to your unified Neumorphic app palette
+    final bg = isDark ? const Color(0xFF0D1117) : const Color(0xFFF0F4F8);
+    final textCol = isDark ? Colors.white : const Color(0xFF1A1A2E);
     final mutedCol = isDark ? Colors.white54 : const Color(0xFF8A9BB0);
+    const accentCol = Color(0xFF4993FC);
 
-    return Padding(
-      // Padding matches list spacing
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
-      child: GestureDetector(
-        onTap: onTap,
-        behavior: HitTestBehavior.opaque,
-        child: Container(
-          // Exact height from MiniPlayer
-          height: 64, 
-          decoration: BoxDecoration(
-            color: cardBg,
-            // Exact pill roundness from MiniPlayer
-            borderRadius: BorderRadius.circular(32), 
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(isDark ? 0.3 : 0.08),
-                blurRadius: 20,
-                offset: const Offset(0, 4),
-              )
-            ],
-            // Adds a subtle blue border if this specific song is playing
-            border: isPlaying 
-                ? Border.all(color: const Color(0xFF4993FC).withOpacity(0.4), width: 1)
-                : null,
-          ),
-          child: Row(children: [
-            
-            const SizedBox(width: 9),
-
-            // ── Thumbnail circle (Exact match to MiniPlayer) ───────────
-            ClipOval(
-              child: song.thumbnailUrl.isNotEmpty
-                  ? CachedNetworkImage(
-                      imageUrl: song.thumbnailUrl,
-                      width: 46, height: 46, fit: BoxFit.cover,
-                      errorWidget: (_, __, ___) => _thumb(mutedCol, bg))
-                  : _thumb(mutedCol, bg),
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: isPlaying ? accentCol.withOpacity(0.08) : bg,
+          borderRadius: BorderRadius.circular(16),
+          border: isPlaying
+              ? Border.all(color: accentCol.withOpacity(0.3), width: 1.5)
+              : null,
+          boxShadow: [
+            BoxShadow(
+                color: isDark ? Colors.black45 : Colors.grey.shade300,
+                blurRadius: 7,
+                offset: const Offset(3, 3)),
+            BoxShadow(
+                color: isDark ? Colors.white.withOpacity(0.03) : Colors.white,
+                blurRadius: 7,
+                offset: const Offset(-3, -3)),
+          ],
+        ),
+        child: Row(
+          children: [
+            // ── UPDATED THUMBNAIL TO COMPLETELY FILL CIRCLE ──
+            Container(
+              width: 46,
+              height: 46,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                      color: Colors.black.withOpacity(0.15),
+                      blurRadius: 8,
+                      offset: const Offset(0, 3))
+                ],
+              ),
+              child: ClipOval(
+                child: Transform.scale(
+                  scale: 1.35, // Ensures the YouTube image completely fills the circle without black bars
+                  child: CachedNetworkImage(
+                    imageUrl: song.thumbnailUrl,
+                    fit: BoxFit.cover,
+                    width: double.infinity,
+                    height: double.infinity,
+                    errorWidget: (_, __, ___) => Container(
+                        color: Colors.grey[800],
+                        child: const Icon(Icons.music_note,
+                            color: Colors.white54, size: 18)),
+                  ),
+                ),
+              ),
             ),
-
             const SizedBox(width: 12),
-
-            // ── Song name + artist (Exact match to MiniPlayer) ─────────
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -76,49 +93,34 @@ class SongTile extends ConsumerWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      // Turns text blue if playing
-                      color: isPlaying ? const Color(0xFF4993FC) : textCol, 
-                    ),
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: isPlaying ? accentCol : textCol,
+                        letterSpacing: -0.2),
                   ),
                   const SizedBox(height: 2),
                   Text(
                     song.artist,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 11, color: mutedCol),
+                    style: TextStyle(
+                        fontSize: 12,
+                        color: mutedCol,
+                        fontWeight: FontWeight.w500),
                   ),
                 ],
               ),
             ),
-
-            // ── Trailing Indicator (Play/Pause indicator) ─────────────
-            Container(
-              width: 36, height: 36,
-              decoration: BoxDecoration(
-                color: isPlaying ? const Color(0xFF4993FC) : Colors.transparent,
-                shape: BoxShape.circle,
-                boxShadow: isPlaying ? [BoxShadow(
-                  color: const Color(0xFF4993FC).withOpacity(0.4),
-                  blurRadius: 10, offset: const Offset(0, 4))] : [],
+            if (isPlaying)
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: Icon(Icons.equalizer_rounded,
+                    color: accentCol, size: 16),
               ),
-              child: Icon(
-                isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
-                // Hidden unless playing, so it keeps the UI minimal
-                color: isPlaying ? Colors.white : const Color(0xFF4993FC).withOpacity(0.5),
-                size: 18,
-              ),
-            ),
-
-            const SizedBox(width: 14),
-          ]),
+            if (trailing != null) trailing!,
+          ],
         ),
       ),
     );
   }
-
-  Widget _thumb(Color mutedCol, Color bg) => Container(
-      width: 46, height: 46, color: bg,
-      child: Icon(Icons.music_note, color: mutedCol, size: 20));
 }
