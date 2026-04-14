@@ -295,19 +295,11 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
   Widget _buildHeader(double topPad, bool isDark, Color bg, Color cardBg,
       Color textCol, Color mutedCol, Color accentCol) {
     return Container(
-      color: Colors.transparent, // Changed to transparent for watermark
+      color: Colors.transparent,
       padding:
           EdgeInsets.only(top: topPad + 12, left: 20, right: 20, bottom: 12),
       child: Row(
         children: [
-          _NeuBtn(
-            icon: Icons.blur_circular_rounded,
-            color: accentCol,
-            bg: bg,
-            isDark: isDark,
-            size: 48,
-            onTap: () {},
-          ),
           const SizedBox(width: 14),
           Text(
             'Library',
@@ -341,7 +333,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
       (Icons.history_rounded, 'History'),
     ];
     return Container(
-      color: Colors.transparent, // Changed to transparent for watermark
+      color: Colors.transparent, 
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
       child: Row(
         children: List.generate(tabs.length, (i) {
@@ -1003,10 +995,10 @@ class _LikedTab extends StatelessWidget {
             background: Container(
               alignment: Alignment.centerLeft,
               padding: const EdgeInsets.only(left: 20),
-              margin: const EdgeInsets.symmetric(vertical: 5),
+              margin: const EdgeInsets.symmetric(vertical: 6),
               decoration: BoxDecoration(
                 color: Colors.redAccent.shade400,
-                borderRadius: BorderRadius.circular(16)
+                borderRadius: BorderRadius.circular(36) // MATCHES NEW CAPSULE
               ),
               child: const Icon(Icons.delete_outline_rounded, color: Colors.white),
             ),
@@ -1021,7 +1013,7 @@ class _LikedTab extends StatelessWidget {
               accentCol: accentCol,
               isPlaying: isPlaying,
               onTap: () => onTap(s),
-              trailing: const SizedBox.shrink(), // Removed delete/heart icon
+              trailing: const SizedBox.shrink(), 
             ),
           ),
         );
@@ -1255,10 +1247,10 @@ class _PlaylistAccordion extends StatelessWidget {
                               background: Container(
                                 alignment: Alignment.centerLeft,
                                 padding: const EdgeInsets.only(left: 20),
-                                margin: const EdgeInsets.symmetric(vertical: 5),
+                                margin: const EdgeInsets.symmetric(vertical: 6), // UPDATED MARGIN
                                 decoration: BoxDecoration(
                                   color: Colors.redAccent.shade400,
-                                  borderRadius: BorderRadius.circular(16)
+                                  borderRadius: BorderRadius.circular(36) // MATCHES NEW CAPSULE
                                 ),
                                 child: const Icon(Icons.delete_outline_rounded, color: Colors.white),
                               ),
@@ -1275,7 +1267,7 @@ class _PlaylistAccordion extends StatelessWidget {
                                 accentCol: accentCol,
                                 isPlaying: s.videoId == currentId,
                                 onTap: () => onTapSong(s, pl.songs),
-                                trailing: const SizedBox.shrink(), // Removed delete icon and drag lines
+                                trailing: const SizedBox.shrink(), 
                               ),
                             ),
                           );
@@ -1403,7 +1395,7 @@ class _HistoryTab extends StatelessWidget {
                 accentCol: accentCol,
                 isPlaying: s.videoId == currentId,
                 trailing: Icon(Icons.access_time_rounded,
-                    color: mutedCol.withOpacity(0.4), size: 16),
+                    color: mutedCol.withOpacity(0.4), size: 18),
                 onTap: () => onTap(s),
               );
             },
@@ -1418,6 +1410,7 @@ class _HistoryTab extends StatelessWidget {
 // SHARED COMPONENTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
+// ── FULLY UPDATED CAPSULE DESIGN FOR LIBRARY LIST ITEMS ──
 class _SongRow extends StatelessWidget {
   final Song song;
   final bool isDark, isPlaying;
@@ -1444,94 +1437,101 @@ class _SongRow extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        margin: const EdgeInsets.symmetric(vertical: 5),
-        padding:
-            const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        height: 72,
+        margin: const EdgeInsets.symmetric(vertical: 6),
         decoration: BoxDecoration(
-          color: isPlaying ? accentCol.withOpacity(0.08) : bg, // Made transparent to let watermark show
-          borderRadius: BorderRadius.circular(16),
-          border: isPlaying
-              ? Border.all(
-                  color: accentCol.withOpacity(0.3), width: 1.5)
-              : null,
+          color: isPlaying ? accentCol.withOpacity(0.08) : cardBg, // Use cardBg so it looks like a floating pill
+          borderRadius: BorderRadius.circular(36), // Fully rounded like the capsule
+          border: isPlaying ? Border.all(color: accentCol.withOpacity(0.3), width: 1.5) : null,
           boxShadow: [
             BoxShadow(
-                color: isDark
-                    ? Colors.black45
-                    : Colors.grey.shade200,
-                blurRadius: 7,
-                offset: const Offset(3, 3)),
-            BoxShadow(
-                color: isDark
-                    ? Colors.white.withOpacity(0.03)
-                    : Colors.white,
-                blurRadius: 7,
-                offset: const Offset(-3, -3)),
+              color: Colors.black.withOpacity(isDark ? 0.3 : 0.08),
+              blurRadius: 20,
+              offset: const Offset(0, 4),
+            )
           ],
         ),
         child: Row(
           children: [
-            // ── UPDATED THUMBNAIL TO COMPLETELY FILL CIRCLE ──
+            const SizedBox(width: 6),
+            
+            // ── Circular Album Art ──
             Container(
-              width: 46,
-              height: 46,
+              width: 60,
+              height: 60,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 boxShadow: [
                   BoxShadow(
-                      color: Colors.black.withOpacity(0.15),
-                      blurRadius: 8,
-                      offset: const Offset(0, 3))
+                    color: Colors.black.withOpacity(0.15),
+                    blurRadius: 8,
+                    offset: const Offset(0, 3)
+                  )
                 ],
               ),
               child: ClipOval(
                 child: Transform.scale(
-                  scale: 1.35, // Ensures image fills completely without black bars
+                  scale: 1.35, // Eliminates black bars on YouTube thumbnails
                   child: CachedNetworkImage(
                     imageUrl: song.thumbnailUrl,
                     fit: BoxFit.cover,
                     width: double.infinity,
                     height: double.infinity,
                     errorWidget: (_, __, ___) => Container(
-                        color: Colors.grey[800],
-                        child: const Icon(Icons.music_note,
-                            color: Colors.white54, size: 18)),
+                      color: Colors.grey[800],
+                      child: const Icon(Icons.music_note, color: Colors.white54, size: 18)
+                    ),
                   ),
                 ),
               ),
             ),
-            const SizedBox(width: 12),
+            
+            const SizedBox(width: 14),
+            
+            // ── Song Info ──
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text(song.title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                          color: isPlaying ? accentCol : textCol,
-                          letterSpacing: -0.2)),
-                  const SizedBox(height: 2),
-                  Text(song.artist,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                          fontSize: 12,
-                          color: mutedCol,
-                          fontWeight: FontWeight.w500)),
+                  Text(
+                    song.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                      color: isPlaying ? accentCol : textCol,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    song.artist,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: mutedCol,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 ],
               ),
             ),
+            
+            // ── Indicators & Trailing Icons ──
             if (isPlaying)
               Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: Icon(Icons.equalizer_rounded,
-                    color: accentCol, size: 16),
-              ),
-            trailing,
-            // Removed drag handle icon here
+                padding: const EdgeInsets.only(right: 18.0),
+                child: Icon(Icons.equalizer_rounded, color: accentCol, size: 22),
+              )
+            else if (trailing is! SizedBox) // If there is a trailing icon like the history clock
+              Padding(
+                padding: const EdgeInsets.only(right: 20.0),
+                child: trailing,
+              )
+            else
+              const SizedBox(width: 12),
           ],
         ),
       ),

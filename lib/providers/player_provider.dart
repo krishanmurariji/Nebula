@@ -200,6 +200,25 @@ class PlayerNotifier extends StateNotifier<NebulaPlayerState> {
     await _handler.updateQueue(mediaItems);
   }
 
+  // --- NEW METHOD ADDED HERE ---
+  Future<void> removeFromQueue(int index) async {
+    if (index < 0 || index >= state.queue.length) return;
+
+    final newQueue = List<Song>.from(state.queue);
+    newQueue.removeAt(index);
+
+    state = state.copyWith(queue: newQueue);
+
+    final mediaItems = newQueue.map((song) => MediaItem(
+      id: song.videoId,
+      title: song.title,
+      artist: song.artist,
+      artUri: Uri.parse(song.thumbnailUrl),
+    )).toList();
+
+    await _handler.updateQueue(mediaItems);
+  }
+
   Future<void> setVolume(double volume) async {
     await _handler.player.setVolume(volume);
   }

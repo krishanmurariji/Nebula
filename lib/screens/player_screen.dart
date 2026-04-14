@@ -8,6 +8,7 @@ import '../models/song.dart';
 import '../providers/player_provider.dart';
 import '../providers/library_provider.dart';
 import '../providers/theme_provider.dart';
+import '../services/audio_handler.dart';
 import 'upnext_screen.dart';
 
 // ── Panel visibility state ────────────────────────────────────────────────────
@@ -237,9 +238,16 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
   }
 
   void _cyclePlayMode() {
-    setState(() {
-      _playModeIndex = (_playModeIndex + 1) % 4;
-    });
+    final next = (_playModeIndex + 1) % 4;
+    setState(() => _playModeIndex = next);
+
+    const modes = [
+      PlayMode.sequential,
+      PlayMode.repeatAll,
+      PlayMode.repeatOne,
+      PlayMode.shuffle,
+    ];
+    ref.read(audioHandlerProvider).setPlayMode(modes[next]);
   }
 
   void _updateVolume(Offset localPosition, double size) {
@@ -254,7 +262,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
     double pct = (angle - pi * 0.75) / (pi * 1.5);
     setState(() {
       _volume = pct.clamp(0.0, 1.0);
-      FlutterVolumeController.setVolume(_volume); // Fixed showSystemUI error here
+      FlutterVolumeController.setVolume(_volume); 
       ref.read(playerProvider.notifier).setVolume(_volume);
     });
   }
@@ -268,7 +276,13 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
     final playlists = ref.watch(playlistProvider);
 
     final playing = ps.status == NebulaPlayerStatus.playing;
-    final loading = ps.status == NebulaPlayerStatus.loading;
+    
+    // UPDATED LOADING LOGIC: include pending state
+    final loading = ps.status == NebulaPlayerStatus.loading ||
+        (ps.pendingSong != null &&
+            ps.status != NebulaPlayerStatus.playing &&
+            ps.status != NebulaPlayerStatus.paused);
+            
     final durMs = ps.duration.inMilliseconds;
     final posMs = ps.position.inMilliseconds;
     final prog = durMs > 0 ? (posMs / durMs).clamp(0.0, 1.0) : 0.0;
@@ -345,11 +359,13 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
                                 ),
                               ),
                             ),
+                            
+                            // UPDATED GESTURE DETECTOR AND VINYL STACK
                             GestureDetector(
-                              onTap: song != null
+                              onTap: song != null && !loading
                                   ? () => _handleTap(song, playing)
                                   : null,
-                              onDoubleTap: song != null
+                              onDoubleTap: song != null && !loading
                                   ? () => _handleDoubleTap(song, liked)
                                   : null,
                               child: Stack(
@@ -360,6 +376,28 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
                                     child: _buildVinylRecord(
                                         diskSize, bg, song, isDark),
                                   ),
+                                  
+                                  // --- NEW BUFFERING OVERLAY ---
+                                  if (loading)
+                                    Container(
+                                      width: diskSize,
+                                      height: diskSize,
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        color: Colors.black.withOpacity(0.5),
+                                      ),
+                                      child: const Center(
+                                        child: SizedBox(
+                                          width: 50,
+                                          height: 50,
+                                          child: CircularProgressIndicator(
+                                            color: Colors.white,
+                                            strokeWidth: 3,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    
                                   _buildOverlayAnimations(),
                                 ],
                               ),
@@ -592,18 +630,36 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
 
   Widget _buildTransportRow(Color textCol, Color bg, bool isDark,
       Song? song, Color mutedCol) {
-    IconData modeIcon;
-    Color modeColor = const Color(0xFF4993FC);
+    const accentCol = Color(0xFF4993FC);
+    final IconData modeIcon;
+    final Color modeColor;
+    final String modeLabel;
 
-    if (_playModeIndex == 0) {
-      modeIcon = Icons.repeat_rounded;
-      modeColor = textCol;
-    } else if (_playModeIndex == 1) {
-      modeIcon = Icons.repeat_rounded;
-    } else if (_playModeIndex == 2) {
-      modeIcon = Icons.repeat_one_rounded;
-    } else {
-      modeIcon = Icons.shuffle_rounded;
+    switch (_playModeIndex) {
+      case 0: // sequential
+        modeIcon = Icons.arrow_forward_rounded;
+        modeColor = mutedCol;
+        modeLabel = 'Sequential';
+        break;
+      case 1: // repeatAll
+        modeIcon = Icons.repeat_rounded;
+        modeColor = accentCol;
+        modeLabel = 'Repeat All';
+        break;
+      case 2: // repeatOne
+        modeIcon = Icons.repeat_one_rounded;
+        modeColor = accentCol;
+        modeLabel = 'Repeat One';
+        break;
+      case 3: // shuffle
+        modeIcon = Icons.shuffle_rounded;
+        modeColor = accentCol;
+        modeLabel = 'Shuffle';
+        break;
+      default:
+        modeIcon = Icons.repeat_rounded;
+        modeColor = accentCol;
+        modeLabel = 'Repeat All';
     }
 
     return Padding(
@@ -611,13 +667,16 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
-          _NeuBtn(
-            icon: modeIcon,
-            color: modeColor,
-            bg: bg,
-            isDark: isDark,
-            size: 52,
-            onTap: _cyclePlayMode,
+          Tooltip(
+            message: modeLabel,
+            child: _NeuBtn(
+              icon: modeIcon,
+              color: modeColor,
+              bg: bg,
+              isDark: isDark,
+              size: 52,
+              onTap: _cyclePlayMode,
+            ),
           ),
           _NeuBtn(
             icon: Icons.skip_previous_rounded,
@@ -1395,6 +1454,7 @@ class _Waveform extends StatelessWidget {
           height: 60,
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            crossAxisAlignment: CrossAxisAlignment.end,
             children: List.generate(barCount, (i) {
               final pct = i / barCount;
               final active = pct <= progress;
