@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:just_audio/just_audio.dart';
 import 'package:audio_service/audio_service.dart';
 import '../models/song.dart';
 import '../services/audio_handler.dart';
