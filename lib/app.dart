@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'providers/api_key_provider.dart';
 import 'providers/player_provider.dart';
 import 'providers/theme_provider.dart';
-import 'screens/onboarding_screen.dart';
 import 'screens/main_shell.dart';
 
 final GlobalKey<ScaffoldMessengerState> _messengerKey =
@@ -14,7 +12,6 @@ class NebulaApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final hasKey   = ref.watch(hasApiKeyProvider);
     final themeMode = ref.watch(themeProvider);
     ref.listen<String?>(playerProvider.select((s) => s.notice), (_, n) {
       if (n == null) return;
@@ -30,7 +27,7 @@ class NebulaApp extends ConsumerWidget {
       themeMode: themeMode,
       theme: _light(),
       darkTheme: _dark(),
-      home: hasKey ? const MainShell() : const OnboardingScreen(),
+      home: const MainShell(),
     );
   }
 

@@ -36,7 +36,6 @@ Local Storage	shared_preferences
 🚀 Getting Started
 📌 Prerequisites
 Flutter SDK (latest stable)
-YouTube Data API v3 Key
 ⚙️ Installation
 # Clone the repository
 git clone https://github.com/krishanmurariji/nebula_music_player.git
@@ -46,14 +45,9 @@ cd nebula_music_player
 
 # Install dependencies
 flutter pub get
-🔑 Setup API Key
-Open Google Cloud Console
-Enable YouTube Data API v3
-Create API Key
+🔑 No API key needed
+Search and playback both work without a YouTube API key or quota.
 
-Then add it in your project:
-
-const YOUTUBE_API_KEY = "YOUR_API_KEY_HERE";
 ▶️ Run App
 flutter run
 📂 Project Structure

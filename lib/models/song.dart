@@ -13,29 +13,7 @@ class Song {
     this.isOfficial = false,
   });
 
-  factory Song.fromJson(Map<String, dynamic> json) {
-    final snippet = json['snippet'] as Map<String, dynamic>? ?? {};
-    String videoId = '';
-    if (json['id'] is Map) {
-      videoId = (json['id'] as Map)['videoId'] as String? ?? '';
-    } else {
-      videoId = json['id'] as String? ?? '';
-    }
-    final thumbs = snippet['thumbnails'] as Map<String, dynamic>? ?? {};
-    final high   = thumbs['high'] as Map<String, dynamic>?
-                ?? thumbs['default'] as Map<String, dynamic>? ?? {};
-    final title        = snippet['title'] as String? ?? 'Unknown';
-    final channelTitle = snippet['channelTitle'] as String? ?? '';
-    return Song(
-      videoId:      videoId,
-      title:        title,
-      artist:       channelTitle,
-      thumbnailUrl: high['url'] as String? ?? '',
-      isOfficial:   _detectOfficial(title, channelTitle),
-    );
-  }
-
-  static bool _detectOfficial(String title, String channel) {
+  static bool detectOfficial(String title, String channel) {
     final t = title.toLowerCase();
     final c = channel.toLowerCase();
     if (c.endsWith('- topic') || c.contains('vevo')) return true;

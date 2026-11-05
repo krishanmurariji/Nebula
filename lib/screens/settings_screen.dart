@@ -3,10 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
-import '../providers/api_key_provider.dart';
 import '../providers/library_provider.dart';
 import '../providers/theme_provider.dart';
-import 'onboarding_screen.dart';
 import 'playback_log_screen.dart';
 import 'mini_player.dart';
 
@@ -19,7 +17,6 @@ class SettingsScreen extends ConsumerStatefulWidget {
 }
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> with TickerProviderStateMixin {
-  bool _showKey = false;
 
   Future<void> _launchUrl(String url) async {
     final Uri uri = Uri.parse(url);
@@ -34,7 +31,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> with TickerProv
 
   @override
   Widget build(BuildContext context) {
-    final apiKey = ref.watch(apiKeyProvider);
     final isDark = ref.watch(themeProvider) == ThemeMode.dark;
     
     // Theme Colors
@@ -81,72 +77,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> with TickerProv
 
                     const SizedBox(height: 32),
 
-                    // ── API INTEGRATION ────────────────────────────────────────
-                    _SectionLabel('API & DATA', mutedCol),
+                    _SectionLabel('DATA', mutedCol),
                     const SizedBox(height: 16),
-                    _NeumorphicContainer(
-                      cardBg: cardBg,
-                      shadowD: shadowD,
-                      shadowL: shadowL,
-                      child: Column(
-                        children: [
-                          Row(
-                            children: [
-                              const Icon(Icons.vpn_key_rounded,
-                                  color: Color(0xFF4993FC), size: 20),
-                              const SizedBox(width: 12),
-                              Text('YouTube API Key',
-                                  style: TextStyle(
-                                      color: textCol, fontWeight: FontWeight.bold)),
-                              const Spacer(),
-                              IconButton(
-                                icon: Icon(_showKey ? Icons.visibility_off : Icons.visibility,
-                                    color: mutedCol, size: 18),
-                                onPressed: () => setState(() => _showKey = !_showKey),
-                              )
-                            ],
-                          ),
-                          Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                                color: bg, borderRadius: BorderRadius.circular(12)),
-                            child: Text(
-                              _showKey
-                                  ? (apiKey.isEmpty ? "Not configured" : apiKey)
-                                  : "••••••••••••••••••••••••",
-                              style: TextStyle(
-                                  fontFamily: 'monospace',
-                                  fontSize: 12,
-                                  color: textCol),
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                          Row(
-                            children: [
-                              Expanded(
-                                  child: _ActionBtn(
-                                      label: 'Update',
-                                      icon: Icons.refresh,
-                                      onTap: () => Navigator.push(
-                                          context,
-                                          MaterialPageRoute(
-                                              builder: (_) => const OnboardingScreen())))),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                  child: _ActionBtn(
-                                      label: 'Reset',
-                                      icon: Icons.delete_sweep,
-                                      isDanger: true,
-                                      onTap: () =>
-                                          ref.read(apiKeyProvider.notifier).clear())),
-                            ],
-                          )
-                        ],
-                      ),
-                    ),
-
-                    const SizedBox(height: 24),
 
                     // ── MEMORY & STORAGE ───────────────────────────────────────
                     _MemoryCard(
@@ -470,45 +402,3 @@ class _SocialCircle extends StatelessWidget {
   }
 }
 
-class _ActionBtn extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final bool isDanger;
-  final VoidCallback onTap;
-  const _ActionBtn(
-      {required this.label, required this.icon, this.isDanger = false, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          decoration: BoxDecoration(
-            border: Border.all(
-                color: isDanger
-                    ? Colors.redAccent.withOpacity(0.5)
-                    : const Color(0xFF4993FC).withOpacity(0.5)),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon,
-                  size: 16, color: isDanger ? Colors.redAccent : const Color(0xFF4993FC)),
-              const SizedBox(width: 8),
-              Text(label,
-                  style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.bold,
-                      color: isDanger ? Colors.redAccent : const Color(0xFF4993FC))),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}

@@ -1,7 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/song.dart';
-import '../services/youtube_api_service.dart';
-import 'api_key_provider.dart';
+import '../services/youtube_search_service.dart';
 
 enum SearchStatus { idle, loading, loaded, error }
 
@@ -24,6 +23,9 @@ class SearchState {
   );
 }
 
+final searchServiceProvider =
+    Provider<YoutubeSearchService>((ref) => YoutubeSearchService());
+
 class SearchNotifier extends StateNotifier<SearchState> {
   final Ref _ref;
   SearchNotifier(this._ref) : super(const SearchState());
@@ -32,8 +34,7 @@ class SearchNotifier extends StateNotifier<SearchState> {
     if (query.trim().isEmpty) { state = const SearchState(); return; }
     state = state.copyWith(status: SearchStatus.loading, query: query, error: null);
     try {
-      final key     = _ref.read(apiKeyProvider);
-      final results = await YoutubeApiService(apiKey: key).searchSongs(query);
+      final results = await _ref.read(searchServiceProvider).searchSongs(query);
       state = state.copyWith(status: SearchStatus.loaded, results: results);
     } catch (e) {
       state = state.copyWith(status: SearchStatus.error, error: e.toString());
