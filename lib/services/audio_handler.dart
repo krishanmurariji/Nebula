@@ -11,6 +11,8 @@ import 'package:just_audio/just_audio.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 
 import '../models/song.dart';
+import 'latest_wins_runner.dart';
+import 'playback_failure.dart';
 
 final audioHandlerProvider =
     Provider<NebulaAudioHandler>((ref) => throw UnimplementedError());
@@ -48,6 +50,31 @@ class _ManifestEntry {
 
   bool get isExpired =>
       DateTime.now().difference(fetchedAt) > _kManifestTtl;
+}
+
+class _LoadRequest {
+  final Song song;
+  final int tok;
+  final Duration? resumeAt;
+  final int attempt;
+  const _LoadRequest(this.song, this.tok, this.resumeAt, this.attempt);
+}
+
+class _FetchResult {
+  final AudioStreamInfo? info;
+  final FailureKind kind; // meaningful only when info == null
+  const _FetchResult(this.info, this.kind);
+}
+
+class _StreamResolveException implements Exception {
+  final FailureKind kind;
+  const _StreamResolveException(this.kind);
+  @override
+  String toString() => 'StreamResolveException($kind)';
+}
+
+class _SupersededException implements Exception {
+  const _SupersededException();
 }
 
 class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
@@ -91,55 +118,65 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
     Duration(seconds: 12),
   ];
 
+  // ── Load pipeline state ───────────────────────────────────────────────────
+  // All loads go through this runner: one at a time, newest request wins.
+  // The native player therefore never sees overlapping stop()/setAudioSource().
+  late final LatestWinsRunner<_LoadRequest> _runner =
+      LatestWinsRunner<_LoadRequest>(_runLoad);
+
+  Timer? _retryTimer;
+  int _consecutiveFailures = 0; // songs in a row that failed (reset on success/user action)
+  int _midPlayRetries = 0;      // mid-song recoveries for the current song
+  int _completedTok = -1;       // guards against double "completed" events
+
+  final StreamController<String> _notices = StreamController.broadcast();
+
+  /// Short human-readable messages ("Skipped unavailable song") for the UI.
+  Stream<String> get notices => _notices.stream;
+
+  /// Fired whenever the queue or its index is changed by the handler itself.
+  final StreamController<void> _queueChanged = StreamController.broadcast();
+  Stream<void> get queueChanges => _queueChanged.stream;
+
   NebulaAudioHandler() {
     _player.playbackEventStream.listen(
       _broadcast,
-      onError: (Object e, StackTrace st) {
-        // Broadcast error state AND attempt manifest-invalidation + retry.
-        debugPrint('[N] event err: $e');
-        playbackState.add(playbackState.value.copyWith(
-            processingState: AudioProcessingState.error));
-        _handlePlaybackError(e, st);
-      },
+      onError: (Object e, StackTrace st) => _onPlayerError(e),
     );
     _player.processingStateStream.listen((s) {
-      if (s == ProcessingState.completed) skipToNext();
+      // Song finished by itself. Ignore while a load is running, and make sure
+      // one finished song can only advance the queue once.
+      if (s == ProcessingState.completed &&
+          !_runner.isBusy &&
+          _completedTok != _tok) {
+        _completedTok = _tok;
+        skipToNext();
+      }
     });
 
     _initCache();
   }
 
-  // ── Playback error handler ────────────────────────────────────────────────
-  // Called when just_audio reports an error on the playbackEventStream.
-  //
-  // IMPORTANT: We must NOT retry on every error. Specifically:
-  //   - "abort" / "Loading interrupted" — means we called stop() ourselves
-  //     (e.g. user skipped). Retrying would cause "player already exists".
-  //   - HTTP 403/410 or "Source error" — genuine URL expiry. Safe to retry
-  //     after invalidating the manifest cache entry.
-  void _handlePlaybackError(Object e, StackTrace st) {
-    final errStr = e.toString().toLowerCase();
-
-    // Never retry self-inflicted interruptions.
-    if (errStr.contains('abort') ||
-        errStr.contains('loading interrupted') ||
-        errStr.contains('already exists')) {
-      debugPrint('[N] playback error ignored (self-inflicted): $e');
-      return;
-    }
+  // ── Error from the native player while a song is (or should be) playing ──
+  // Typically an expired/throttled stream URL. Re-resolve and resume from the
+  // same position a couple of times, then give up on the song and skip it.
+  void _onPlayerError(Object e) {
+    final kind = classifyPlaybackError(e);
+    debugPrint('[N] player error ($kind): $e');
+    if (kind == FailureKind.cancelled) return;
+    // A load in progress reports its own failures through exceptions.
+    if (_runner.isBusy) return;
 
     final song = _current;
     if (song == null) return;
-    debugPrint('[N] playback error for ${song.videoId}: $e — invalidating manifest cache and retrying');
-    _manifestCache.remove(song.videoId);
 
-    // Capture tok BEFORE the microtask so we abort if user skips in the meantime.
-    final tok = _tok;
-    Future.microtask(() async {
-      if (_tok != tok) return;
-      debugPrint('[N] retrying load after URL expiry: ${song.title}');
-      await _load(song);
-    });
+    if (kind != FailureKind.permanent && _midPlayRetries < 2) {
+      _midPlayRetries++;
+      _manifestCache.remove(song.videoId);
+      _requestLoad(song, resumeAt: _player.position);
+    } else {
+      _giveUpOnCurrent(song, kind);
+    }
   }
 
   // ── Cache init ────────────────────────────────────────────────────────────
@@ -217,6 +254,7 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
     final sorted = _index.values.toList()
       ..sort((a, b) => a.ts.compareTo(b.ts));
     for (final e in sorted) {
+      if (e.id == _current?.videoId) continue; // never delete what is playing
       if (total <= (_kMaxCacheBytes * 0.8).toInt()) break;
       try {
         _cf(e.id).deleteSync();
@@ -295,8 +333,8 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
 
   // ── Play / Load ───────────────────────────────────────────────────────────
 
-  Future<void> playSong(Song song, {List<Song>? queue, int index = 0}) async {
-    if (queue != null) {
+  Future<void> playSong(Song song, {List<Song>? queue, int index = 0}) {
+    if (queue != null && queue.isNotEmpty) {
       _queue = List.from(queue);
       _idx = index.clamp(0, queue.length - 1);
     } else if (!_queue.contains(song)) {
@@ -305,99 +343,164 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
     } else {
       _idx = _queue.indexOf(song);
     }
-    await _load(song);
+    _resetFailureCounters();
+    _requestLoad(song);
+    _queueChanged.add(null);
+    return _runner.idle;
   }
 
-  Future<void> _load(Song song) async {
+  void _resetFailureCounters() {
+    _consecutiveFailures = 0;
+    _midPlayRetries = 0;
+  }
+
+  /// Entry point for every load. Synchronous and cheap: it only records the
+  /// request and publishes the new song to the UI immediately.
+  void _requestLoad(Song song, {Duration? resumeAt, int attempt = 0}) {
     final tok = ++_tok;
+    _retryTimer?.cancel();
+    _current = song;
+
+    playbackState.add(playbackState.value.copyWith(
+        processingState: AudioProcessingState.loading,
+        playing: false,
+        queueIndex: _idx));
+    mediaItem.add(MediaItem(
+      id: song.videoId,
+      title: song.title,
+      artist: song.artist,
+      artUri:
+          song.thumbnailUrl.isNotEmpty ? Uri.tryParse(song.thumbnailUrl) : null,
+    ));
+
+    _runner.submit(_LoadRequest(song, tok, resumeAt, attempt));
+  }
+
+  /// Runs on the single worker. Never overlaps with another load.
+  Future<void> _runLoad(_LoadRequest req, RunContext ctx) async {
+    final song = req.song;
+    bool live() => ctx.isCurrent && _tok == req.tok;
+    var usedDiskCache = false;
+
     try {
-      // Await stop() so the platform player fully tears down before we call
-      // setAudioSource. Without this, just_audio throws:
-      //   PlatformException(abort, Loading interrupted)
-      // because the old source teardown races with the new source setup.
-      await _player.stop();
-      playbackState.add(playbackState.value.copyWith(
-          processingState: AudioProcessingState.loading, playing: false));
-      mediaItem.add(MediaItem(
-        id: song.videoId,
-        title: song.title,
-        artist: song.artist,
-        artUri: song.thumbnailUrl.isNotEmpty
-            ? Uri.tryParse(song.thumbnailUrl)
-            : null,
-      ));
+      debugPrint('[N] ▶ ${song.title} (attempt ${req.attempt})');
+      try {
+        await _player.stop();
+      } catch (e) {
+        debugPrint('[N] stop() before load ignored: $e');
+      }
+      if (!live()) return;
 
-      debugPrint('[N] ▶ ${song.title}');
       await _ensureCache();
-      if (_tok != tok) return;
+      if (!live()) return;
 
-      // ── Path 1: Disk cache hit — instant playback ─────────────────────────
+      final AudioSource source;
+      AudioStreamInfo? info;
+
       if (_isCached(song.videoId)) {
+        usedDiskCache = true;
         _markUsed(song.videoId);
-        debugPrint('[N] disk cache hit');
-        await _player.setAudioSource(
-            AudioSource.file(_cf(song.videoId).path));
-        if (_tok != tok) {
-          _player.stop();
-          return;
+        source = AudioSource.file(_cf(song.videoId).path);
+      } else {
+        final cached = _manifestCache[song.videoId];
+        if (cached != null && !cached.isExpired) {
+          info = cached.info;
+        } else {
+          final res = await _getInfo(song.videoId, req.tok,
+              superseded: ctx.superseded);
+          if (!live()) return;
+          info = res.info;
+          if (info == null) {
+            throw _StreamResolveException(res.kind);
+          }
         }
-        _current = song;
-        await _player.play();
-        debugPrint('[N] ✓ PLAYING (disk cached): ${song.title}');
-        _scheduleNextPrefetch(tok);
-        return;
+        source = AudioSource.uri(info.url);
       }
 
-      // ── Path 2: Manifest cache hit — stream with near-zero delay ──────────
-      // If the next song was prefetched while the current one was playing,
-      // its manifest URL is already in _manifestCache — no network call needed.
-      final cached = _manifestCache[song.videoId];
-      if (cached != null && !cached.isExpired) {
-        debugPrint('[N] manifest cache hit — streaming immediately');
-        await _player.setAudioSource(AudioSource.uri(cached.info.url));
-        if (_tok != tok) {
-          _player.stop();
-          return;
-        }
-        _current = song;
-        await _player.play();
-        debugPrint('[N] ✓ STREAMING (manifest cached): ${song.title}');
-        _cacheInBackground(cached.info, song.videoId, tok);
-        _scheduleNextPrefetch(tok);
-        return;
-      }
+      await _player.setAudioSource(source, initialPosition: req.resumeAt);
+      if (!live()) return;
 
-      // ── Path 3: Cold start — fetch manifest then stream ───────────────────
-      debugPrint('[N] cold manifest fetch for ${song.title}');
-      final info = await _getInfo(song.videoId, tok);
-      if (_tok != tok) return;
-      if (info == null) {
-        debugPrint('[N] ✗ no stream info for ${song.videoId}');
-        playbackState.add(playbackState.value.copyWith(
-            processingState: AudioProcessingState.error));
-        return;
-      }
+      // IMPORTANT: play() only completes when playback pauses or ends, so it
+      // must NOT be awaited here or the worker would be blocked for the whole
+      // song and skipping would stall.
+      unawaited(_player.play().catchError((Object e) {
+        if (live()) _onPlayerError(e);
+      }));
 
-      await _player.setAudioSource(AudioSource.uri(info.url));
-      if (_tok != tok) {
-        _player.stop();
-        return;
-      }
-      _current = song;
-      await _player.play();
-      debugPrint('[N] ✓ STREAMING (cold): ${song.title}');
-      _cacheInBackground(info, song.videoId, tok);
-      _scheduleNextPrefetch(tok);
+      _consecutiveFailures = 0;
+      debugPrint('[N] ✓ started: ${song.title}');
+
+      if (info != null) _cacheInBackground(info, song.videoId, req.tok);
+      _scheduleNextPrefetch(req.tok);
     } catch (e, st) {
-      if (_tok != tok) return;
-      debugPrint('[N] _load error: $e\n$st');
-      playbackState.add(playbackState.value.copyWith(
-          processingState: AudioProcessingState.error));
+      if (!live()) return; // superseded: whatever happened is irrelevant now
+      var kind =
+          e is _StreamResolveException ? e.kind : classifyPlaybackError(e);
+      debugPrint('[N] load failed ($kind): $e\n$st');
+      if (kind == FailureKind.cancelled) kind = FailureKind.transient;
+      if (usedDiskCache) _dropFromCache(song.videoId); // maybe corrupt
+      _handleLoadFailure(req, kind);
     }
   }
 
-  void _cacheInBackground(
-      AudioStreamInfo info, String videoId, int tok) {
+  // ── Failure policy ────────────────────────────────────────────────────────
+  // permanent    → skip the song right away
+  // rateLimited  → stop and surface the countdown (retrying now makes it worse)
+  // transient    → retry with backoff (max 2 retries), then skip
+  void _handleLoadFailure(_LoadRequest req, FailureKind kind) {
+    final song = req.song;
+    _manifestCache.remove(song.videoId);
+
+    if (kind == FailureKind.rateLimited) {
+      _setError();
+      return;
+    }
+    if (kind == FailureKind.transient && req.attempt < 2) {
+      final delay = retryDelay(req.attempt);
+      debugPrint('[N] retry in ${delay.inMilliseconds}ms');
+      final tok = req.tok;
+      _retryTimer?.cancel();
+      _retryTimer = Timer(delay, () {
+        // Only retry if nothing newer has happened in the meantime.
+        if (_tok == tok && _current == song) {
+          _requestLoad(song, resumeAt: req.resumeAt, attempt: req.attempt + 1);
+        }
+      });
+      return;
+    }
+    _giveUpOnCurrent(song, kind);
+  }
+
+  /// The current song cannot be played: move on instead of showing a dead end.
+  void _giveUpOnCurrent(Song song, FailureKind kind) {
+    _consecutiveFailures++;
+    final canSkip = _queue.length > 1 &&
+        _consecutiveFailures < min(_queue.length, 5);
+    if (canSkip && _advance(forced: true)) {
+      _notices.add('Skipped "${song.title}" — unavailable');
+      _midPlayRetries = 0;
+      _requestLoad(_queue[_idx]);
+      _queueChanged.add(null);
+    } else {
+      _notices.add('Could not play "${song.title}"');
+      _setError();
+    }
+  }
+
+  void _setError() {
+    playbackState.add(playbackState.value
+        .copyWith(processingState: AudioProcessingState.error, playing: false));
+  }
+
+  void _dropFromCache(String id) {
+    try {
+      _cf(id).deleteSync();
+    } catch (_) {}
+    _index.remove(id);
+    _saveIndex();
+  }
+
+  void _cacheInBackground(AudioStreamInfo info, String videoId, int tok) {
     Future.microtask(() async {
       try {
         await _download(info, videoId, tok);
@@ -410,51 +513,54 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
 
   // ── Manifest fetch with per-client exponential backoff ───────────────────
 
-  Future<AudioStreamInfo?> _getInfo(String videoId, int tok) async {
-    if (_tok != tok) return null;
+  Future<_FetchResult> _getInfo(String videoId, int tok,
+      {Future<void>? superseded}) async {
+    if (_tok != tok) return const _FetchResult(null, FailureKind.cancelled);
 
-    // Return a fresh cached entry without any network call.
     final existing = _manifestCache[videoId];
     if (existing != null && !existing.isExpired) {
-      debugPrint('[N] _getInfo: manifest cache hit for $videoId');
-      return existing.info;
+      return _FetchResult(existing.info, FailureKind.transient);
     }
 
     debugPrint('[N] manifest fetch for $videoId');
+    var sawPermanent = false;
 
     for (int pass = 0; pass < 2; pass++) {
       for (int ci = 0; ci < _clients.length; ci++) {
-        if (_tok != tok) return null;
+        if (_tok != tok) return const _FetchResult(null, FailureKind.cancelled);
 
         if (_clientIsOnCooldown(ci)) {
-          final until = _clientCooldownUntil[ci]!;
-          final remaining = until.difference(DateTime.now()).inSeconds;
-          debugPrint(
-              '[N] client=$ci skipped (cooldown ${remaining}s remaining)');
+          final remaining =
+              _clientCooldownUntil[ci]!.difference(DateTime.now()).inSeconds;
+          debugPrint('[N] client=$ci skipped (cooldown ${remaining}s)');
           continue;
         }
 
         try {
           debugPrint('[N] manifest client=$ci for $videoId');
-          final m = await _yt.videos.streamsClient
+          final fetch = _yt.videos.streamsClient
               .getManifest(videoId, ytClients: [_clients[ci]])
               .timeout(_timeouts[ci]);
+          // Race against "user moved on" so a slow client never delays the
+          // next song by up to its full timeout.
+          final m = superseded == null
+              ? await fetch
+              : await Future.any<StreamManifest>([
+                  fetch,
+                  superseded.then<StreamManifest>(
+                      (_) => throw const _SupersededException()),
+                ]);
 
           if (m.audioOnly.isEmpty) {
             debugPrint('[N] client=$ci no audio streams, trying next');
             continue;
           }
 
-          // ── Quality selection: always pick lowest bitrate ─────────────────
-          // Caller said latency > quality. Lowest bitrate = fastest buffering
-          // start and smallest background download. Typically 48kbps AAC.
+          // Lowest-bitrate mp4 (AAC) first: fastest start, smallest download.
           final mp4 = m.audioOnly
               .where((s) => s.codec.mimeType.contains('mp4'))
               .toList()
             ..sort((a, b) => a.bitrate.compareTo(b.bitrate));
-
-          // Pick the absolute lowest mp4; fall back to lowest of any codec
-          // if no mp4 streams exist (preserves existing fallback behaviour).
           final chosen = mp4.isNotEmpty
               ? mp4.first
               : (m.audioOnly.toList()
@@ -464,25 +570,31 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
           debugPrint(
               '[N] ✓ manifest ok client=$ci ${chosen.codec.mimeType} @ ${chosen.bitrate}');
           _markClientSuccess(ci);
-
-          // Store in manifest cache so next play / prefetch is instant.
           _manifestCache[videoId] = _ManifestEntry(chosen);
-
-          return chosen;
+          return _FetchResult(chosen, FailureKind.transient);
+        } on _SupersededException {
+          return const _FetchResult(null, FailureKind.cancelled);
         } on RequestLimitExceededException {
           _markClientRateLimited(ci);
         } on TimeoutException {
           debugPrint('[N] client=$ci timeout, trying next');
         } catch (e) {
-          debugPrint('[N] client=$ci error: $e');
+          final kind = classifyPlaybackError(e);
+          debugPrint('[N] client=$ci error ($kind): $e');
+          if (kind == FailureKind.permanent) sawPermanent = true;
+          if (kind == FailureKind.rateLimited) {
+            _markClientRateLimited(ci);
+            }
         }
       }
 
+      // A permanent verdict ("video unavailable") will not change on retry.
+      if (sawPermanent) break;
+
       if (pass == 0) {
         final now = DateTime.now();
-        bool anyAvailableNow = false;
+        var anyAvailableNow = false;
         Duration? shortestWait;
-
         for (int ci = 0; ci < _clients.length; ci++) {
           final until = _clientCooldownUntil[ci];
           if (until == null || now.isAfter(until)) {
@@ -490,21 +602,17 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
             break;
           }
           final wait = until.difference(now);
-          if (shortestWait == null || wait < shortestWait) {
-            shortestWait = wait;
-          }
+          if (shortestWait == null || wait < shortestWait) shortestWait = wait;
         }
 
         if (anyAvailableNow) continue;
 
         if (shortestWait != null && shortestWait.inSeconds <= 30) {
-          debugPrint(
-              '[N] all clients on cooldown, waiting ${shortestWait.inSeconds}s');
+          debugPrint('[N] all clients on cooldown, waiting ${shortestWait.inSeconds}s');
           for (int s = 0; s < shortestWait.inSeconds + 1; s++) {
-            if (_tok != tok) return null;
+            if (_tok != tok) return const _FetchResult(null, FailureKind.cancelled);
             await Future.delayed(const Duration(seconds: 1));
           }
-          debugPrint('[N] cooldown wait done, retrying pass 2');
         } else {
           debugPrint('[N] all clients need >30s cooldown, aborting');
           break;
@@ -513,7 +621,13 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
     }
 
     debugPrint('[N] all clients failed for $videoId');
-    return null;
+    if (sawPermanent) return const _FetchResult(null, FailureKind.permanent);
+    // Every client throttled → wait it out; otherwise treat as a transient failure.
+    return _FetchResult(
+        null,
+        globalCooldownSeconds > 0
+            ? FailureKind.rateLimited
+            : FailureKind.transient);
   }
 
   // ── Download ──────────────────────────────────────────────────────────────
@@ -677,7 +791,7 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
       try {
         // Use a special "prefetch token" check: we pass ptok so the fetch
         // aborts if the user skips. _getInfo already checks _tok == tok.
-        info = await _getInfo(next.videoId, ptok);
+        info = (await _getInfo(next.videoId, ptok)).info;
       } catch (e) {
         debugPrint('[N] prefetch manifest err: $e');
         return;
@@ -712,32 +826,40 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
   // ── AudioHandler overrides ────────────────────────────────────────────────
 
   @override
-  Future<void> play() async => _player.play();
+  Future<void> play() async {
+    // just_audio's play() completes only when playback pauses/ends; don't await.
+    unawaited(_player.play());
+  }
 
   @override
-  Future<void> pause() async => _player.pause();
+  Future<void> pause() => _player.pause();
 
   @override
-  Future<void> seek(Duration p) async => _player.seek(p);
+  Future<void> seek(Duration p) => _player.seek(p);
 
   @override
   Future<void> stop() async {
     _tok++;
-    await _player.stop();
+    _runner.cancel();
+    _retryTimer?.cancel();
+    try {
+      await _player.stop();
+    } catch (_) {}
     playbackState.add(playbackState.value.copyWith(
         processingState: AudioProcessingState.idle, playing: false));
   }
 
-  @override
-  Future<void> skipToNext() async {
-    if (_queue.isEmpty) return;
-    switch (_playMode) {
+  /// Moves [_idx] to the next song according to [_playMode].
+  /// Returns false when there is nothing to advance to (end of a sequential queue).
+  /// [forced] is used after a failure: repeat-one must not retry a dead song forever.
+  bool _advance({bool forced = false}) {
+    if (_queue.isEmpty) return false;
+    var mode = _playMode;
+    if (forced && mode == PlayMode.repeatOne) mode = PlayMode.repeatAll;
+    switch (mode) {
       case PlayMode.repeatOne:
-        // Stay on the same song — just reload from the top.
-        await _load(_queue[_idx]);
-        break;
+        return true;
       case PlayMode.shuffle:
-        // Pick a random index different from the current one.
         if (_queue.length > 1) {
           int next;
           do {
@@ -745,32 +867,93 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
           } while (next == _idx);
           _idx = next;
         }
-        await _load(_queue[_idx]);
-        break;
+        return true;
       case PlayMode.sequential:
-        // Advance but stop at the end — do not wrap.
         if (_idx < _queue.length - 1) {
           _idx++;
-          await _load(_queue[_idx]);
-        } else {
-          // End of queue — stop playback entirely.
-          debugPrint('[N] sequential: end of queue, stopping');
-          await stop();
+          return true;
         }
-        break;
+        return false;
       case PlayMode.repeatAll:
-      default:
         _idx = (_idx + 1) % _queue.length;
-        await _load(_queue[_idx]);
-        break;
+        return true;
+    }
+  }
+
+  // Skips only move the index and queue a load. Ten rapid taps move the index
+  // ten times but cause a single load of the final song.
+  @override
+  Future<void> skipToNext() async {
+    if (_queue.isEmpty) return;
+    _resetFailureCounters();
+    if (_advance()) {
+      _requestLoad(_queue[_idx]);
+      _queueChanged.add(null);
+    } else {
+      debugPrint('[N] sequential: end of queue, stopping');
+      await stop();
     }
   }
 
   @override
   Future<void> skipToPrevious() async {
     if (_queue.isEmpty) return;
+    _resetFailureCounters();
     _idx = (_idx - 1 + _queue.length) % _queue.length;
-    await _load(_queue[_idx]);
+    _requestLoad(_queue[_idx]);
+    _queueChanged.add(null);
+  }
+
+  // ── Queue editing (keeps the real playback queue in sync with the UI) ─────
+
+  /// [newIndex] is the position after the item has been removed (as the UI
+  /// already adjusts it for ReorderableListView).
+  void reorderQueue(int oldIndex, int newIndex) {
+    if (oldIndex < 0 || oldIndex >= _queue.length) return;
+    final current = _current;
+    final item = _queue.removeAt(oldIndex);
+    _queue.insert(newIndex.clamp(0, _queue.length), item);
+    if (current != null) {
+      final i = _queue.indexOf(current);
+      if (i >= 0) _idx = i;
+    }
+    _publishQueue();
+  }
+
+  void removeFromQueue(int index) {
+    if (index < 0 || index >= _queue.length) return;
+    final removingCurrent = index == _idx;
+    _queue.removeAt(index);
+
+    if (_queue.isEmpty) {
+      _idx = 0;
+      _publishQueue();
+      unawaited(stop());
+      return;
+    }
+    if (index < _idx) {
+      _idx--;
+    } else if (removingCurrent) {
+      _idx = _idx.clamp(0, _queue.length - 1); // next song slides into this slot
+    }
+    _publishQueue();
+    if (removingCurrent) {
+      _resetFailureCounters();
+      _requestLoad(_queue[_idx]);
+    }
+  }
+
+  void _publishQueue() {
+    queue.add(_queue
+        .map((s) => MediaItem(
+              id: s.videoId,
+              title: s.title,
+              artist: s.artist,
+              artUri:
+                  s.thumbnailUrl.isNotEmpty ? Uri.tryParse(s.thumbnailUrl) : null,
+            ))
+        .toList());
+    _queueChanged.add(null);
   }
 
   void _broadcast(PlaybackEvent e) {
@@ -805,6 +988,8 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
   @override
   Future<void> onTaskRemoved() async {
     _tok++;
+    _runner.cancel();
+    _retryTimer?.cancel();
     await _player.stop();
     await _player.dispose();
     _yt.close();

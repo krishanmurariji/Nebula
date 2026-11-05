@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'providers/api_key_provider.dart';
+import 'providers/player_provider.dart';
 import 'providers/theme_provider.dart';
 import 'screens/onboarding_screen.dart';
 import 'screens/main_shell.dart';
+
+final GlobalKey<ScaffoldMessengerState> _messengerKey =
+    GlobalKey<ScaffoldMessengerState>();
 
 class NebulaApp extends ConsumerWidget {
   const NebulaApp({super.key});
@@ -12,8 +16,16 @@ class NebulaApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final hasKey   = ref.watch(hasApiKeyProvider);
     final themeMode = ref.watch(themeProvider);
+    ref.listen<String?>(playerProvider.select((s) => s.notice), (_, n) {
+      if (n == null) return;
+      _messengerKey.currentState
+        ?..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(
+            content: Text(n), duration: const Duration(seconds: 3)));
+    });
     return MaterialApp(
       title: 'Nebula',
+      scaffoldMessengerKey: _messengerKey,
       debugShowCheckedModeBanner: false,
       themeMode: themeMode,
       theme: _light(),
