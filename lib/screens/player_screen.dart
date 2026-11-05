@@ -1399,15 +1399,6 @@ class _VolumeArcPainter extends CustomPainter {
     final startIconX = center.dx + iconRadius * cos(startAngle);
     final startIconY = center.dy + iconRadius * sin(startAngle);
 
-    final IconData volumeIcon;
-    if (volume <= 0.0) {
-      volumeIcon = Icons.volume_off_rounded;
-    } else if (volume >= 1.0) {
-      volumeIcon = Icons.volume_up_rounded;
-    } else {
-      volumeIcon = Icons.volume_down_rounded;
-    }
-
     _drawMaterialIcon(
         canvas, Offset(startIconX, startIconY), Icons.volume_mute_rounded, iconBlue, 22.0);
 

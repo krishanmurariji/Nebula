@@ -52,11 +52,19 @@ Search and playback both work without a YouTube API key or quota.
 flutter run
 📂 Project Structure
 lib/
-│── core/          # Constants, themes, utils
-│── features/      # Main modules (player, home, search)
-│── services/      # API & audio handling
-│── providers/     # Riverpod state management
+│── models/        # Song
+│── providers/     # Riverpod state (player, library, search, theme)
+│── screens/       # Home, Search, Library, Player, Settings, Playback Log
 │── widgets/       # Reusable UI components
+│── services/      # Audio engine
+│   ├── audio_handler.dart        # Playback controller (audio_service)
+│   ├── latest_wins_runner.dart   # One load at a time, newest request wins
+│   ├── stream_resolver.dart      # De-duplicated, circuit-broken stream lookup
+│   ├── fallback_sources.dart     # Piped/Invidious backup when YouTube fails
+│   ├── progressive_download.dart # One download feeds player + cache
+│   ├── audio_cache.dart          # Async LRU disk cache
+│   └── youtube_search_service.dart
+test/              # Unit tests for the services above
 🚧 Roadmap
  🎵 Offline Playback
  ❤️ Playlist & Favorites
