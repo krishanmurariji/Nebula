@@ -283,9 +283,9 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
             ps.status != NebulaPlayerStatus.playing &&
             ps.status != NebulaPlayerStatus.paused);
             
-    final durMs = ps.duration.inMilliseconds;
-    final posMs = ps.position.inMilliseconds;
-    final prog = durMs > 0 ? (posMs / durMs).clamp(0.0, 1.0) : 0.0;
+    final progress =
+        ref.watch(playbackProgressProvider).valueOrNull ?? PlaybackProgress.zero;
+    final prog = progress.fraction;
 
     final isDark = ref.watch(themeProvider) == ThemeMode.dark;
     final bg = isDark ? const Color(0xFF0D1117) : const Color(0xFFEDF2F7);
@@ -418,7 +418,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
                           progress: prog,
                           isDark: isDark,
                           onSeek: (pct) {
-                            final total = ps.duration.inSeconds;
+                            final total = progress.duration.inSeconds;
                             if (total > 0) {
                               ref.read(playerProvider.notifier).seek(Duration(
                                   seconds: (pct * total).round()));
@@ -433,12 +433,12 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
                             mainAxisAlignment:
                                 MainAxisAlignment.spaceBetween,
                             children: [
-                              Text(_fmt(ps.position),
+                              Text(_fmt(progress.position),
                                   style: TextStyle(
                                       fontSize: 11,
                                       color: mutedCol,
                                       fontWeight: FontWeight.w700)),
-                              Text(_fmt(ps.duration),
+                              Text(_fmt(progress.duration),
                                   style: TextStyle(
                                       fontSize: 11,
                                       color: mutedCol,

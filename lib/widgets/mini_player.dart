@@ -13,9 +13,7 @@ class MiniPlayer extends ConsumerWidget {
     if (ps.song == null) return const SizedBox.shrink();
     final song    = ps.song!;
     final playing = ps.status == NebulaPlayerStatus.playing;
-    final durMs   = ps.duration.inMilliseconds;
-    final posMs   = ps.position.inMilliseconds;
-    final prog    = durMs > 0 ? (posMs / durMs).clamp(0.0, 1.0) : 0.0;
+    final prog = ref.watch(playbackProgressProvider).valueOrNull?.fraction ?? 0.0;
 
     return GestureDetector(
       onTap: () => Navigator.of(context).push(

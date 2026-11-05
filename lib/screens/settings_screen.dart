@@ -7,6 +7,7 @@ import '../providers/api_key_provider.dart';
 import '../providers/library_provider.dart';
 import '../providers/theme_provider.dart';
 import 'onboarding_screen.dart';
+import 'playback_log_screen.dart';
 import 'mini_player.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
@@ -166,6 +167,32 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> with TickerProv
                               borderRadius: BorderRadius.circular(12)),
                         ));
                       },
+                    ),
+
+                    const SizedBox(height: 16),
+                    _MemoryCard(
+                      label: 'Backup Sources',
+                      subtitle: 'Used if YouTube blocks or breaks',
+                      icon: Icons.shield_moon_rounded,
+                      iconColor: const Color(0xFF4993FC),
+                      cardBg: cardBg,
+                      shadowD: shadowD,
+                      shadowL: shadowL,
+                      onTap: () => showBackupSourcesDialog(context),
+                    ),
+                    const SizedBox(height: 16),
+                    _MemoryCard(
+                      label: 'Playback Log',
+                      subtitle: 'See what the player is doing',
+                      icon: Icons.bug_report_rounded,
+                      iconColor: Colors.orangeAccent,
+                      cardBg: cardBg,
+                      shadowD: shadowD,
+                      shadowL: shadowL,
+                      onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (_) => const PlaybackLogScreen())),
                     ),
 
                     const SizedBox(height: 32),

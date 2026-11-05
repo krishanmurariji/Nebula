@@ -3,17 +3,21 @@ import 'dart:io';
 import 'dart:math';
 
 import 'package:audio_service/audio_service.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 
 import '../models/song.dart';
+import 'app_log.dart';
 import 'audio_cache.dart';
+import 'backup_settings.dart';
+import 'connectivity_probe.dart';
+import 'fallback_sources.dart';
 import 'latest_wins_runner.dart';
 import 'playback_failure.dart';
 import 'progressive_download.dart';
+import 'resolved_stream.dart';
 import 'stream_resolver.dart';
 
 final audioHandlerProvider =
@@ -85,19 +89,31 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
     YoutubeApiClient.mweb,
   ];
 
-  late final StreamResolver<AudioStreamInfo> _resolver =
-      StreamResolver<AudioStreamInfo>(
-    fetch: _fetchManifest,
+  // Clients 0-3 are YouTube; client 4 is the backup source (Piped/Invidious),
+  // tried only after YouTube itself has failed.
+  static const int _kBackupClient = 4;
+
+  late final FallbackStreamFetcher _fallback =
+      FallbackStreamFetcher(instances: loadBackupInstances);
+
+  late final StreamResolver<ResolvedStream> _resolver =
+      StreamResolver<ResolvedStream>(
+    fetch: _fetchStream,
     timeouts: const [
       Duration(seconds: 20),
       Duration(seconds: 12),
       Duration(seconds: 12),
       Duration(seconds: 12),
+      Duration(seconds: 25), // backup source (up to two instances)
     ],
   );
 
-  Future<AudioStreamInfo?> _fetchManifest(String videoId, int client) async {
-    debugPrint('[N] manifest client=$client for $videoId');
+  final ConnectivityProbe _net = ConnectivityProbe();
+
+  Future<ResolvedStream?> _fetchStream(String videoId, int client) async {
+    if (client == _kBackupClient) return _fallback.fetch(videoId);
+
+    nlog('[N] manifest client=$client for $videoId');
     final m = await _yt.videos.streamsClient
         .getManifest(videoId, ytClients: [_clients[client]]);
     if (m.audioOnly.isEmpty) return null;
@@ -107,13 +123,17 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
         .where((s) => s.codec.mimeType.contains('mp4'))
         .toList()
       ..sort((a, b) => a.bitrate.compareTo(b.bitrate));
-    final chosen = mp4.isNotEmpty
+    final info = mp4.isNotEmpty
         ? mp4.first
         : (m.audioOnly.toList()..sort((a, b) => a.bitrate.compareTo(b.bitrate)))
             .first;
-    debugPrint(
-        '[N] ✓ manifest ok client=$client ${chosen.codec.mimeType} @ ${chosen.bitrate}');
-    return chosen;
+    nlog('[N] ✓ manifest ok client=$client ${info.codec.mimeType} @ ${info.bitrate}');
+    return ResolvedStream(
+      url: info.url,
+      totalBytes: info.size.totalBytes,
+      mimeType: info.codec.mimeType,
+      open: () => _yt.videos.streamsClient.get(info),
+    );
   }
 
   // ── Disk cache ────────────────────────────────────────────────────────────
@@ -168,7 +188,7 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
   // same position a couple of times, then give up on the song and skip it.
   void _onPlayerError(Object e) {
     final kind = classifyPlaybackError(e);
-    debugPrint('[N] player error ($kind): $e');
+    nlog('[N] player error ($kind): $e');
     if (kind == FailureKind.cancelled) return;
     // A load in progress reports its own failures through exceptions.
     if (_runner.isBusy) return;
@@ -182,7 +202,7 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
       // attempt 1 = skip the progressive source and use the direct URL.
       _requestLoad(song, resumeAt: _player.position, attempt: 1);
     } else {
-      _giveUpOnCurrent(song, kind);
+      unawaited(_giveUpOnCurrent(song, kind));
     }
   }
 
@@ -194,10 +214,10 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
       final cache = AudioCache(Directory('${base.path}/nebula_cache'));
       await cache.init();
       _cache = cache;
-      debugPrint('[N] cache ready: ${cache.count} songs, ${cache.totalBytes} bytes');
+      nlog('[N] cache ready: ${cache.count} songs, ${cache.totalBytes} bytes');
     } catch (e) {
       // No usable disk → just stream without caching.
-      debugPrint('[N] cache disabled: $e');
+      nlog('[N] cache disabled: $e');
     } finally {
       if (!_cacheReady.isCompleted) _cacheReady.complete();
     }
@@ -223,7 +243,7 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
 
   void setPlayMode(PlayMode mode) {
     _playMode = mode;
-    debugPrint('[N] playMode → $mode');
+    nlog('[N] playMode → $mode');
   }
 
   // ── Play / Load ───────────────────────────────────────────────────────────
@@ -284,11 +304,11 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
     ProgressiveDownload? download;
 
     try {
-      debugPrint('[N] ▶ ${song.title} (attempt ${req.attempt})');
+      nlog('[N] ▶ ${song.title} (attempt ${req.attempt})');
       try {
         await _player.stop();
       } catch (e) {
-        debugPrint('[N] stop() before load ignored: $e');
+        nlog('[N] stop() before load ignored: $e');
       }
       if (!live()) return;
 
@@ -314,15 +334,15 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
         if (req.attempt == 0) {
           // Progressive: one download feeds the player AND the disk cache.
           download = ProgressiveDownload(
-            open: () => _yt.videos.streamsClient.get(info),
-            totalBytes: info.size.totalBytes,
+            open: info.open,
+            totalBytes: info.totalBytes,
           );
           _activeDownload = download;
           _saveWhenDone(download, song.videoId);
-          source = _ProgressiveAudioSource(download, info.codec.mimeType);
+          source = _ProgressiveAudioSource(download, info.mimeType);
         } else {
           // Fallback after a failure: hand the raw URL to the native player.
-          debugPrint('[N] using direct URL fallback');
+          nlog('[N] using direct URL fallback');
           source = AudioSource.uri(info.url);
         }
       }
@@ -338,17 +358,17 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
       }));
 
       _consecutiveFailures = 0;
-      debugPrint('[N] ✓ started: ${song.title}');
+      nlog('[N] ✓ started: ${song.title}');
       _scheduleNextPrefetch(req.tok);
     } catch (e, st) {
       download?.cancel();
       if (!live()) return; // superseded: whatever happened is irrelevant now
       var kind =
           e is _StreamResolveException ? e.kind : classifyPlaybackError(e);
-      debugPrint('[N] load failed ($kind): $e\n$st');
+      nlog('[N] load failed ($kind): $e\n$st');
       if (kind == FailureKind.cancelled) kind = FailureKind.transient;
       if (usedDiskCache) unawaited(_cache?.remove(song.videoId)); // maybe corrupt
-      _handleLoadFailure(req, kind);
+      unawaited(_handleLoadFailure(req, kind));
     }
   }
 
@@ -356,17 +376,26 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
   void _saveWhenDone(ProgressiveDownload d, String videoId) {
     d.completed.then((bytes) async {
       await _cache?.put(videoId, bytes, protect: _protectedIds);
-      debugPrint('[N] cached $videoId (${bytes.length} bytes)');
+      nlog('[N] cached $videoId (${bytes.length} bytes)');
     }).catchError((Object _) {});
   }
 
   // ── Failure policy ────────────────────────────────────────────────────────
+  // offline      → never burn retries or skip: play downloaded songs, or wait
+  //                and resume automatically when the network returns
   // permanent    → skip the song right away
   // rateLimited  → stop and surface the countdown (retrying now makes it worse)
   // transient    → retry with backoff (max 2 retries), then skip
-  void _handleLoadFailure(_LoadRequest req, FailureKind kind) {
+  Future<void> _handleLoadFailure(_LoadRequest req, FailureKind kind) async {
     final song = req.song;
     _resolver.invalidate(song.videoId);
+
+    if (kind != FailureKind.permanent && !await _net.isOnline()) {
+      if (_tok != req.tok) return;
+      _handleOffline(song, req.tok, resumeAt: req.resumeAt);
+      return;
+    }
+    if (_tok != req.tok) return;
 
     if (kind == FailureKind.rateLimited) {
       _setError();
@@ -374,7 +403,7 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
     }
     if (kind == FailureKind.transient && req.attempt < 2) {
       final delay = retryDelay(req.attempt);
-      debugPrint('[N] retry in ${delay.inMilliseconds}ms');
+      nlog('[N] retry in ${delay.inMilliseconds}ms');
       final tok = req.tok;
       _retryTimer?.cancel();
       _retryTimer = Timer(delay, () {
@@ -385,11 +414,19 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
       });
       return;
     }
-    _giveUpOnCurrent(song, kind);
+    await _giveUpOnCurrent(song, kind);
   }
 
   /// The current song cannot be played: move on instead of showing a dead end.
-  void _giveUpOnCurrent(Song song, FailureKind kind) {
+  Future<void> _giveUpOnCurrent(Song song, FailureKind kind) async {
+    final tok = _tok;
+    if (kind != FailureKind.permanent && !await _net.isOnline()) {
+      if (_tok != tok) return;
+      _handleOffline(song, tok, resumeAt: _player.position);
+      return;
+    }
+    if (_tok != tok) return;
+
     _consecutiveFailures++;
     final canSkip =
         _queue.length > 1 && _consecutiveFailures < min(_queue.length, 5);
@@ -402,6 +439,37 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
       _notices.add('Could not play "${song.title}"');
       _setError();
     }
+  }
+
+  /// No network. Keep the music going from downloaded songs if any exist in
+  /// the queue; otherwise wait quietly and resume this song when we are back.
+  void _handleOffline(Song song, int tok, {Duration? resumeAt}) {
+    final cache = _cache;
+    if (cache != null && _queue.length > 1) {
+      for (var step = 1; step < _queue.length; step++) {
+        final i = (_idx + step) % _queue.length;
+        if (cache.contains(_queue[i].videoId)) {
+          nlog('[N] offline → playing downloaded "${_queue[i].title}"');
+          _notices.add('Offline — playing downloaded songs');
+          _idx = i;
+          _resetFailureCounters();
+          _requestLoad(_queue[i]);
+          _queueChanged.add(null);
+          return;
+        }
+      }
+    }
+
+    nlog('[N] offline → waiting for connection');
+    _notices.add('No connection — will resume when back online');
+    _setError();
+    unawaited(() async {
+      final back = await _net.waitUntilOnline(isCancelled: () => _tok != tok);
+      if (!back || _tok != tok) return;
+      nlog('[N] back online → resuming "${song.title}"');
+      _resetFailureCounters();
+      _requestLoad(song, resumeAt: resumeAt);
+    }());
   }
 
   void _setError() {
@@ -431,22 +499,22 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
         if (_tok != ptok || _runner.isBusy) return;
         if (cache.contains(next.videoId)) return;
 
-        debugPrint('[N] prefetch: ${next.title}');
+        nlog('[N] prefetch: ${next.title}');
         final res = await _resolver.resolve(next.videoId);
         final info = res.value;
         if (info == null || _tok != ptok || _runner.isBusy) return;
 
         final dl = ProgressiveDownload(
-          open: () => _yt.videos.streamsClient.get(info),
-          totalBytes: info.size.totalBytes,
+          open: info.open,
+          totalBytes: info.totalBytes,
         );
         _prefetchDownload = dl..start();
         final bytes = await dl.completed;
         if (_tok != ptok) return; // user moved on; bytes are discarded
         await cache.put(next.videoId, bytes, protect: _protectedIds);
-        debugPrint('[N] prefetch done: ${next.title}');
+        nlog('[N] prefetch done: ${next.title}');
       } catch (e) {
-        debugPrint('[N] prefetch skipped: $e');
+        nlog('[N] prefetch skipped: $e');
       }
     }());
   }
@@ -525,7 +593,7 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
       _requestLoad(_queue[_idx]);
       _queueChanged.add(null);
     } else {
-      debugPrint('[N] sequential: end of queue, stopping');
+      nlog('[N] sequential: end of queue, stopping');
       await stop();
     }
   }
