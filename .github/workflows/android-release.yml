@@ -1,0 +1,151 @@
+name: Android APK
+
+# What triggers a build, and what it produces:
+#   push to master / claude/**  → rolling pre-release "dev-latest" (always the newest build)
+#   push of a tag like v1.2.0   → a permanent, versioned GitHub Release
+#   manual "Run workflow"       → same as a branch push
+#
+# Stable download link for the phone / the future website:
+#   https://github.com/<owner>/<repo>/releases/download/dev-latest/nebula.apk   (newest build)
+#   https://github.com/<owner>/<repo>/releases/latest/download/nebula.apk       (newest tagged release)
+
+on:
+  push:
+    branches: [master, main, "claude/**"]
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write # create/replace releases
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      IS_TAG: ${{ startsWith(github.ref, 'refs/tags/v') }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      # The Gradle files list Aliyun mirrors first; a slow/blocked mirror would
+      # fail the whole build. GitHub's runners reach Google + Maven Central fine.
+      - name: Drop Aliyun mirrors in CI only
+        run: |
+          sed -i '/maven.aliyun.com/d' android/build.gradle android/settings.gradle || true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Test
+        run: flutter test
+
+      # ── Signing ────────────────────────────────────────────────────────────
+      # Updates only install over an existing app if every build is signed with
+      # the SAME key, so the key lives in GitHub secrets (see docs/RELEASING.md).
+      - name: Prepare release signing
+        id: signing
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE_B64" ] || [ -z "$STORE_PASSWORD" ] || [ -z "$KEY_ALIAS" ] || [ -z "$KEY_PASSWORD" ]; then
+            if [ "$IS_TAG" = "true" ]; then
+              echo "::error::Signing secrets are missing. Refusing to publish a versioned release signed with a throwaway key. See docs/RELEASING.md."
+              exit 1
+            fi
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::No signing secrets: building with a throwaway debug key. Installing this APK over a previous build will fail until you uninstall the old app. See docs/RELEASING.md."
+            exit 0
+          fi
+          echo "$KEYSTORE_B64" | base64 -d > "$GITHUB_WORKSPACE/android/nebula-release.jks"
+          {
+            echo "storePassword=$STORE_PASSWORD"
+            echo "keyPassword=$KEY_PASSWORD"
+            echo "keyAlias=$KEY_ALIAS"
+            echo "storeFile=$GITHUB_WORKSPACE/android/nebula-release.jks"
+          } > "$GITHUB_WORKSPACE/android/key.properties"
+          echo "signed=true" >> "$GITHUB_OUTPUT"
+
+      # ── Version ────────────────────────────────────────────────────────────
+      # build-number must grow with every build or the phone refuses the update.
+      - name: Work out version
+        id: ver
+        run: |
+          if [ "$IS_TAG" = "true" ]; then
+            NAME="${GITHUB_REF_NAME#v}"
+          else
+            NAME="$(grep -m1 '^version:' pubspec.yaml | sed -E 's/version:\s*([0-9.]+).*/\1/')"
+          fi
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
+          echo "number=${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+
+      - name: Build release APK
+        run: |
+          flutter build apk --release \
+            --build-name="${{ steps.ver.outputs.name }}" \
+            --build-number="${{ steps.ver.outputs.number }}"
+          cp build/app/outputs/flutter-apk/app-release.apk nebula.apk
+          sha256sum nebula.apk | tee nebula.apk.sha256
+          ls -lh nebula.apk
+
+      - name: Keep the APK as a workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nebula-apk
+          path: |
+            nebula.apk
+            nebula.apk.sha256
+          retention-days: 14
+
+      # ── Publish ────────────────────────────────────────────────────────────
+      - name: Publish versioned release (tags)
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" nebula.apk nebula.apk.sha256 \
+            --title "Nebula ${GITHUB_REF_NAME}" \
+            --generate-notes \
+            --verify-tag
+
+      - name: Publish rolling dev build (branches / manual)
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SIGNED: ${{ steps.signing.outputs.signed }}
+        run: |
+          SHORT="${GITHUB_SHA::7}"
+          {
+            echo "Newest build from \`${GITHUB_REF_NAME}\` @ \`${SHORT}\` (build #${{ steps.ver.outputs.number }})."
+            echo
+            if [ "$SIGNED" = "true" ]; then
+              echo "Signed with the Nebula release key: installs as an update over earlier builds."
+            else
+              echo "**Signed with a throwaway debug key.** Uninstall any earlier Nebula before installing this one."
+            fi
+            echo
+            echo "SHA-256: \`$(cut -d' ' -f1 nebula.apk.sha256)\`"
+          } > notes.md
+          # Replace the previous rolling release so the download URL never changes.
+          gh release delete dev-latest --cleanup-tag --yes || true
+          gh release create dev-latest nebula.apk nebula.apk.sha256 \
+            --prerelease \
+            --target "$GITHUB_SHA" \
+            --title "Nebula dev build #${{ steps.ver.outputs.number }} (${SHORT})" \
+            --notes-file notes.md

@@ -33,6 +33,10 @@ Audio Engine	just_audio, audio_service
 API & Networking	http, youtube_explode_dart
 UI/UX	Neumorphism, Custom Animations
 Local Storage	shared_preferences
+📥 Download (Android)
+Newest build: https://github.com/krishanmurariji/Nebula/releases/download/dev-latest/nebula.apk
+Built automatically by GitHub Actions on every push. See docs/RELEASING.md for the one-time signing setup.
+
 🚀 Getting Started
 📌 Prerequisites
 Flutter SDK (latest stable)
