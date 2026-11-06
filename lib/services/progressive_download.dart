@@ -11,6 +11,7 @@ class ProgressiveDownload {
   ProgressiveDownload({
     required Stream<List<int>> Function() open,
     required this.totalBytes,
+    this.stallTimeout,
   }) : _open = open {
     // Callers that never look at [completed] must not trigger
     // "unhandled async error" when a download fails or is cancelled.
@@ -19,6 +20,12 @@ class ProgressiveDownload {
 
   final Stream<List<int>> Function() _open;
   final int totalBytes;
+
+  /// Fail the download when no byte arrives for this long (a stalled
+  /// connection must not leave the player loading forever).
+  final Duration? stallTimeout;
+  Timer? _watchdog;
+  int _lastSeen = -1;
 
   final List<Uint8List> _chunks = [];
   final List<int> _starts = []; // _starts[i] = byte offset of _chunks[i]
@@ -47,6 +54,7 @@ class ProgressiveDownload {
   void start() {
     if (_started) return;
     _started = true;
+    _startWatchdog();
     try {
       _sub = _open().listen(
         _onData,
@@ -57,6 +65,32 @@ class ProgressiveDownload {
     } catch (e, st) {
       _fail(e, st);
     }
+  }
+
+  void _startWatchdog() {
+    final limit = stallTimeout;
+    if (limit == null) return;
+    final tick = Duration(milliseconds: (limit.inMilliseconds ~/ 3).clamp(20, 5000));
+    var idleFor = Duration.zero;
+    _watchdog = Timer.periodic(tick, (t) {
+      if (_done || _cancelled || _error != null) {
+        t.cancel();
+        return;
+      }
+      if (_received != _lastSeen) {
+        _lastSeen = _received;
+        idleFor = Duration.zero;
+        return;
+      }
+      idleFor += tick;
+      if (idleFor >= limit) {
+        t.cancel();
+        _sub?.cancel();
+        _sub = null;
+        _fail(TimeoutException('no data for ${limit.inSeconds}s '
+            '(received $_received of $totalBytes bytes)'), StackTrace.current);
+      }
+    });
   }
 
   void _onData(List<int> data) {
@@ -84,6 +118,7 @@ class ProgressiveDownload {
       return;
     }
     _done = true;
+    _watchdog?.cancel();
     final out = Uint8List(_received);
     for (var i = 0; i < _chunks.length; i++) {
       out.setRange(_starts[i], _starts[i] + _chunks[i].length, _chunks[i]);
@@ -93,6 +128,7 @@ class ProgressiveDownload {
   }
 
   void _fail(Object e, StackTrace st) {
+    _watchdog?.cancel();
     if (_error != null || _done) return;
     _error = e;
     _stack = st;
@@ -104,6 +140,7 @@ class ProgressiveDownload {
   void cancel() {
     if (_done || _cancelled) return;
     _cancelled = true;
+    _watchdog?.cancel();
     _sub?.cancel();
     _sub = null;
     if (!_completer.isCompleted) {

@@ -1,11 +1,7 @@
-// just_audio marks StreamAudioSource as @experimental, but it is the supported
-// way to feed custom bytes to the player and the version is pinned in
-// pubspec.lock. Acknowledged here, only for this file.
-// ignore_for_file: experimental_member_use
-
 import 'dart:async';
 import 'dart:io';
 import 'dart:math';
+import 'dart:typed_data';
 
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -35,10 +31,13 @@ final audioHandlerProvider =
 // sequential — plays to end of queue then stops
 enum PlayMode { repeatAll, repeatOne, shuffle, sequential }
 
-/// Songs larger than this are streamed straight from the URL instead of being
-/// buffered in memory (a one-hour mix can be 60 MB+; a hostile server could
-/// claim gigabytes).
-const int _kMaxProgressiveBytes = 150 * 1024 * 1024;
+/// Songs up to this size are downloaded completely (into the disk cache) and
+/// then played from the local file. Anything bigger streams straight from its
+/// URL instead of being held in memory.
+const int _kMaxDownloadFirstBytes = 40 * 1024 * 1024;
+
+/// How many different clients/sources a single song may try before giving up.
+const int _kMaxStreamAttempts = 7;
 
 class _LoadRequest {
   final Song song;
@@ -55,27 +54,18 @@ class _StreamResolveException implements Exception {
   String toString() => 'StreamResolveException($kind)';
 }
 
-/// Feeds the player from a [ProgressiveDownload]. The player starts playing as
-/// soon as the first bytes arrive, seeking works (it waits for the bytes), and
-/// the very same download fills the disk cache.
-class _ProgressiveAudioSource extends StreamAudioSource {
-  _ProgressiveAudioSource(this.download, this.contentType);
-
-  final ProgressiveDownload download;
-  final String contentType;
-
+/// The stream a client handed out could not actually be downloaded (403,
+/// stall, truncated …). Carries which client so it can be penalized.
+class _DownloadFailure implements Exception {
+  final int client;
+  final Object cause;
+  const _DownloadFailure(this.client, this.cause);
   @override
-  Future<StreamAudioResponse> request([int? start, int? end]) async {
-    final from = start ?? 0;
-    final to = min(end ?? download.totalBytes, download.totalBytes);
-    return StreamAudioResponse(
-      sourceLength: download.totalBytes,
-      contentLength: to - from,
-      offset: from,
-      stream: download.read(from, to),
-      contentType: contentType,
-    );
-  }
+  String toString() => 'DownloadFailure(client $client): $cause';
+}
+
+class _SupersededException implements Exception {
+  const _SupersededException();
 }
 
 class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
@@ -92,16 +82,19 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
 
   // ── Stream resolution ─────────────────────────────────────────────────────
   // androidVr first — bypasses IP-level blocks that hit android/ios/mweb.
+  // Order matters: androidVr works without signature solving; the others
+  // are tried only when the earlier ones fail or hand out unusable streams.
   static final _clients = [
     YoutubeApiClient.androidVr,
-    YoutubeApiClient.android,
     YoutubeApiClient.ios,
+    YoutubeApiClient.androidMusic,
+    YoutubeApiClient.android,
+    YoutubeApiClient.tv,
     YoutubeApiClient.mweb,
   ];
 
-  // Clients 0-3 are YouTube; client 4 is the backup source (Piped/Invidious),
-  // tried only after YouTube itself has failed.
-  static const int _kBackupClient = 4;
+  // The backup source (Piped/Invidious) comes after every YouTube client.
+  static final int _kBackupClient = _clients.length;
 
   late final FallbackStreamFetcher _fallback =
       FallbackStreamFetcher(instances: loadBackupInstances);
@@ -109,11 +102,14 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
   late final StreamResolver<ResolvedStream> _resolver =
       StreamResolver<ResolvedStream>(
     fetch: _fetchStream,
+    log: (m) => nlog('[N] resolver: $m'),
     timeouts: const [
-      Duration(seconds: 20),
-      Duration(seconds: 12),
-      Duration(seconds: 12),
-      Duration(seconds: 12),
+      Duration(seconds: 20), // androidVr
+      Duration(seconds: 12), // ios
+      Duration(seconds: 12), // androidMusic
+      Duration(seconds: 12), // android
+      Duration(seconds: 12), // tv
+      Duration(seconds: 12), // mweb
       Duration(seconds: 25), // backup source (up to two instances)
     ],
   );
@@ -121,7 +117,9 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
   final ConnectivityProbe _net = ConnectivityProbe();
 
   Future<ResolvedStream?> _fetchStream(String videoId, int client) async {
-    if (client == _kBackupClient) return _fallback.fetch(videoId);
+    if (client == _kBackupClient) {
+      return (await _fallback.fetch(videoId))?.withClient(client);
+    }
 
     nlog('[N] manifest client=$client for $videoId');
     final m = await _yt.videos.streamsClient
@@ -143,6 +141,7 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
       totalBytes: info.size.totalBytes,
       mimeType: info.codec.mimeType,
       open: () => _yt.videos.streamsClient.get(info),
+      clientIndex: client,
     );
   }
 
@@ -209,7 +208,6 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
     if (kind != FailureKind.permanent && _midPlayRetries < 2) {
       _midPlayRetries++;
       _resolver.invalidate(song.videoId);
-      // attempt 1 = skip the progressive source and use the direct URL.
       _requestLoad(song, resumeAt: _player.position, attempt: 1);
     } else {
       unawaited(_giveUpOnCurrent(song, kind));
@@ -347,27 +345,57 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
         usedDiskCache = true;
         source = AudioSource.file(cachedFile.path);
       } else {
-        // ── Path 2/3: resolve (memory cache or network) and stream ──────────
+        // ── Resolve the stream (memory cache or network) ────────────────────
         final res =
             await _resolver.resolve(song.videoId, superseded: ctx.superseded);
         if (!live()) return;
         final info = res.value;
         if (info == null) throw _StreamResolveException(res.kind);
 
-        if (req.attempt == 0 &&
+        final cache = _cache;
+        if (cache != null &&
             info.totalBytes > 0 &&
-            info.totalBytes <= _kMaxProgressiveBytes) {
-          // Progressive: one download feeds the player AND the disk cache.
+            info.totalBytes <= _kMaxDownloadFirstBytes) {
+          // Download completely, then play the local file. Songs are small
+          // (about 1 MB at the chosen bitrate), a failure here is immediate and
+          // explicit, and the finished file doubles as the offline cache.
           download = ProgressiveDownload(
             open: info.open,
             totalBytes: info.totalBytes,
+            stallTimeout: const Duration(seconds: 15),
           );
           _activeDownload = download;
-          _saveWhenDone(download, song.videoId);
-          source = _ProgressiveAudioSource(download, info.mimeType);
+          nlog('[N] downloading ${info.totalBytes} bytes via ${info.origin} '
+              '(client ${info.clientIndex})');
+          download.start();
+
+          final Uint8List bytes;
+          try {
+            bytes = await Future.any<Uint8List>([
+              download.completed,
+              ctx.superseded.then<Uint8List>(
+                  (_) => throw const _SupersededException()),
+            ]);
+          } on _SupersededException {
+            download.cancel();
+            return;
+          } catch (e) {
+            throw _DownloadFailure(info.clientIndex, e);
+          }
+          if (!live()) return;
+
+          await cache.put(song.videoId, bytes, protect: _protectedIds);
+          final stored = await cache.lookup(song.videoId);
+          if (!live()) return;
+          if (stored == null) {
+            throw _DownloadFailure(
+                info.clientIndex, 'could not store the song on disk');
+          }
+          nlog('[N] ready: ${bytes.length} bytes');
+          source = AudioSource.file(stored.path);
         } else {
-          // Fallback after a failure: hand the raw URL to the native player.
-          nlog('[N] using direct URL fallback');
+          // Too large (or no disk): let the native player stream the URL.
+          nlog('[N] streaming directly from URL');
           source = AudioSource.uri(info.url);
         }
       }
@@ -388,6 +416,11 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
     } catch (e, st) {
       download?.cancel();
       if (!live()) return; // superseded: whatever happened is irrelevant now
+      if (e is _DownloadFailure) {
+        nlog('[N] download failed: $e');
+        unawaited(_handleDownloadFailure(req, e));
+        return;
+      }
       var kind =
           e is _StreamResolveException ? e.kind : classifyPlaybackError(e);
       nlog('[N] load failed ($kind): $e\n$st');
@@ -397,12 +430,26 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
     }
   }
 
-  /// Persists a finished download. Failures are irrelevant to playback.
-  void _saveWhenDone(ProgressiveDownload d, String videoId) {
-    d.completed.then((bytes) async {
-      await _cache?.put(videoId, bytes, protect: _protectedIds);
-      nlog('[N] cached $videoId (${bytes.length} bytes)');
-    }).catchError((Object _) {});
+  /// The stream a client handed out could not be downloaded. Penalize that
+  /// client for a while and immediately try the next one, so a client that
+  /// returns addresses YouTube refuses to serve cannot wedge playback.
+  Future<void> _handleDownloadFailure(
+      _LoadRequest req, _DownloadFailure f) async {
+    final song = req.song;
+    if (!await _net.isOnline()) {
+      if (_tok != req.tok) return;
+      _handleOffline(song, req.tok, resumeAt: req.resumeAt);
+      return;
+    }
+    if (_tok != req.tok) return;
+
+    _resolver.invalidate(song.videoId);
+    _resolver.penalize(f.client, const Duration(minutes: 5));
+    if (req.attempt + 1 < _kMaxStreamAttempts) {
+      _requestLoad(song, resumeAt: req.resumeAt, attempt: req.attempt + 1);
+    } else {
+      await _giveUpOnCurrent(song, FailureKind.transient);
+    }
   }
 
   // ── Failure policy ────────────────────────────────────────────────────────
@@ -532,6 +579,7 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
         final dl = ProgressiveDownload(
           open: info.open,
           totalBytes: info.totalBytes,
+          stallTimeout: const Duration(seconds: 15),
         );
         _prefetchDownload = dl..start();
         final bytes = await dl.completed;

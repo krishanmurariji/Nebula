@@ -7,6 +7,7 @@ class ResolvedStream {
     required this.mimeType,
     required this.open,
     this.origin = 'youtube',
+    this.clientIndex = -1,
   });
 
   /// Direct URL (used by the raw-URL fallback source).
@@ -19,4 +20,17 @@ class ResolvedStream {
 
   /// For logs: 'youtube' or the backup instance host.
   final String origin;
+
+  /// Which resolver client produced this stream (-1 = unknown). Lets the
+  /// player penalize a client whose streams cannot actually be downloaded.
+  final int clientIndex;
+
+  ResolvedStream withClient(int index) => ResolvedStream(
+        url: url,
+        totalBytes: totalBytes,
+        mimeType: mimeType,
+        open: open,
+        origin: origin,
+        clientIndex: index,
+      );
 }

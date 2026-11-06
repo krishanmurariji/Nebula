@@ -53,6 +53,7 @@ class StreamResolver<T> {
     this.maxInlineWait = const Duration(seconds: 30),
     DateTime Function()? now,
     Future<void> Function(Duration)? delay,
+    this.log,
   })  : _now = now ?? DateTime.now,
         _delay = delay ?? Future.delayed,
         _breakers = List.generate(timeouts.length, (_) => _Breaker());
@@ -68,6 +69,9 @@ class StreamResolver<T> {
   /// If every client is cooling down for no longer than this, wait for it
   /// instead of failing right away.
   final Duration maxInlineWait;
+
+  /// Optional sink for diagnostics (why each client failed).
+  final void Function(String message)? log;
 
   final DateTime Function() _now;
   final Future<void> Function(Duration) _delay;
@@ -125,6 +129,15 @@ class StreamResolver<T> {
     }
   }
 
+  /// Marks client [i] as unusable for [duration]. Used when a client hands out
+  /// stream addresses that turn out not to be downloadable (for example 403),
+  /// which a successful manifest lookup cannot reveal.
+  void penalize(int i, Duration duration) {
+    if (i < 0 || i >= clientCount) return;
+    _breakers[i].openUntil = _now().add(duration);
+    log?.call('client $i penalized for ${duration.inSeconds}s');
+  }
+
   void _onSuccess(int i) {
     final b = _breakers[i];
     b.rateLimitFails = 0;
@@ -174,13 +187,19 @@ class StreamResolver<T> {
 
         try {
           final value = await fetch(videoId, ci).timeout(timeouts[ci]);
-          if (value == null) continue; // this client had nothing; try next
+          if (value == null) {
+            log?.call('client $ci: no usable audio streams');
+            continue; // this client had nothing; try next
+          }
           _onSuccess(ci);
           _cache[videoId] = (value: value, at: _now());
           return ResolveResult.ok(value);
         } on TimeoutException {
+          log?.call('client $ci: timed out after ${timeouts[ci].inSeconds}s');
           _onHardFail(ci);
         } catch (e) {
+          log?.call('client $ci failed: ${e.runtimeType}: '
+              '${e.toString().split('\n').first}');
           switch (classifyPlaybackError(e)) {
             case FailureKind.rateLimited:
               _onRateLimited(ci);
