@@ -41,12 +41,6 @@ jobs:
           channel: stable
           cache: true
 
-      # The Gradle files list Aliyun mirrors first; a slow/blocked mirror would
-      # fail the whole build. GitHub's runners reach Google + Maven Central fine.
-      - name: Drop Aliyun mirrors in CI only
-        run: |
-          sed -i '/maven.aliyun.com/d' android/build.gradle android/settings.gradle || true
-
       - name: Install dependencies
         run: flutter pub get
 
