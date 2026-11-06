@@ -462,7 +462,9 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
     final song = req.song;
     _resolver.invalidate(song.videoId);
 
-    if (kind != FailureKind.permanent && !await _net.isOnline()) {
+    if (kind != FailureKind.permanent &&
+        kind != FailureKind.rateLimited &&
+        !await _net.isOnline()) {
       if (_tok != req.tok) return;
       _handleOffline(song, req.tok, resumeAt: req.resumeAt);
       return;
@@ -470,6 +472,10 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
     if (_tok != req.tok) return;
 
     if (kind == FailureKind.rateLimited) {
+      // YouTube answered (so we ARE online) but is limiting this network.
+      final wait = _resolver.globalCooldownSeconds;
+      _notices.add('YouTube is limiting requests from your network'
+          '${wait > 0 ? ' — retrying in ${wait}s' : ''}');
       _setError();
       return;
     }
@@ -559,6 +565,7 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
     final next = _queue[(_idx + 1) % _queue.length];
     final cache = _cache;
     if (cache == null || cache.contains(next.videoId)) return;
+    if (_resolver.globalCooldownSeconds > 0) return; // do not add load
 
     unawaited(() async {
       try {

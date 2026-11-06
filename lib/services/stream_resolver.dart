@@ -21,7 +21,6 @@ class ResolveResult<T> {
 typedef StreamFetcher<T> = Future<T?> Function(String videoId, int clientIndex);
 
 class _Breaker {
-  int rateLimitFails = 0;
   int hardFails = 0;
   DateTime? openUntil;
 }
@@ -50,7 +49,7 @@ class StreamResolver<T> {
     this.ttl = const Duration(minutes: 30),
     this.hardFailThreshold = 3,
     this.hardFailCooldown = const Duration(seconds: 15),
-    this.maxInlineWait = const Duration(seconds: 30),
+    this.minGap = const Duration(milliseconds: 400),
     DateTime Function()? now,
     Future<void> Function(Duration)? delay,
     this.log,
@@ -66,9 +65,15 @@ class StreamResolver<T> {
   final int hardFailThreshold;
   final Duration hardFailCooldown;
 
-  /// If every client is cooling down for no longer than this, wait for it
-  /// instead of failing right away.
-  final Duration maxInlineWait;
+  /// Pause between two consecutive client attempts, so a failing lookup never
+  /// turns into a burst of requests (bursts are what triggers rate limiting).
+  final Duration minGap;
+
+  /// YouTube rate limits apply to the whole IP address, not to one client, so
+  /// the first "rate limited" answer stops everything for a growing period
+  /// (20 s, 40 s, 80 s … up to 10 minutes) instead of trying the other clients.
+  DateTime? _rateLimitedUntil;
+  int _rateLimitStreak = 0;
 
   /// Optional sink for diagnostics (why each client failed).
   final void Function(String message)? log;
@@ -102,8 +107,13 @@ class StreamResolver<T> {
     return until != null && _now().isBefore(until);
   }
 
-  /// Seconds until at least one client is usable again; 0 if one is usable now.
+  /// Seconds until lookups are allowed again; 0 when they are allowed now.
   int get globalCooldownSeconds {
+    final g = _rateLimitedUntil;
+    if (g != null) {
+      final left = g.difference(_now());
+      if (left > Duration.zero) return (left.inMilliseconds / 1000).ceil();
+    }
     Duration? shortest;
     for (var i = 0; i < clientCount; i++) {
       if (!_isOpen(i)) return 0;
@@ -113,11 +123,16 @@ class StreamResolver<T> {
     return shortest == null ? 0 : max(0, shortest.inSeconds);
   }
 
-  void _onRateLimited(int i) {
-    final b = _breakers[i];
-    b.rateLimitFails++;
-    final secs = min(4 * pow(2, b.rateLimitFails - 1).toInt(), 60);
-    b.openUntil = _now().add(Duration(seconds: secs));
+  bool get _isRateLimited {
+    final g = _rateLimitedUntil;
+    return g != null && _now().isBefore(g);
+  }
+
+  void _onRateLimited() {
+    _rateLimitStreak++;
+    final secs = min(20 * pow(2, _rateLimitStreak - 1).toInt(), 600);
+    _rateLimitedUntil = _now().add(Duration(seconds: secs));
+    log?.call('YouTube is rate limiting this network: pausing lookups for ${secs}s');
   }
 
   void _onHardFail(int i) {
@@ -139,8 +154,9 @@ class StreamResolver<T> {
   }
 
   void _onSuccess(int i) {
+    _rateLimitStreak = 0;
+    _rateLimitedUntil = null;
     final b = _breakers[i];
-    b.rateLimitFails = 0;
     b.hardFails = 0;
     b.openUntil = null;
   }
@@ -151,6 +167,9 @@ class StreamResolver<T> {
       {Future<void>? superseded}) async {
     final cached = peek(videoId);
     if (cached != null) return ResolveResult.ok(cached);
+    if (_isRateLimited) {
+      return const ResolveResult.failed(FailureKind.rateLimited);
+    }
 
     var flight = _inFlight[videoId];
     if (flight == null || flight.abandoned) {
@@ -179,65 +198,47 @@ class StreamResolver<T> {
   Future<ResolveResult<T>> _run(String videoId, _InFlight<T> flight) async {
     const cancelled = ResolveResult<Never>.failed(FailureKind.cancelled);
     var sawPermanent = false;
+    var attempted = 0;
 
-    for (var pass = 0; pass < 2; pass++) {
-      for (var ci = 0; ci < clientCount; ci++) {
-        if (flight.abandoned) return cancelled;
-        if (_isOpen(ci)) continue;
+    for (var ci = 0; ci < clientCount; ci++) {
+      if (flight.abandoned) return cancelled;
+      if (_isOpen(ci)) continue;
 
-        try {
-          final value = await fetch(videoId, ci).timeout(timeouts[ci]);
-          if (value == null) {
-            log?.call('client $ci: no usable audio streams');
-            continue; // this client had nothing; try next
-          }
-          _onSuccess(ci);
-          _cache[videoId] = (value: value, at: _now());
-          return ResolveResult.ok(value);
-        } on TimeoutException {
-          log?.call('client $ci: timed out after ${timeouts[ci].inSeconds}s');
-          _onHardFail(ci);
-        } catch (e) {
-          log?.call('client $ci failed: ${e.runtimeType}: '
-              '${e.toString().split('\n').first}');
-          switch (classifyPlaybackError(e)) {
-            case FailureKind.rateLimited:
-              _onRateLimited(ci);
-            case FailureKind.permanent:
-              sawPermanent = true;
-            case FailureKind.cancelled:
-            case FailureKind.transient:
-              _onHardFail(ci);
-          }
+      if (attempted > 0 && minGap > Duration.zero) await _delay(minGap);
+      if (flight.abandoned) return cancelled;
+      attempted++;
+
+      try {
+        final value = await fetch(videoId, ci).timeout(timeouts[ci]);
+        if (value == null) {
+          log?.call('client $ci: no usable audio streams');
+          continue; // this client had nothing; try next
         }
-      }
-
-      // "Video unavailable" will not change by asking again.
-      if (sawPermanent) return const ResolveResult.failed(FailureKind.permanent);
-
-      if (pass == 0) {
-        // If everything is cooling down briefly, wait it out and try once more.
-        Duration? shortest;
-        var anyUsable = false;
-        for (var ci = 0; ci < clientCount; ci++) {
-          if (!_isOpen(ci)) {
-            anyUsable = true;
-            break;
-          }
-          final left = _breakers[ci].openUntil!.difference(_now());
-          if (shortest == null || left < shortest) shortest = left;
-        }
-        if (anyUsable) continue;
-        if (shortest == null || shortest > maxInlineWait) break;
-        for (var s = 0; s <= shortest.inSeconds; s++) {
-          if (flight.abandoned) return cancelled;
-          await _delay(const Duration(seconds: 1));
+        _onSuccess(ci);
+        _cache[videoId] = (value: value, at: _now());
+        return ResolveResult.ok(value);
+      } on TimeoutException {
+        log?.call('client $ci: timed out after ${timeouts[ci].inSeconds}s');
+        _onHardFail(ci);
+      } catch (e) {
+        log?.call('client $ci failed: ${e.runtimeType}: '
+            '${e.toString().split('\n').first}');
+        switch (classifyPlaybackError(e)) {
+          case FailureKind.rateLimited:
+            // Whole-IP limit: stop right here, do not ask the other clients.
+            _onRateLimited();
+            return const ResolveResult.failed(FailureKind.rateLimited);
+          case FailureKind.permanent:
+            sawPermanent = true;
+          case FailureKind.cancelled:
+          case FailureKind.transient:
+            _onHardFail(ci);
         }
       }
     }
 
-    return ResolveResult.failed(globalCooldownSeconds > 0
-        ? FailureKind.rateLimited
-        : FailureKind.transient);
+    // "Video unavailable" will not change by asking again.
+    if (sawPermanent) return const ResolveResult.failed(FailureKind.permanent);
+    return const ResolveResult.failed(FailureKind.transient);
   }
 }

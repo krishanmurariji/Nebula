@@ -71,32 +71,114 @@ void main() {
     expect((await r.resolve('v')).value, 'c1');
   });
 
-  test('a rate-limited client is skipped on the next resolve', () async {
-    final tried = <int>[];
-    final r = StreamResolver<String>(
-      timeouts: _t,
-      fetch: (id, c) async {
-        tried.add(c);
-        if (c == 0) throw RequestLimitExceededException();
-        return 'ok';
-      },
-    );
-    await r.resolve('a');
-    tried.clear();
-    await r.resolve('b');
-    expect(tried, [1], reason: 'client 0 is cooling down');
+  group('rate limiting (whole-IP, not per client)', () {
+    test('the first "rate limited" answer stops everything: other clients are NOT asked', () async {
+      final tried = <int>[];
+      final r = StreamResolver<String>(
+        timeouts: _t,
+        minGap: Duration.zero,
+        fetch: (id, c) async {
+          tried.add(c);
+          throw RequestLimitExceededException();
+        },
+      );
+      final res = await r.resolve('v');
+      expect(res.kind, FailureKind.rateLimited);
+      expect(tried, [0], reason: 'hammering other clients only makes the limit worse');
+      expect(r.globalCooldownSeconds, inInclusiveRange(1, 20));
+    });
+
+    test('during the pause no request is made at all', () async {
+      var calls = 0;
+      final r = StreamResolver<String>(
+        timeouts: _t,
+        minGap: Duration.zero,
+        fetch: (id, c) async {
+          calls++;
+          throw RequestLimitExceededException();
+        },
+      );
+      await r.resolve('a');
+      calls = 0;
+      for (var i = 0; i < 10; i++) {
+        expect((await r.resolve('b$i')).kind, FailureKind.rateLimited);
+      }
+      expect(calls, 0);
+    });
+
+    test('a cached stream is still served during the pause', () async {
+      var limited = false;
+      final r = StreamResolver<String>(
+        timeouts: _t,
+        minGap: Duration.zero,
+        fetch: (id, c) async {
+          if (limited) throw RequestLimitExceededException();
+          return 'cached-$id';
+        },
+      );
+      expect((await r.resolve('x')).value, 'cached-x');
+      limited = true;
+      await r.resolve('other'); // triggers the pause
+      expect((await r.resolve('x')).value, 'cached-x');
+    });
+
+    test('the pause grows with consecutive limits (20s, 40s, 80s …) and a success resets it', () async {
+      var now = DateTime(2026);
+      var limited = true;
+      final r = StreamResolver<String>(
+        timeouts: _t,
+        minGap: Duration.zero,
+        now: () => now,
+        fetch: (id, c) async {
+          if (limited) throw RequestLimitExceededException();
+          return 'ok';
+        },
+      );
+      await r.resolve('a');
+      expect(r.globalCooldownSeconds, 20);
+      now = now.add(const Duration(seconds: 21));
+      await r.resolve('a');
+      expect(r.globalCooldownSeconds, 40);
+      now = now.add(const Duration(seconds: 41));
+      await r.resolve('a');
+      expect(r.globalCooldownSeconds, 80);
+
+      now = now.add(const Duration(seconds: 81));
+      limited = false;
+      expect((await r.resolve('a')).value, 'ok');
+      expect(r.globalCooldownSeconds, 0);
+      limited = true;
+      await r.resolve('b');
+      expect(r.globalCooldownSeconds, 20, reason: 'streak was reset by the success');
+    });
+
+    test('the pause never exceeds 10 minutes', () async {
+      var now = DateTime(2026);
+      final r = StreamResolver<String>(
+        timeouts: _t,
+        minGap: Duration.zero,
+        now: () => now,
+        fetch: (id, c) async => throw RequestLimitExceededException(),
+      );
+      for (var i = 0; i < 12; i++) {
+        await r.resolve('a');
+        now = now.add(const Duration(minutes: 11));
+      }
+      await r.resolve('a');
+      expect(r.globalCooldownSeconds, lessThanOrEqualTo(600));
+    });
   });
 
-  test('all clients rate limited, long wait → rateLimited with countdown', () async {
+  test('attempts are spaced by minGap so failures never become a burst', () async {
+    final gaps = <Duration>[];
     final r = StreamResolver<String>(
       timeouts: _t,
-      maxInlineWait: Duration.zero, // never wait inline
-      fetch: (id, c) async => throw RequestLimitExceededException(),
+      minGap: const Duration(milliseconds: 400),
+      delay: (d) async => gaps.add(d),
+      fetch: (id, c) async => throw Exception('boom'),
     );
-    final res = await r.resolve('v');
-    expect(res.value, isNull);
-    expect(res.kind, FailureKind.rateLimited);
-    expect(r.globalCooldownSeconds, greaterThan(0));
+    await r.resolve('v');
+    expect(gaps, [const Duration(milliseconds: 400), const Duration(milliseconds: 400)]);
   });
 
   test('unavailable video is reported as permanent', () async {

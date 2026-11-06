@@ -4,6 +4,7 @@ import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 
 import '../models/song.dart';
 import 'app_log.dart';
+import 'playback_failure.dart';
 
 /// Thrown with a message that is safe to show to the user.
 class SearchException implements Exception {
@@ -50,6 +51,11 @@ class YoutubeSearchService {
       } catch (e) {
         last = e;
         nlog('[N] search attempt ${attempt + 1} failed: $e');
+        if (classifyPlaybackError(e) == FailureKind.rateLimited) {
+          throw const SearchException(
+              'YouTube is limiting requests from your network. '
+              'Please wait a few minutes and try again.');
+        }
         if (attempt == 0) await Future<void>.delayed(const Duration(milliseconds: 600));
       }
     }

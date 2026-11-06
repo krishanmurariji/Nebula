@@ -16,15 +16,21 @@ class ConnectivityProbe {
   final Duration pollInterval;
   final Future<void> Function(Duration) _delay;
 
+  /// Online if ANY of several hosts resolves, asked in parallel with a
+  /// generous timeout. Slow or flaky DNS on one host (or YouTube answering
+  /// slowly) must never be mistaken for "no internet".
   static Future<bool> _dnsCheck() async {
-    for (final host in const ['www.youtube.com', 'www.google.com']) {
-      try {
-        final r = await InternetAddress.lookup(host)
-            .timeout(const Duration(seconds: 3));
-        if (r.isNotEmpty && r.first.rawAddress.isNotEmpty) return true;
-      } catch (_) {}
+    const hosts = ['www.google.com', 'www.youtube.com', 'one.one.one.one'];
+    final done = Completer<bool>();
+    var pending = hosts.length;
+    for (final host in hosts) {
+      InternetAddress.lookup(host).timeout(const Duration(seconds: 6)).then((r) {
+        if (r.isNotEmpty && !done.isCompleted) done.complete(true);
+      }).catchError((Object _) {}).whenComplete(() {
+        if (--pending == 0 && !done.isCompleted) done.complete(false);
+      });
     }
-    return false;
+    return done.future;
   }
 
   Future<bool> isOnline() async {

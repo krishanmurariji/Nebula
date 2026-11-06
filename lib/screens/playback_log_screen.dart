@@ -141,9 +141,10 @@ class _BackupSourcesDialogState extends State<_BackupSourcesDialog> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'Used automatically when YouTube blocks or breaks. One Piped or '
-              'Invidious https address per line. Public servers come and go, '
-              'so you can add your own. Leave empty to turn this off.',
+              'Used automatically when YouTube blocks or breaks. None are built in: '
+              'public Piped/Invidious servers are often blocked or shut down, so '
+              'add one that works for you (or your own), one https address per '
+              'line. Leave empty to turn this off.',
               style: TextStyle(fontSize: 12),
             ),
             const SizedBox(height: 12),

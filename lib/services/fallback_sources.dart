@@ -6,13 +6,11 @@ import 'package:http/http.dart' as http;
 import 'app_log.dart';
 import 'resolved_stream.dart';
 
-/// Default backup instances. Public instances come and go, so the list is
-/// user-editable (Settings → Backup Sources) and dead ones are skipped
-/// automatically.
-const List<String> kDefaultBackupInstances = [
-  'https://pipedapi.kavin.rocks',
-  'https://yewtu.be',
-];
+/// No backup servers are built in: public Piped/Invidious instances are
+/// frequently blocked, rate limited or shut down (both former defaults were
+/// unreachable on the first real device). Add your own in Settings → Backup
+/// Sources. An empty list simply switches this fallback off.
+const List<String> kDefaultBackupInstances = [];
 
 /// Validates a user-entered backup server address. Returns the cleaned base
 /// URL (no trailing slash) or null when it is not acceptable: only https, a

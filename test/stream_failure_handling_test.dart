@@ -126,10 +126,9 @@ void main() {
       expect(lines.any((l) => l.contains('client 1') && l.contains('no usable audio')), isTrue, reason: '$lines');
     });
 
-    test('every client penalized → rateLimited-style wait, not a crash', () async {
+    test('every client penalized → no result and a countdown, not a crash', () async {
       final r = StreamResolver<String>(
         timeouts: _t,
-        maxInlineWait: Duration.zero,
         fetch: (id, c) async => 'x',
       );
       for (var i = 0; i < 3; i++) {
