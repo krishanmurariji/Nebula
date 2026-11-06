@@ -14,6 +14,42 @@ const List<String> kDefaultBackupInstances = [
   'https://yewtu.be',
 ];
 
+/// Validates a user-entered backup server address. Returns the cleaned base
+/// URL (no trailing slash) or null when it is not acceptable: only https, a
+/// real host, no embedded credentials, no query/fragment, and not a local or
+/// private-network address.
+String? normalizeInstanceUrl(String raw) {
+  final text = raw.trim();
+  if (text.isEmpty || text.length > 200) return null;
+  final uri = Uri.tryParse(text);
+  if (uri == null || uri.scheme != 'https') return null;
+  if (uri.host.isEmpty || uri.userInfo.isNotEmpty) return null;
+  if (uri.hasQuery || uri.hasFragment) return null;
+  final host = uri.host.toLowerCase();
+  // Plain DNS names / IPv4 only (Uri silently percent-encodes odd characters).
+  if (!RegExp(r'^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$').hasMatch(host)) return null;
+  if (!host.contains('.')) return null; // "localhost", bare names
+  if (host.endsWith('.local') || host.endsWith('.internal')) return null;
+  final ip = RegExp(r'^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$').firstMatch(host);
+  if (ip != null) {
+    final a = int.parse(ip[1]!), b = int.parse(ip[2]!);
+    final isPrivate = a == 10 ||
+        a == 127 ||
+        a == 0 ||
+        (a == 169 && b == 254) ||
+        (a == 172 && b >= 16 && b <= 31) ||
+        (a == 192 && b == 168);
+    if (isPrivate) return null;
+  }
+  if (host.contains(':')) return null; // IPv6 literal
+  final port = uri.hasPort ? ':${uri.port}' : '';
+  final path = uri.path.replaceAll(RegExp(r'/+$'), '');
+  return 'https://${uri.host}$port$path';
+}
+
+/// The most bytes we will accept for one song from a backup server.
+const int kMaxBackupBytes = 300 * 1024 * 1024;
+
 class _Candidate {
   _Candidate(this.url, this.bitrate, this.mimeType, this.size);
   final String url;
@@ -112,9 +148,12 @@ class FallbackStreamFetcher {
     } catch (_) {
       bases = kDefaultBackupInstances;
     }
-    for (final raw in bases) {
-      final base = raw.trim().replaceAll(RegExp(r'/+$'), '');
-      if (base.isEmpty) continue;
+    for (final raw in bases.take(8)) {
+      final base = normalizeInstanceUrl(raw);
+      if (base == null) {
+        nlog('[N] backup entry ignored (not a valid https address)');
+        continue;
+      }
       final dead = _deadUntil[base];
       if (dead != null && _now().isBefore(dead)) continue;
       try {
@@ -149,13 +188,15 @@ class FallbackStreamFetcher {
 
     var url = Uri.parse(c.url);
     if (!url.hasScheme) url = Uri.parse(base).resolveUri(url);
+    // Media must come over https; never follow an instance to http/file/etc.
+    if (url.scheme != 'https') return null;
 
     var size = c.size;
     if (size == null || size <= 0) {
       final head = await _client.head(url).timeout(perInstanceTimeout);
       size = int.tryParse(head.headers['content-length'] ?? '');
     }
-    if (size == null || size <= 0) return null;
+    if (size == null || size <= 0 || size > kMaxBackupBytes) return null;
 
     return ResolvedStream(
       url: url,

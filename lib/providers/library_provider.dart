@@ -3,6 +3,44 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/song.dart';
 
+/// Decodes a saved JSON list defensively: a corrupt file yields an empty list
+/// (and is reported via [onCorrupt] so it can be backed up), and one bad entry
+/// never costs the good ones.
+List<T> decodeList<T>(
+  String? raw,
+  T? Function(Map<dynamic, dynamic>) parse, {
+  void Function(Object error)? onCorrupt,
+}) {
+  if (raw == null || raw.isEmpty) return [];
+  try {
+    final decoded = json.decode(raw);
+    if (decoded is! List) throw const FormatException('expected a list');
+    final out = <T>[];
+    for (final e in decoded) {
+      if (e is! Map) continue;
+      try {
+        final v = parse(e);
+        if (v != null) out.add(v);
+      } catch (_) {/* skip just this entry */}
+    }
+    return out;
+  } catch (e) {
+    onCorrupt?.call(e);
+    return [];
+  }
+}
+
+Song? _parseSong(Map<dynamic, dynamic> m) {
+  final s = Song.fromMap(m);
+  return s.videoId.isEmpty ? null : s;
+}
+
+/// Keeps a copy of unreadable data instead of silently overwriting it.
+Future<void> _backupCorrupt(SharedPreferences p, String key, String? raw) async {
+  if (raw == null) return;
+  await p.setString('${key}_corrupt_backup', raw);
+}
+
 const _kLiked     = 'nebula_liked';
 const _kPlaylists = 'nebula_playlists';
 const _kHistory   = 'nebula_history';
@@ -23,9 +61,11 @@ class LikedNotifier extends StateNotifier<List<Song>> {
   Future<void> _load() async {
     final p = await SharedPreferences.getInstance();
     final raw = p.getString(_kLiked);
-    if (raw == null) return;
-    state = (json.decode(raw) as List)
-        .map((e) => Song.fromMap(e as Map<String, dynamic>)).toList();
+    final loaded = decodeList<Song>(raw, _parseSong,
+        onCorrupt: (_) => _backupCorrupt(p, _kLiked, raw));
+    if (!mounted) return;
+    // Merge: keep anything the user liked while this was still loading.
+    state = [...state, ...loaded.where((s) => !state.contains(s))];
   }
 
   Future<void> _save() async {
@@ -41,9 +81,10 @@ class LikedNotifier extends StateNotifier<List<Song>> {
   }
 
   Future<void> reorder(int oldIndex, int newIndex) async {
+    if (oldIndex < 0 || oldIndex >= state.length) return;
     final list = [...state];
     final item = list.removeAt(oldIndex);
-    list.insert(newIndex, item);
+    list.insert(newIndex.clamp(0, list.length), item);
     state = list;
     await _save();
   }
@@ -62,10 +103,16 @@ class Playlist {
     'id': id, 'name': name, 'songs': songs.map((s) => s.toMap()).toList(),
   };
 
-  factory Playlist.fromMap(Map<String, dynamic> m) => Playlist(
-    id: m['id'] as String? ?? '', name: m['name'] as String? ?? 'Untitled',
-    songs: (m['songs'] as List? ?? [])
-        .map((e) => Song.fromMap(e as Map<String, dynamic>)).toList(),
+  factory Playlist.fromMap(Map<dynamic, dynamic> m) => Playlist(
+    id: m['id'] is String ? m['id'] as String : '',
+    name: m['name'] is String ? m['name'] as String : 'Untitled',
+    songs: m['songs'] is List
+        ? (m['songs'] as List)
+            .whereType<Map>()
+            .map(Song.fromMap)
+            .where((s) => s.videoId.isNotEmpty)
+            .toList()
+        : const [],
   );
 }
 
@@ -79,9 +126,11 @@ class PlaylistNotifier extends StateNotifier<List<Playlist>> {
   Future<void> _load() async {
     final p = await SharedPreferences.getInstance();
     final raw = p.getString(_kPlaylists);
-    if (raw == null) return;
-    state = (json.decode(raw) as List)
-        .map((e) => Playlist.fromMap(e as Map<String, dynamic>)).toList();
+    final loaded = decodeList<Playlist>(
+        raw, (m) => Playlist.fromMap(m).id.isEmpty ? null : Playlist.fromMap(m),
+        onCorrupt: (_) => _backupCorrupt(p, _kPlaylists, raw));
+    if (!mounted) return;
+    state = [...state, ...loaded.where((l) => !state.any((s) => s.id == l.id))];
   }
 
   Future<void> _save() async {
@@ -92,8 +141,10 @@ class PlaylistNotifier extends StateNotifier<List<Playlist>> {
 
   Future<Playlist> create(String name) async {
     final pl = Playlist(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
-        name: name.trim().isEmpty ? 'New Playlist' : name.trim());
+        id: '${DateTime.now().microsecondsSinceEpoch}',
+        name: name.trim().isEmpty
+            ? 'New Playlist'
+            : (name.trim().length > 60 ? name.trim().substring(0, 60) : name.trim()));
     state = [...state, pl];
     await _save();
     return pl;
@@ -125,9 +176,10 @@ class PlaylistNotifier extends StateNotifier<List<Playlist>> {
   Future<void> reorderSong(String playlistId, int oldIndex, int newIndex) async {
     state = state.map((p) {
       if (p.id != playlistId) return p;
+      if (oldIndex < 0 || oldIndex >= p.songs.length) return p;
       final newSongs = [...p.songs];
       final item = newSongs.removeAt(oldIndex);
-      newSongs.insert(newIndex, item);
+      newSongs.insert(newIndex.clamp(0, newSongs.length), item);
       return p.copyWith(songs: newSongs);
     }).toList();
     await _save();
@@ -148,9 +200,10 @@ class HistoryNotifier extends StateNotifier<List<Song>> {
   Future<void> _load() async {
     final p = await SharedPreferences.getInstance();
     final raw = p.getString(_kHistory);
-    if (raw == null) return;
-    state = (json.decode(raw) as List)
-        .map((e) => Song.fromMap(e as Map<String, dynamic>)).toList();
+    final loaded = decodeList<Song>(raw, _parseSong,
+        onCorrupt: (_) => _backupCorrupt(p, _kHistory, raw));
+    if (!mounted) return;
+    state = [...state, ...loaded.where((s) => !state.contains(s))].take(30).toList();
   }
 
   Future<void> _save() async {

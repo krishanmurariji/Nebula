@@ -223,7 +223,7 @@ class PlayerNotifier extends StateNotifier<NebulaPlayerState> {
   }
 
   Future<void> setVolume(double volume) async {
-    await _handler.player.setVolume(volume);
+    await _handler.player.setVolume(volume.isNaN ? 1.0 : volume.clamp(0.0, 1.0));
   }
 
   Future<void> skipNext()       async => _handler.skipToNext();

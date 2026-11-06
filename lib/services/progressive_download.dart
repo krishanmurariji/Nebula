@@ -62,6 +62,14 @@ class ProgressiveDownload {
   void _onData(List<int> data) {
     if (_cancelled || _done) return;
     final chunk = data is Uint8List ? data : Uint8List.fromList(data);
+    if (_received + chunk.length > totalBytes) {
+      // The server sent more than it promised: refuse rather than fill memory.
+      _sub?.cancel();
+      _sub = null;
+      _fail(StateError('server sent more than the declared $totalBytes bytes'),
+          StackTrace.current);
+      return;
+    }
     _starts.add(_received);
     _chunks.add(chunk);
     _received += chunk.length;

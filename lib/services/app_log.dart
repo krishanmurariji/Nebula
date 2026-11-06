@@ -2,6 +2,22 @@ import 'dart:collection';
 
 import 'package:flutter/foundation.dart';
 
+/// Removes anything in a log line that should not be shared: query strings of
+/// URLs (YouTube stream URLs carry signed, IP-bound tokens) and long opaque
+/// tokens. Hosts and paths stay so the log is still useful.
+String redactSecrets(String line) {
+  var out = line.replaceAllMapped(
+    RegExp(r'''(https?://[^\s"'<>?#]+)[?#][^\s"'<>]*'''),
+    (m) => '${m[1]}?…',
+  );
+  out = out.replaceAllMapped(
+    RegExp(r'\b(key|token|sig|signature|authorization|password)=([^\s&]+)',
+        caseSensitive: false),
+    (m) => '${m[1]}=…',
+  );
+  return out;
+}
+
 /// In-memory ring buffer of recent log lines, shown on the Playback Log screen
 /// so problems can be diagnosed on a phone without a USB cable.
 class AppLog {
@@ -21,7 +37,7 @@ class AppLog {
     String two(int n) => n.toString().padLeft(2, '0');
     final stamp =
         '${two(t.hour)}:${two(t.minute)}:${two(t.second)}.${t.millisecond.toString().padLeft(3, '0')}';
-    _lines.addLast('$stamp  $message');
+    _lines.addLast('$stamp  ${redactSecrets(message)}');
     while (_lines.length > capacity) {
       _lines.removeFirst();
     }

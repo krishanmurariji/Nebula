@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../services/app_log.dart';
 import '../services/backup_settings.dart';
+import '../services/fallback_sources.dart';
 
 /// Live view of the playback log — lets problems be diagnosed on the phone.
 class PlaybackLogScreen extends StatelessWidget {
@@ -75,61 +76,109 @@ class PlaybackLogScreen extends StatelessWidget {
 Future<void> showBackupSourcesDialog(BuildContext context) async {
   final current = await loadBackupInstances();
   if (!context.mounted) return;
-  final controller = TextEditingController(text: current.join('\n'));
-
   await showDialog<void>(
     context: context,
-    builder: (ctx) => AlertDialog(
+    builder: (_) => _BackupSourcesDialog(initial: current),
+  );
+}
+
+class _BackupSourcesDialog extends StatefulWidget {
+  const _BackupSourcesDialog({required this.initial});
+  final List<String> initial;
+  @override
+  State<_BackupSourcesDialog> createState() => _BackupSourcesDialogState();
+}
+
+class _BackupSourcesDialogState extends State<_BackupSourcesDialog> {
+  // Owned by the dialog's State so it is disposed only after the dialog is
+  // really gone (disposing right after showDialog returns can throw).
+  late final TextEditingController _controller =
+      TextEditingController(text: widget.initial.join('\n'));
+  String? _error;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    final lines = _controller.text
+        .split('\n')
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty)
+        .toList();
+    final valid = <String>[];
+    final rejected = <String>[];
+    for (final line in lines) {
+      final n = normalizeInstanceUrl(line);
+      if (n == null) {
+        rejected.add(line);
+      } else if (!valid.contains(n)) {
+        valid.add(n);
+      }
+    }
+    if (rejected.isNotEmpty) {
+      setState(() => _error =
+          'Not accepted (https addresses of public servers only):\n${rejected.take(3).join('\n')}');
+      return;
+    }
+    if (valid.length > 8) {
+      setState(() => _error = 'Please keep it to 8 servers or fewer.');
+      return;
+    }
+    await saveBackupInstances(valid);
+    if (mounted) Navigator.pop(context);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
       title: const Text('Backup Sources'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Used automatically when YouTube blocks or breaks. One Piped or '
-            'Invidious address per line. Public servers come and go, so you '
-            'can add your own. Leave empty to turn this off.',
-            style: TextStyle(fontSize: 12),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: controller,
-            maxLines: 5,
-            minLines: 3,
-            keyboardType: TextInputType.multiline,
-            style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
-            decoration: const InputDecoration(
-                border: OutlineInputBorder(),
-                hintText: 'https://pipedapi.example.com'),
-          ),
-        ],
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Used automatically when YouTube blocks or breaks. One Piped or '
+              'Invidious https address per line. Public servers come and go, '
+              'so you can add your own. Leave empty to turn this off.',
+              style: TextStyle(fontSize: 12),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _controller,
+              maxLines: 5,
+              minLines: 3,
+              keyboardType: TextInputType.multiline,
+              autocorrect: false,
+              enableSuggestions: false,
+              style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+              decoration: InputDecoration(
+                border: const OutlineInputBorder(),
+                hintText: 'https://pipedapi.example.com',
+                errorText: _error,
+                errorMaxLines: 5,
+              ),
+            ),
+          ],
+        ),
       ),
       actions: [
         TextButton(
           onPressed: () async {
             await resetBackupInstances();
-            if (ctx.mounted) Navigator.pop(ctx);
+            if (mounted) Navigator.pop(context);
           },
           child: const Text('Reset to defaults'),
         ),
         TextButton(
-          onPressed: () => Navigator.pop(ctx),
+          onPressed: () => Navigator.pop(context),
           child: const Text('Cancel'),
         ),
-        FilledButton(
-          onPressed: () async {
-            final list = controller.text
-                .split('\n')
-                .map((e) => e.trim())
-                .where((e) => e.startsWith('http'))
-                .toList();
-            await saveBackupInstances(list);
-            if (ctx.mounted) Navigator.pop(ctx);
-          },
-          child: const Text('Save'),
-        ),
+        FilledButton(onPressed: _save, child: const Text('Save')),
       ],
-    ),
-  );
-  controller.dispose();
+    );
+  }
 }

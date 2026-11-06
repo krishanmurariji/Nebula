@@ -1,11 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  HTTPS only, everywhere. The single exception is the loopback address: the
+  audio player reads songs from a tiny server inside this very app (127.0.0.1),
+  which never leaves the device. YouTube / Google hosts are NOT exempt.
+-->
 <network-security-config>
     <domain-config cleartextTrafficPermitted="true">
         <domain includeSubdomains="false">127.0.0.1</domain>
         <domain includeSubdomains="false">localhost</domain>
-        <domain includeSubdomains="true">googlevideo.com</domain>
-        <domain includeSubdomains="true">google.com</domain>
-        <domain includeSubdomains="true">youtube.com</domain>
     </domain-config>
 
     <base-config cleartextTrafficPermitted="false">

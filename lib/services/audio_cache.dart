@@ -41,11 +41,15 @@ class AudioCache {
   File get _indexFile => File('${dir.path}/index.json');
   File fileFor(String id) => File('${dir.path}/$id.mp4');
 
+  /// The id becomes part of a file name, so only plain YouTube-style ids are
+  /// allowed. Anything else (e.g. "../../x") is never read, written or deleted.
+  static bool isSafeId(String id) => RegExp(r'^[A-Za-z0-9_-]{1,64}$').hasMatch(id);
+
   int get count => _index.length;
   int get totalBytes => _index.values.fold(0, (s, e) => s + e.size);
 
   /// Cheap in-memory check. Use [lookup] before actually playing the file.
-  bool contains(String id) => _index.containsKey(id);
+  bool contains(String id) => isSafeId(id) && _index.containsKey(id);
 
   Future<void> init() async {
     await dir.create(recursive: true);
@@ -56,7 +60,9 @@ class AudioCache {
         if (raw is List) {
           for (final item in raw) {
             final e = _Entry.tryParse(item);
-            if (e != null && await fileFor(e.id).exists()) _index[e.id] = e;
+            if (e != null && isSafeId(e.id) && await fileFor(e.id).exists()) {
+              _index[e.id] = e;
+            }
           }
         }
       }
@@ -87,7 +93,7 @@ class AudioCache {
   /// The cached file for [id], or null. Verifies the file really is there and
   /// repairs the index if it is not.
   Future<File?> lookup(String id) async {
-    final e = _index[id];
+    final e = isSafeId(id) ? _index[id] : null;
     if (!_ready || e == null) return null;
     final f = fileFor(id);
     try {
@@ -106,7 +112,7 @@ class AudioCache {
   /// affect playback.
   Future<void> put(String id, Uint8List bytes,
       {Set<String> protect = const {}}) async {
-    if (!_ready || bytes.length < 4096) return;
+    if (!_ready || !isSafeId(id) || bytes.length < 4096) return;
     final tmp = File('${dir.path}/$id.${_seq++}.tmp');
     try {
       await tmp.writeAsBytes(bytes, flush: true);
@@ -123,6 +129,7 @@ class AudioCache {
   }
 
   Future<void> remove(String id) async {
+    if (!isSafeId(id)) return;
     _index.remove(id);
     try {
       await fileFor(id).delete();

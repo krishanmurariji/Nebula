@@ -27,13 +27,21 @@ class Song {
     'thumbnailUrl': thumbnailUrl, 'isOfficial': isOfficial,
   };
 
-  factory Song.fromMap(Map<String, dynamic> m) => Song(
-    videoId:      m['videoId']      as String? ?? '',
-    title:        m['title']        as String? ?? 'Unknown',
-    artist:       m['artist']       as String? ?? '',
-    thumbnailUrl: m['thumbnailUrl'] as String? ?? '',
-    isOfficial:   m['isOfficial']   as bool?   ?? false,
-  );
+  /// Tolerant on purpose: this reads data saved by older versions and
+  /// anything on disk can be corrupted, so wrong types never throw.
+  factory Song.fromMap(Map<dynamic, dynamic> m) {
+    String str(Object? v, String fallback) => v is String ? v : fallback;
+    return Song(
+      videoId:      str(m['videoId'], ''),
+      title:        str(m['title'], 'Unknown'),
+      artist:       str(m['artist'], ''),
+      thumbnailUrl: str(m['thumbnailUrl'], ''),
+      isOfficial:   m['isOfficial'] is bool ? m['isOfficial'] as bool : false,
+    );
+  }
+
+  /// True when this can actually be played / cached.
+  bool get isPlayable => RegExp(r'^[A-Za-z0-9_-]{6,64}$').hasMatch(videoId);
 
   @override bool operator ==(Object o) =>
       identical(this, o) || (o is Song && videoId == o.videoId);

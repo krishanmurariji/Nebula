@@ -1,6 +1,9 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../providers/theme_provider.dart';
 
 import 'home_screen.dart';
@@ -23,6 +26,23 @@ class _MainShellState extends ConsumerState<MainShell> {
   void initState() {
     super.initState();
     _pageCtrl = PageController();
+    WidgetsBinding.instance
+        .addPostFrameCallback((_) => _askNotificationPermission());
+  }
+
+  /// Android 13+ hides the media notification and lock-screen controls unless
+  /// the user allows notifications. Ask once, politely, and never block on it.
+  Future<void> _askNotificationPermission() async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (prefs.getBool('asked_notification_permission') ?? false) return;
+      final status = await Permission.notification.status;
+      if (status.isDenied) {
+        await Permission.notification.request();
+      }
+      await prefs.setBool('asked_notification_permission', true);
+    } catch (_) {/* playback works without it */}
   }
 
   @override

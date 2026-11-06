@@ -35,6 +35,11 @@ final audioHandlerProvider =
 // sequential — plays to end of queue then stops
 enum PlayMode { repeatAll, repeatOne, shuffle, sequential }
 
+/// Songs larger than this are streamed straight from the URL instead of being
+/// buffered in memory (a one-hour mix can be 60 MB+; a hostile server could
+/// claim gigabytes).
+const int _kMaxProgressiveBytes = 150 * 1024 * 1024;
+
 class _LoadRequest {
   final Song song;
   final int tok;
@@ -256,7 +261,16 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
   Future<void> playSong(Song song, {List<Song>? queue, int index = 0}) {
     if (queue != null && queue.isNotEmpty) {
       _queue = List.from(queue);
-      _idx = index.clamp(0, queue.length - 1);
+      // Trust the song itself, not the caller's index: if it is not in the
+      // list (stale UI, deleted entry) it is put in front so the queue and
+      // what plays can never disagree.
+      final at = _queue.indexOf(song);
+      if (at < 0) {
+        _queue.insert(0, song);
+        _idx = 0;
+      } else {
+        _idx = at;
+      }
     } else if (!_queue.contains(song)) {
       _queue.add(song);
       _idx = _queue.length - 1;
@@ -310,6 +324,10 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
 
     try {
       nlog('[N] ▶ ${song.title} (attempt ${req.attempt})');
+      if (!song.isPlayable) {
+        // Corrupt or tampered entry: skip it, never hand it to the network or disk.
+        throw const _StreamResolveException(FailureKind.permanent);
+      }
       try {
         await _player.stop();
       } catch (e) {
@@ -336,7 +354,9 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
         final info = res.value;
         if (info == null) throw _StreamResolveException(res.kind);
 
-        if (req.attempt == 0) {
+        if (req.attempt == 0 &&
+            info.totalBytes > 0 &&
+            info.totalBytes <= _kMaxProgressiveBytes) {
           // Progressive: one download feeds the player AND the disk cache.
           download = ProgressiveDownload(
             open: info.open,
@@ -543,7 +563,12 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
   Future<void> pause() => _player.pause();
 
   @override
-  Future<void> seek(Duration position) => _player.seek(position);
+  Future<void> seek(Duration position) {
+    final total = _player.duration;
+    var target = position < Duration.zero ? Duration.zero : position;
+    if (total != null && target > total) target = total;
+    return _player.seek(target);
+  }
 
   @override
   Future<void> stop() async {
