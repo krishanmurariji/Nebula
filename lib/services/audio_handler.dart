@@ -20,6 +20,7 @@ import 'playback_failure.dart';
 import 'progressive_download.dart';
 import 'resolved_stream.dart';
 import 'stream_resolver.dart';
+import 'webview_js_solver.dart';
 
 final audioHandlerProvider =
     Provider<NebulaAudioHandler>((ref) => throw UnimplementedError());
@@ -70,7 +71,12 @@ class _SupersededException implements Exception {
 
 class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
   final AudioPlayer _player = AudioPlayer();
-  final YoutubeExplode _yt = YoutubeExplode();
+  // Solves YouTube's JavaScript challenges (the "n" parameter / signatures) in
+  // an invisible WebView. Without it most streams are throttled to zero bytes
+  // or refused with 403.
+  late final WebViewEJSSolver _jsSolver =
+      WebViewEJSSolver(log: (m) => nlog('[N] $m'));
+  late final YoutubeExplode _yt = YoutubeExplode(jsSolver: _jsSolver);
 
   Song? _current;
   List<Song> _queue = [];
@@ -82,15 +88,17 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
 
   // ── Stream resolution ─────────────────────────────────────────────────────
   // androidVr first — bypasses IP-level blocks that hit android/ios/mweb.
-  // Order matters: androidVr works without signature solving; the others
-  // are tried only when the earlier ones fail or hand out unusable streams.
+  // Order matters. androidSdkless is the library's recommended client (based
+  // on yt-dlp's android_sdkless); the rest are tried only when the earlier ones
+  // fail or hand out streams that cannot be downloaded.
   static final _clients = [
+    YoutubeApiClient.androidSdkless,
     YoutubeApiClient.androidVr,
     YoutubeApiClient.ios,
-    YoutubeApiClient.androidMusic,
-    YoutubeApiClient.android,
+    YoutubeApiClient.safari,
     YoutubeApiClient.tv,
     YoutubeApiClient.mweb,
+    YoutubeApiClient.android,
   ];
 
   // The backup source (Piped/Invidious) comes after every YouTube client.
@@ -103,13 +111,15 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
       StreamResolver<ResolvedStream>(
     fetch: _fetchStream,
     log: (m) => nlog('[N] resolver: $m'),
+    // Generous: the first lookup also loads and runs the JavaScript solver.
     timeouts: const [
-      Duration(seconds: 20), // androidVr
-      Duration(seconds: 12), // ios
-      Duration(seconds: 12), // androidMusic
-      Duration(seconds: 12), // android
-      Duration(seconds: 12), // tv
-      Duration(seconds: 12), // mweb
+      Duration(seconds: 40), // androidSdkless
+      Duration(seconds: 25), // androidVr
+      Duration(seconds: 25), // ios
+      Duration(seconds: 30), // safari
+      Duration(seconds: 30), // tv
+      Duration(seconds: 25), // mweb
+      Duration(seconds: 20), // android
       Duration(seconds: 25), // backup source (up to two instances)
     ],
   );
@@ -190,6 +200,9 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
     });
 
     unawaited(_initCache());
+    unawaited(_jsSolver.warmUp().catchError((Object e) {
+      nlog('[N] JS solver could not start: $e');
+    }));
   }
 
   // ── Error from the native player while a song is (or should be) playing ──
