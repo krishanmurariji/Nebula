@@ -1,3 +1,8 @@
+// just_audio marks StreamAudioSource as @experimental, but it is the supported
+// way to feed custom bytes to the player and the version is pinned in
+// pubspec.lock. Acknowledged here, only for this file.
+// ignore_for_file: experimental_member_use
+
 import 'dart:async';
 import 'dart:io';
 import 'dart:math';
