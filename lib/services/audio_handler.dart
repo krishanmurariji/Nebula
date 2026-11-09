@@ -17,6 +17,7 @@ import 'fallback_sources.dart';
 import 'latest_wins_runner.dart';
 import 'playback_failure.dart';
 import 'resolved_stream.dart';
+import 'self_test.dart';
 import 'song_acquirer.dart';
 import 'stream_resolver.dart';
 import 'youtube_clients.dart';
@@ -544,6 +545,15 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
       if (ok && _tok == ptok) nlog('[N] prefetch done: ${next.title}');
     }());
   }
+
+  // ── Self-test ─────────────────────────────────────────────────────────────
+
+  /// Runs the real song pipeline once for a known video and reports each stage.
+  Future<List<SelfTestStep>> selfTest() => runSelfTest(
+        acquirer: _acquirer,
+        cache: () => _cache,
+        ensureCache: _ensureCache,
+      );
 
   // ── Cache management ──────────────────────────────────────────────────────
 

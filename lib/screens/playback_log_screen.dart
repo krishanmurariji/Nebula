@@ -1,22 +1,30 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 
 import '../services/app_log.dart';
+import '../services/audio_handler.dart';
+import '../services/self_test.dart';
 import '../services/network_diagnostics.dart';
 import '../services/backup_settings.dart';
 import '../services/fallback_sources.dart';
 
 /// Live view of the playback log — lets problems be diagnosed on the phone.
-class PlaybackLogScreen extends StatelessWidget {
+class PlaybackLogScreen extends ConsumerWidget {
   const PlaybackLogScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     return Scaffold(
       appBar: AppBar(
         title: const Text('Playback Log'),
         actions: [
+          IconButton(
+            tooltip: 'Self-test (finds, downloads and saves a real song)',
+            icon: const Icon(Icons.verified_rounded),
+            onPressed: () => _showSelfTest(context, ref),
+          ),
           IconButton(
             tooltip: 'Network check',
             icon: const Icon(Icons.network_check_rounded),
@@ -235,6 +243,70 @@ Future<void> _showNetworkCheck(BuildContext context) async {
                     ),
                   const SizedBox(height: 12),
                   Text(data.advice,
+                      style: const TextStyle(fontWeight: FontWeight.w600)),
+                ],
+              ),
+            );
+          },
+        ),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close')),
+      ],
+    ),
+  );
+}
+
+
+/// Runs the whole song pipeline on a known video and shows each stage.
+Future<void> _showSelfTest(BuildContext context, WidgetRef ref) async {
+  final handler = ref.read(audioHandlerProvider);
+  final future = handler.selfTest().then((steps) {
+    for (final s in steps) {
+      nlog('[N] selftest $s');
+    }
+    final verdict = selfTestVerdict(steps);
+    nlog('[N] selftest verdict: $verdict');
+    return (steps: steps, verdict: verdict);
+  });
+
+  await showDialog<void>(
+    context: context,
+    barrierDismissible: false,
+    builder: (ctx) => AlertDialog(
+      title: const Text('Self-test'),
+      content: SizedBox(
+        width: double.maxFinite,
+        child: FutureBuilder<({List<SelfTestStep> steps, String verdict})>(
+          future: future,
+          builder: (context, snap) {
+            if (!snap.hasData) {
+              return const Padding(
+                padding: EdgeInsets.all(24),
+                child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 16),
+                  Text('Finding, downloading and saving a real song…'),
+                ]),
+              );
+            }
+            final data = snap.data!;
+            return SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  for (final s in data.steps)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 2),
+                      child: Text(s.toString(),
+                          style: TextStyle(
+                              fontFamily: 'monospace',
+                              fontSize: 11,
+                              color: s.ok ? null : Colors.redAccent)),
+                    ),
+                  const SizedBox(height: 12),
+                  Text(data.verdict,
                       style: const TextStyle(fontWeight: FontWeight.w600)),
                 ],
               ),
