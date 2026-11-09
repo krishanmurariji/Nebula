@@ -288,11 +288,11 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
     final prog = progress.fraction;
 
     final isDark = ref.watch(themeProvider) == ThemeMode.dark;
-    final bg = isDark ? const Color(0xFF0D1117) : const Color(0xFFEDF2F7);
-    final cardBg = isDark ? const Color(0xFF161B22) : Colors.white;
-    final textCol = isDark ? Colors.white : const Color(0xFF1A1A2E);
-    final mutedCol = isDark ? Colors.white54 : const Color(0xFF8A9BB0);
-    const accentCol = Color(0xFF4993FC);
+    final bg = isDark ? const Color(0xFF1C1814) : const Color(0xFFDCD8CD);
+    final cardBg = isDark ? const Color(0xFF28221C) : const Color(0xFFE9E5DB);
+    final textCol = isDark ? Colors.white : const Color(0xFF2B2420);
+    final mutedCol = isDark ? Colors.white54 : const Color(0xFF6E6459);
+    const accentCol = Color(0xFFB0653A);
 
     final h = MediaQuery.of(context).size.height;
     final topPad = MediaQuery.of(context).padding.top;
@@ -463,7 +463,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
               left: 20,
               child: _NeuBtn(
                 icon: Icons.expand_more_rounded,
-                color: const Color(0xFF4993FC),
+                color: const Color(0xFFB0653A),
                 bg: bg,
                 isDark: isDark,
                 size: 52,
@@ -630,7 +630,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
 
   Widget _buildTransportRow(Color textCol, Color bg, bool isDark,
       Song? song, Color mutedCol) {
-    const accentCol = Color(0xFF4993FC);
+    const accentCol = Color(0xFFB0653A);
     final IconData modeIcon;
     final Color modeColor;
     final String modeLabel;
@@ -680,7 +680,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
           ),
           _NeuBtn(
             icon: Icons.skip_previous_rounded,
-            color: const Color(0xFF4993FC),
+            color: const Color(0xFFB0653A),
             bg: bg,
             isDark: isDark,
             size: 52,
@@ -689,7 +689,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
           ),
           _NeuBtn(
             icon: Icons.skip_next_rounded,
-            color: const Color(0xFF4993FC),
+            color: const Color(0xFFB0653A),
             bg: bg,
             isDark: isDark,
             size: 52,
@@ -697,7 +697,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
           ),
           _NeuBtn(
             icon: Icons.playlist_add_rounded,
-            color: const Color(0xFF4993FC),
+            color: const Color(0xFFB0653A),
             bg: bg,
             isDark: isDark,
             size: 52,
@@ -854,7 +854,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
 
   Widget _buildNeedleRight(bool isDark, double width, double height) {
     final armColor =
-        isDark ? const Color(0xFF2A2D3A) : Colors.white;
+        isDark ? const Color(0xFF352D25) : const Color(0xFFE9E5DB);
     return SizedBox(
       width: width,
       height: height,
@@ -988,7 +988,7 @@ class _AddToPlaylistPanel extends ConsumerWidget {
                 _NeuBtn(
                   icon: Icons.close_rounded,
                   color: mutedCol,
-                  bg: isDark ? const Color(0xFF0D1117) : const Color(0xFFEDF2F7),
+                  bg: isDark ? const Color(0xFF1C1814) : const Color(0xFFDCD8CD),
                   isDark: isDark,
                   size: 44,
                   onTap: onClose,
@@ -1007,7 +1007,7 @@ class _AddToPlaylistPanel extends ConsumerWidget {
                 _NeuBtn(
                   icon: Icons.add_rounded,
                   color: accentCol,
-                  bg: isDark ? const Color(0xFF0D1117) : const Color(0xFFEDF2F7),
+                  bg: isDark ? const Color(0xFF1C1814) : const Color(0xFFDCD8CD),
                   isDark: isDark,
                   size: 44,
                   onTap: onAdd,
@@ -1030,7 +1030,7 @@ class _AddToPlaylistPanel extends ConsumerWidget {
                     _NeuIconBox(
                       icon: Icons.queue_music_rounded,
                       isDark: isDark,
-                      bg: isDark ? const Color(0xFF0D1117) : const Color(0xFFEDF2F7),
+                      bg: isDark ? const Color(0xFF1C1814) : const Color(0xFFDCD8CD),
                       color: accentCol,
                       size: 72,
                     ),
@@ -1071,7 +1071,7 @@ class _AddToPlaylistPanel extends ConsumerWidget {
                               blurRadius: 8,
                               offset: const Offset(3, 3)),
                           BoxShadow(
-                              color: isDark ? Colors.white.withOpacity(0.04) : Colors.white,
+                              color: isDark ? Colors.white.withOpacity(0.04) : const Color(0xFFF7F5EE),
                               blurRadius: 8,
                               offset: const Offset(-3, -3)),
                         ],
@@ -1180,7 +1180,7 @@ class _NamingPanel extends StatelessWidget {
               _NeuBtn(
                 icon: Icons.arrow_back_rounded,
                 color: mutedCol,
-                bg: isDark ? const Color(0xFF0D1117) : const Color(0xFFEDF2F7),
+                bg: isDark ? const Color(0xFF1C1814) : const Color(0xFFDCD8CD),
                 isDark: isDark,
                 size: 44,
                 onTap: onCancel,
@@ -1202,7 +1202,7 @@ class _NamingPanel extends StatelessWidget {
             child: _NeuIconBox(
               icon: Icons.album_rounded,
               isDark: isDark,
-              bg: isDark ? const Color(0xFF0D1117) : const Color(0xFFEDF2F7),
+              bg: isDark ? const Color(0xFF1C1814) : const Color(0xFFDCD8CD),
               color: accentCol,
               size: 88,
             ),
@@ -1220,7 +1220,7 @@ class _NamingPanel extends StatelessWidget {
           const SizedBox(height: 10),
           Container(
             decoration: BoxDecoration(
-              color: isDark ? const Color(0xFF0D1117) : const Color(0xFFEDF2F7),
+              color: isDark ? const Color(0xFF1C1814) : const Color(0xFFDCD8CD),
               borderRadius: BorderRadius.circular(16),
               boxShadow: [
                 BoxShadow(
@@ -1228,7 +1228,7 @@ class _NamingPanel extends StatelessWidget {
                     blurRadius: 10,
                     offset: const Offset(4, 4)),
                 BoxShadow(
-                    color: isDark ? Colors.white.withOpacity(0.04) : Colors.white,
+                    color: isDark ? Colors.white.withOpacity(0.04) : const Color(0xFFF7F5EE),
                     blurRadius: 10,
                     offset: const Offset(-4, -4)),
               ],
@@ -1362,9 +1362,9 @@ class _VolumeArcPainter extends CustomPainter {
         startAngle: startAngle,
         endAngle: startAngle + sweepFull * volume,
         colors: const [
-          Color(0xFF0A4FD6),
-          Color(0xFF1A7EFF),
-          Color(0xFF5BB8FF),
+          Color(0xFF8E4A27),
+          Color(0xFFB0653A),
+          Color(0xFFD79A6B),
         ],
         stops: const [0.0, 0.6, 1.0],
       ).createShader(rect);
@@ -1390,10 +1390,10 @@ class _VolumeArcPainter extends CustomPainter {
       canvas.drawCircle(
           Offset(thumbX, thumbY), 8, Paint()..color = Colors.white);
       canvas.drawCircle(Offset(thumbX, thumbY), 5,
-          Paint()..color = const Color(0xFF4993FC));
+          Paint()..color = const Color(0xFFB0653A));
     }
 
-    const iconBlue = Color(0xFF4993FC);
+    const iconBlue = Color(0xFFB0653A);
     final iconRadius = radius + 24;
 
     final startIconX = center.dx + iconRadius * cos(startAngle);
@@ -1461,10 +1461,10 @@ class _Waveform extends StatelessWidget {
                 height: barHeight,
                 decoration: BoxDecoration(
                   color: active
-                      ? const Color(0xFF0066CC)
+                      ? const Color(0xFFA8582E)
                       : (isDark
                           ? Colors.white10
-                          : const Color(0xFFE2E8F0)),
+                          : const Color(0xFFCFCABD)),
                   borderRadius: BorderRadius.circular(12),
                 ),
               );
@@ -1535,7 +1535,7 @@ class _NeuBtn extends StatelessWidget {
                 BoxShadow(
                     color: isDark
                         ? Colors.white.withOpacity(0.05)
-                        : Colors.white,
+                        : const Color(0xFFF7F5EE),
                     blurRadius: 10,
                     offset: const Offset(-5, -5)),
               ]),
@@ -1571,7 +1571,7 @@ class _NeuIconBox extends StatelessWidget {
                 blurRadius: 14,
                 offset: const Offset(6, 6)),
             BoxShadow(
-                color: isDark ? Colors.white.withOpacity(0.05) : Colors.white,
+                color: isDark ? Colors.white.withOpacity(0.05) : const Color(0xFFF7F5EE),
                 blurRadius: 14,
                 offset: const Offset(-6, -6)),
           ],

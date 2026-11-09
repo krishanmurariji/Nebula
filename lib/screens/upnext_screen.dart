@@ -19,10 +19,10 @@ class UpNextScreen extends ConsumerWidget {
     final isDark = ref.watch(themeProvider) == ThemeMode.dark;
     final h = MediaQuery.of(context).size.height;
 
-    final bg = isDark ? const Color(0xFF0D1117) : const Color(0xFFF5F8FF);
-    final textCol = isDark ? Colors.white : const Color(0xFF1A1A2E);
-    final mutedCol = isDark ? Colors.white54 : const Color(0xFF8A9BB0);
-    const accentCol = Color(0xFF4993FC);
+    final bg = isDark ? const Color(0xFF1C1814) : const Color(0xFFDCD8CD);
+    final textCol = isDark ? Colors.white : const Color(0xFF2B2420);
+    final mutedCol = isDark ? Colors.white54 : const Color(0xFF6E6459);
+    const accentCol = Color(0xFFB0653A);
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -65,7 +65,7 @@ class UpNextScreen extends ConsumerWidget {
                       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                       margin: const EdgeInsets.only(bottom: 12),
                       decoration: BoxDecoration(
-                        color: isDark ? const Color(0xFF161B22) : Colors.white,
+                        color: isDark ? const Color(0xFF28221C) : const Color(0xFFE9E5DB),
                         borderRadius: BorderRadius.circular(24),
                         boxShadow: [
                           BoxShadow(
@@ -201,10 +201,10 @@ class _CapsuleSongTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cardBg = isDark ? const Color(0xFF161B22) : Colors.white;
-    final textCol = isDark ? Colors.white : const Color(0xFF1A1A2E);
-    final mutedCol = isDark ? Colors.white54 : const Color(0xFF8A9BB0);
-    const accentCol = Color(0xFF4993FC);
+    final cardBg = isDark ? const Color(0xFF28221C) : const Color(0xFFE9E5DB);
+    final textCol = isDark ? Colors.white : const Color(0xFF2B2420);
+    final mutedCol = isDark ? Colors.white54 : const Color(0xFF6E6459);
+    const accentCol = Color(0xFFB0653A);
 
     return GestureDetector(
       onTap: onTap,

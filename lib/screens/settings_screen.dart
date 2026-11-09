@@ -34,12 +34,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> with TickerProv
     final isDark = ref.watch(themeProvider) == ThemeMode.dark;
     
     // Theme Colors
-    final bg = isDark ? const Color(0xFF0D1117) : const Color(0xFFEDF2F7);
-    final cardBg = isDark ? const Color(0xFF161B22) : Colors.white;
-    final textCol = isDark ? Colors.white : const Color(0xFF1A1A2E);
-    final mutedCol = isDark ? Colors.white54 : const Color(0xFF8A9BB0);
-    final shadowD = isDark ? Colors.black54 : const Color(0xFFC8D3DF);
-    final shadowL = isDark ? const Color(0xFF1E2530) : Colors.white;
+    final bg = isDark ? const Color(0xFF1C1814) : const Color(0xFFDCD8CD);
+    final cardBg = isDark ? const Color(0xFF28221C) : const Color(0xFFE9E5DB);
+    final textCol = isDark ? Colors.white : const Color(0xFF2B2420);
+    final mutedCol = isDark ? Colors.white54 : const Color(0xFF6E6459);
+    final shadowD = isDark ? Colors.black54 : const Color(0xFFB8B3A6);
+    final shadowL = isDark ? const Color(0xFF332B24) : const Color(0xFFF7F5EE);
 
     return Scaffold(
       backgroundColor: bg,
@@ -94,7 +94,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> with TickerProv
                         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                           content: const Text('Playback history shredded!'),
                           behavior: SnackBarBehavior.floating,
-                          backgroundColor: const Color(0xFF1A2540),
+                          backgroundColor: const Color(0xFF2B2420),
                           shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12)),
                         ));
@@ -106,7 +106,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> with TickerProv
                       label: 'Backup Sources',
                       subtitle: 'Used if YouTube blocks or breaks',
                       icon: Icons.shield_moon_rounded,
-                      iconColor: const Color(0xFF4993FC),
+                      iconColor: const Color(0xFFB0653A),
                       cardBg: cardBg,
                       shadowD: shadowD,
                       shadowL: shadowL,
@@ -143,7 +143,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> with TickerProv
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
                               border: Border.all(
-                                  color: const Color(0xFF4993FC).withOpacity(0.5),
+                                  color: const Color(0xFFB0653A).withOpacity(0.5),
                                   width: 2),
                             ),
                             child: CircleAvatar(
@@ -242,7 +242,7 @@ class _CircularThemeSelector extends ConsumerWidget {
             duration: const Duration(milliseconds: 500),
             turns: isDark ? 0.5 : 0,
             child: const Icon(Icons.sync_rounded,
-                color: Color(0xFF4993FC), size: 28),
+                color: Color(0xFFB0653A), size: 28),
           ),
           _ThemeOption(
               label: 'Dark',
@@ -276,7 +276,7 @@ class _ThemeOption extends StatelessWidget {
         width: 80,
         height: 80,
         decoration: BoxDecoration(
-          color: active ? const Color(0xFF4993FC) : Colors.transparent,
+          color: active ? const Color(0xFFB0653A) : Colors.transparent,
           shape: BoxShape.circle,
         ),
         child: Column(

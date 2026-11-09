@@ -39,9 +39,9 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     // Watch liked songs to show the heart badge on search results
     final likedSongs = ref.watch(likedSongsProvider); 
     
-    final bg      = isDark ? const Color(0xFF0D1117) : const Color(0xFFEDF2F7);
-    final cardBg  = isDark ? const Color(0xFF161B22) : Colors.white;
-    final textCol = isDark ? Colors.white : const Color(0xFF1A1A2E);
+    final bg      = isDark ? const Color(0xFF1C1814) : const Color(0xFFDCD8CD);
+    final cardBg  = isDark ? const Color(0xFF28221C) : const Color(0xFFE9E5DB);
+    final textCol = isDark ? Colors.white : const Color(0xFF2B2420);
     
     final screenSize = MediaQuery.of(context).size;
 
@@ -93,11 +93,11 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                       style: TextStyle(color: textCol, fontSize: 14, fontWeight: FontWeight.w500),
                       decoration: InputDecoration(
                         hintText: 'Artists, songs...',
-                        hintStyle: const TextStyle(color: Color(0xFFB0BEC5), fontSize: 14),
-                        prefixIcon: const Icon(Icons.search, color: Color(0xFF4993FC), size: 20),
+                        hintStyle: const TextStyle(color: Color(0xFF9A9082), fontSize: 14),
+                        prefixIcon: const Icon(Icons.search, color: Color(0xFFB0653A), size: 20),
                         suffixIcon: _ctrl.text.isNotEmpty
                             ? IconButton(
-                                icon: const Icon(Icons.close, color: Color(0xFFB0BEC5), size: 18),
+                                icon: const Icon(Icons.close, color: Color(0xFF9A9082), size: 18),
                                 onPressed: () {
                                   _ctrl.clear();
                                   ref.read(searchProvider.notifier).clear();
@@ -159,21 +159,21 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     switch (search.status) {
       case SearchStatus.loading:
         return const Center(child: CircularProgressIndicator(
-            color: Color(0xFF4993FC), strokeWidth: 2));
+            color: Color(0xFFB0653A), strokeWidth: 2));
       case SearchStatus.error:
         return Center(child: Padding(
           padding: const EdgeInsets.all(32),
           child: Column(mainAxisSize: MainAxisSize.min, children: [
-            const Icon(Icons.wifi_off_outlined, size: 52, color: Color(0xFFD0DBE8)),
+            const Icon(Icons.wifi_off_outlined, size: 52, color: Color(0xFFB5AE9F)),
             const SizedBox(height: 16),
             Text(search.error ?? 'Error', textAlign: TextAlign.center,
-              style: const TextStyle(color: Color(0xFF8A9BB0))),
+              style: const TextStyle(color: Color(0xFF6E6459))),
             const SizedBox(height: 20),
             GestureDetector(
               onTap: () => _search(_ctrl.text),
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 12),
-                decoration: BoxDecoration(color: const Color(0xFF4993FC),
+                decoration: BoxDecoration(color: const Color(0xFFB0653A),
                     borderRadius: BorderRadius.circular(30)),
                 child: const Text('Retry', style: TextStyle(color: Colors.white,
                     fontWeight: FontWeight.w600)))),
@@ -181,7 +181,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       case SearchStatus.loaded:
         if (search.results.isEmpty) return const Center(
           child: Text('No results found',
-              style: TextStyle(color: Color(0xFF8A9BB0))));
+              style: TextStyle(color: Color(0xFF6E6459))));
         final visible = applySearchFilter(search.results, filter);
         if (visible.isEmpty) {
           // The filter hid everything: say so and offer the way out.
@@ -189,7 +189,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
             child: Padding(
               padding: const EdgeInsets.all(32),
               child: Column(mainAxisSize: MainAxisSize.min, children: [
-                const Icon(Icons.verified_outlined, size: 52, color: Color(0xFFD0DBE8)),
+                const Icon(Icons.verified_outlined, size: 52, color: Color(0xFFB5AE9F)),
                 const SizedBox(height: 16),
                 Text('No official upload found for this search',
                     textAlign: TextAlign.center,
@@ -197,13 +197,13 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                 const SizedBox(height: 6),
                 Text('${search.results.length} other results are available.',
                     textAlign: TextAlign.center,
-                    style: const TextStyle(color: Color(0xFF8A9BB0), fontSize: 13)),
+                    style: const TextStyle(color: Color(0xFF6E6459), fontSize: 13)),
                 const SizedBox(height: 20),
                 GestureDetector(
                   onTap: () => ref.read(searchFilterProvider.notifier).set(SearchFilter.bestMatch),
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 12),
-                    decoration: BoxDecoration(color: const Color(0xFF4993FC),
+                    decoration: BoxDecoration(color: const Color(0xFFB0653A),
                         borderRadius: BorderRadius.circular(30)),
                     child: const Text('Show all results', style: TextStyle(
                         color: Colors.white, fontWeight: FontWeight.w600)))),
@@ -262,7 +262,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                   child: Image.asset(
                     'assets/images/app_logo_final.png',
                     fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => const Icon(Icons.search_outlined, size: 56, color: Color(0xFFD0DBE8)),
+                    errorBuilder: (_, __, ___) => const Icon(Icons.search_outlined, size: 56, color: Color(0xFFB5AE9F)),
                   ),
                 ),
               ),
@@ -296,10 +296,10 @@ class _CapsuleSongTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cardBg = isDark ? const Color(0xFF161B22) : Colors.white;
-    final textCol = isDark ? Colors.white : const Color(0xFF1A1A2E);
-    final mutedCol = isDark ? Colors.white54 : const Color(0xFF8A9BB0);
-    const accentCol = Color(0xFF4993FC);
+    final cardBg = isDark ? const Color(0xFF28221C) : const Color(0xFFE9E5DB);
+    final textCol = isDark ? Colors.white : const Color(0xFF2B2420);
+    final mutedCol = isDark ? Colors.white54 : const Color(0xFF6E6459);
+    const accentCol = Color(0xFFB0653A);
 
     // ── DYNAMIC SMART BADGE LOGIC ──
     final titleLower = song.title.toLowerCase();
@@ -441,7 +441,7 @@ class _CapsuleSongTile extends StatelessWidget {
                       // ── Verified Tick ──
                       if (isOfficial) ...[
                         const SizedBox(width: 4),
-                        const Icon(Icons.check_circle, size: 12, color: Color(0xFF4993FC)),
+                        const Icon(Icons.check_circle, size: 12, color: Color(0xFFB0653A)),
                       ],
                     ],
                   ),

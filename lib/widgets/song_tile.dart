@@ -23,10 +23,10 @@ class SongTile extends ConsumerWidget {
     final isDark = ref.watch(themeProvider) == ThemeMode.dark;
     
     // Colors matched to your unified Neumorphic app palette
-    final bg = isDark ? const Color(0xFF0D1117) : const Color(0xFFF0F4F8);
-    final textCol = isDark ? Colors.white : const Color(0xFF1A1A2E);
-    final mutedCol = isDark ? Colors.white54 : const Color(0xFF8A9BB0);
-    const accentCol = Color(0xFF4993FC);
+    final bg = isDark ? const Color(0xFF1C1814) : const Color(0xFFDCD8CD);
+    final textCol = isDark ? Colors.white : const Color(0xFF2B2420);
+    final mutedCol = isDark ? Colors.white54 : const Color(0xFF6E6459);
+    const accentCol = Color(0xFFB0653A);
 
     return GestureDetector(
       onTap: onTap,
@@ -46,7 +46,7 @@ class SongTile extends ConsumerWidget {
                 blurRadius: 7,
                 offset: const Offset(3, 3)),
             BoxShadow(
-                color: isDark ? Colors.white.withOpacity(0.03) : Colors.white,
+                color: isDark ? Colors.white.withOpacity(0.03) : const Color(0xFFF7F5EE),
                 blurRadius: 7,
                 offset: const Offset(-3, -3)),
           ],

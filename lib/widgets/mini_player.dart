@@ -21,11 +21,11 @@ class MiniPlayer extends ConsumerWidget {
       child: Container(
         margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
         decoration: BoxDecoration(
-          color: const Color(0xFF1A1A2E),
+          color: const Color(0xFF2B2420),
           borderRadius: BorderRadius.circular(18),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFF1A1A2E).withOpacity(0.25),
+              color: const Color(0xFF2B2420).withOpacity(0.25),
               blurRadius: 20, offset: const Offset(0, 6)),
           ],
         ),
@@ -71,7 +71,7 @@ class MiniPlayer extends ConsumerWidget {
                       color: Colors.white, shape: BoxShape.circle),
                     child: Icon(
                       playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
-                      color: const Color(0xFF1A1A2E), size: 18)),
+                      color: const Color(0xFF2B2420), size: 18)),
                 ),
                 const SizedBox(width: 8),
                 GestureDetector(

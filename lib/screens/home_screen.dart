@@ -140,10 +140,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final playerState = ref.watch(playerProvider);
 
     final isDark = ref.watch(themeProvider) == ThemeMode.dark;
-    final bg = isDark ? const Color(0xFF0D1117) : const Color(0xFFF0F4F8); 
-    final textCol = isDark ? Colors.white : const Color(0xFF1A1A2E);
-    final mutedCol = isDark ? Colors.white54 : const Color(0xFF8A9BB0);
-    const accentCol = Color(0xFF4993FC);
+    final bg = isDark ? const Color(0xFF1C1814) : const Color(0xFFDCD8CD); 
+    final textCol = isDark ? Colors.white : const Color(0xFF2B2420);
+    final mutedCol = isDark ? Colors.white54 : const Color(0xFF6E6459);
+    const accentCol = Color(0xFFB0653A);
     
     final topPad = MediaQuery.of(context).padding.top;
     final screenWidth = MediaQuery.of(context).size.width;
@@ -271,7 +271,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                 clipBehavior: Clip.antiAlias,
                                 decoration: BoxDecoration(
                                   borderRadius: BorderRadius.circular(isActive ? 32 : 24),
-                                  color: isDark ? const Color(0xFF161B22) : Colors.grey.shade300,
+                                  color: isDark ? const Color(0xFF28221C) : Colors.grey.shade300,
                                   boxShadow: [
                                     if (isActive) BoxShadow(
                                       color: Colors.black.withOpacity(isDark ? 0.4 : 0.15),
@@ -552,10 +552,10 @@ class _CapsuleSongTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cardBg = isDark ? const Color(0xFF161B22) : Colors.white;
-    final textCol = isDark ? Colors.white : const Color(0xFF1A1A2E);
-    final mutedCol = isDark ? Colors.white54 : const Color(0xFF8A9BB0);
-    const accentCol = Color(0xFF4993FC);
+    final cardBg = isDark ? const Color(0xFF28221C) : const Color(0xFFE9E5DB);
+    final textCol = isDark ? Colors.white : const Color(0xFF2B2420);
+    final mutedCol = isDark ? Colors.white54 : const Color(0xFF6E6459);
+    const accentCol = Color(0xFFB0653A);
 
     return GestureDetector(
       onTap: onTap,
@@ -648,7 +648,7 @@ class _NeuBtn extends StatelessWidget {
               shape: BoxShape.circle,
               boxShadow: [
                 BoxShadow(color: isDark ? Colors.black54 : Colors.grey[300]!, blurRadius: 10, offset: const Offset(5, 5)),
-                BoxShadow(color: isDark ? Colors.white.withOpacity(0.05) : Colors.white, blurRadius: 10, offset: const Offset(-5, -5)),
+                BoxShadow(color: isDark ? Colors.white.withOpacity(0.05) : const Color(0xFFF7F5EE), blurRadius: 10, offset: const Offset(-5, -5)),
               ]),
           child: Icon(icon, color: color, size: size * 0.5),
         ),

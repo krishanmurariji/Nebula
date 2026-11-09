@@ -78,7 +78,7 @@ class _MainShellState extends ConsumerState<MainShell> {
     });
 
     final isDark = ref.watch(themeProvider) == ThemeMode.dark;
-    final bg = isDark ? const Color(0xFF0D1117) : const Color(0xFFEDF2F7);
+    final bg = isDark ? const Color(0xFF1C1814) : const Color(0xFFDCD8CD);
 
     return Scaffold(
       backgroundColor: bg,

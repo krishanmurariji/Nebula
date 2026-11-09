@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'providers/player_provider.dart';
+import 'theme/noor_palette.dart';
 import 'providers/theme_provider.dart';
 import 'screens/main_shell.dart';
 
@@ -39,21 +40,23 @@ class NebulaApp extends ConsumerWidget {
   ThemeData _light() => ThemeData(
     useMaterial3: true,
     brightness: Brightness.light,
-    scaffoldBackgroundColor: const Color(0xFFEDF2F7),
+    scaffoldBackgroundColor: NoorColors.bg,
     colorScheme: const ColorScheme.light(
-      primary: Color(0xFF4993FC),
-      surface: Color(0xFFEDF2F7),
-      onSurface: Color(0xFF1A1A2E),
+      primary: NoorColors.copper,
+      secondary: NoorColors.copperDeep,
+      surface: NoorColors.bg,
+      onSurface: NoorColors.ink,
     ),
   );
 
   ThemeData _dark() => ThemeData(
     useMaterial3: true,
     brightness: Brightness.dark,
-    scaffoldBackgroundColor: const Color(0xFF0D1117),
+    scaffoldBackgroundColor: NoorColors.darkBg,
     colorScheme: const ColorScheme.dark(
-      primary: Color(0xFF4993FC),
-      surface: Color(0xFF161B22),
+      primary: NoorColors.copper,
+      secondary: NoorColors.copperSoft,
+      surface: NoorColors.darkSurface,
       onSurface: Colors.white,
     ),
   );

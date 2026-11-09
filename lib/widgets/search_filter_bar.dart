@@ -75,9 +75,9 @@ class _FilterChipButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const accent = Color(0xFF4993FC);
-    final idleBg = isDark ? const Color(0xFF161B22) : Colors.white;
-    final idleFg = isDark ? Colors.white70 : const Color(0xFF4A5A6E);
+    const accent = Color(0xFFB0653A);
+    final idleBg = isDark ? const Color(0xFF28221C) : const Color(0xFFE9E5DB);
+    final idleFg = isDark ? Colors.white70 : const Color(0xFF5E544A);
     final fg = selected ? Colors.white : idleFg;
 
     return Semantics(

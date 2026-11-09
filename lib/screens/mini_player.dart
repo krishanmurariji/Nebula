@@ -48,9 +48,9 @@ class _MiniPlayerState extends ConsumerState<MiniPlayer>
     final isError = ps.status == NebulaPlayerStatus.error;
     final isDark  = ref.watch(themeProvider) == ThemeMode.dark;
 
-    final cardBg  = isDark ? const Color(0xFF161B22) : Colors.white;
-    final textCol = isDark ? Colors.white : const Color(0xFF1A1A2E);
-    final mutedCol= isDark ? Colors.white54 : const Color(0xFF8A9BB0);
+    final cardBg  = isDark ? const Color(0xFF28221C) : const Color(0xFFE9E5DB);
+    final textCol = isDark ? Colors.white : const Color(0xFF2B2420);
+    final mutedCol= isDark ? Colors.white54 : const Color(0xFF6E6459);
 
     if (playing && !loading) {
       if (!_rotationCtrl.isAnimating) _rotationCtrl.repeat();
@@ -193,7 +193,7 @@ class _MiniPlayerState extends ConsumerState<MiniPlayer>
                         width: 44,
                         height: 44,
                         decoration: const BoxDecoration(
-                          color: Color(0xFF4993FC),
+                          color: Color(0xFFB0653A),
                           shape: BoxShape.circle,
                         ),
                         child: loading
@@ -292,7 +292,7 @@ class _MiniPlayerState extends ConsumerState<MiniPlayer>
 
   Widget _buildMiniNeedle(bool isDark) {
     final armColor =
-        isDark ? const Color(0xFFB0BEC5) : const Color(0xFF455A64);
+        isDark ? const Color(0xFF9A9082) : const Color(0xFF5E544A);
     return SizedBox(
       width: 24,
       height: 34,

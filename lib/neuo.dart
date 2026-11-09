@@ -1,20 +1,21 @@
 import 'package:flutter/material.dart';
+import 'theme/noor_palette.dart';
 
 class N {
-  static const bg       = Color(0xFFF5FAFF);
+  static const bg       = Color(0xFFDCD8CD);
   static const surface  = Color(0xFFFFFFFF);
-  static const primary  = Color(0xFF005EB9);
-  static const onSurf   = Color(0xFF28343B);
-  static const muted    = Color(0xFF556169);
-  static const outline  = Color(0xFFA7B4BD);
+  static const primary  = Color(0xFFB0653A);
+  static const onSurf   = Color(0xFF2B2420);
+  static const muted    = Color(0xFF6E6459);
+  static const outline  = Color(0xFFB5AE9F);
   static const error    = Color(0xFFA83836);
-  static const surfHigh = Color(0xFFDFEAF2);
-  static const surfLow  = Color(0xFFEDF5FB);
-  static const surfHst  = Color(0xFFD8E4EE);
+  static const surfHigh = Color(0xFFD2CEC2);
+  static const surfLow  = Color(0xFFE4E0D6);
+  static const surfHst  = Color(0xFFCBC6B9);
 
   static List<BoxShadow> lift({double intensity = 1.0}) => [
     BoxShadow(
-      color: Color.fromRGBO(209, 217, 230, intensity.clamp(0.0, 1.0)),
+      color: NoorColors.shadowDark.withOpacity(intensity.clamp(0.0, 1.0)),
       blurRadius: (16 * intensity).clamp(1.0, 32.0),
       offset: Offset(
         (8 * intensity).clamp(0.0, 16.0),
@@ -22,7 +23,7 @@ class N {
       ),
     ),
     BoxShadow(
-      color: Colors.white.withOpacity(intensity.clamp(0.0, 1.0)),
+      color: NoorColors.shadowLight.withOpacity(intensity.clamp(0.0, 1.0)),
       blurRadius: (16 * intensity).clamp(1.0, 32.0),
       offset: Offset(
         -(8 * intensity).clamp(0.0, 16.0),
@@ -33,12 +34,12 @@ class N {
 
   static List<BoxShadow> get inset => const [
     BoxShadow(
-      color: Color(0xFFD1D9E6),
+      color: Color(0xFFB8B3A6),
       blurRadius: 8,
       offset: Offset(4, 4),
     ),
     BoxShadow(
-      color: Colors.white,
+      color: NoorColors.shadowLight,
       blurRadius: 8,
       offset: Offset(-4, -4),
     ),
