@@ -49,6 +49,14 @@ void main() {
     }
   });
 
+  test('httpStatusInCause finds the server answer, and only a real one', () {
+    expect(httpStatusInCause('direct: HTTP 403 from rr6.googlevideo.com; library: Timeout'), 403);
+    expect(httpStatusInCause(Exception('HTTP 429 from x')), 429);
+    expect(httpStatusInCause('TimeoutException: no data for 10s'), isNull);
+    expect(httpStatusInCause('SocketException: Failed host lookup'), isNull);
+    expect(httpStatusInCause(null), isNull);
+  });
+
   test('retryDelay backs off and is capped', () {
     expect(retryDelay(0), const Duration(milliseconds: 800));
     expect(retryDelay(1), const Duration(milliseconds: 1600));

@@ -173,6 +173,7 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
   Timer? _retryTimer;
   int _consecutiveFailures = 0; // songs in a row that failed (reset on success/user action)
   int _midPlayRetries = 0;      // mid-song recoveries for the current song
+  int _mediaRefusals = 0;       // distinct clients whose download got HTTP 403
   int _completedTok = -1;       // guards against double "completed" events
 
   final StreamController<String> _notices = StreamController.broadcast();
@@ -298,6 +299,7 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
   void _resetFailureCounters() {
     _consecutiveFailures = 0;
     _midPlayRetries = 0;
+    _mediaRefusals = 0;
   }
 
   /// Entry point for every load. Synchronous and cheap: it only records the
@@ -478,7 +480,23 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
   Future<void> _handleDownloadFailure(
       _LoadRequest req, _DownloadFailure f) async {
     final song = req.song;
-    if (!await _net.isOnline()) {
+
+    // A server that answered "403" proves we are online, so skip the offline
+    // probe. Two different clients refused by the media server means YouTube is
+    // refusing audio for this device/network: more attempts cannot help and
+    // each one asks YouTube again (which is how rate limiting gets triggered).
+    final status = httpStatusInCause(f.cause);
+    if (status == 403) {
+      _mediaRefusals++;
+      if (_mediaRefusals >= 2) {
+        if (_tok != req.tok) return;
+        _notices.add('YouTube refused the audio download (HTTP 403) for this '
+            'device or network. Nothing is wrong with your connection.');
+        _setError();
+        return;
+      }
+    }
+    if (status == null && !await _net.isOnline()) {
       if (_tok != req.tok) return;
       _handleOffline(song, req.tok, resumeAt: req.resumeAt);
       return;
