@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:math';
-import 'dart:typed_data';
 
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -15,11 +14,10 @@ import 'audio_cache.dart';
 import 'backup_settings.dart';
 import 'connectivity_probe.dart';
 import 'fallback_sources.dart';
-import 'http_range_download.dart';
 import 'latest_wins_runner.dart';
 import 'playback_failure.dart';
-import 'progressive_download.dart';
 import 'resolved_stream.dart';
+import 'song_acquirer.dart';
 import 'stream_resolver.dart';
 import 'youtube_clients.dart';
 import 'webview_js_solver.dart';
@@ -34,11 +32,6 @@ final audioHandlerProvider =
 // sequential — plays to end of queue then stops
 enum PlayMode { repeatAll, repeatOne, shuffle, sequential }
 
-/// Songs up to this size are downloaded completely (into the disk cache) and
-/// then played from the local file. Anything bigger streams straight from its
-/// URL instead of being held in memory.
-const int _kMaxDownloadFirstBytes = 40 * 1024 * 1024;
-
 /// How many different clients/sources a single song may try before giving up.
 const int _kMaxStreamAttempts = 4;
 
@@ -48,27 +41,6 @@ class _LoadRequest {
   final Duration? resumeAt;
   final int attempt;
   const _LoadRequest(this.song, this.tok, this.resumeAt, this.attempt);
-}
-
-class _StreamResolveException implements Exception {
-  final FailureKind kind;
-  const _StreamResolveException(this.kind);
-  @override
-  String toString() => 'StreamResolveException($kind)';
-}
-
-/// The stream a client handed out could not actually be downloaded (403,
-/// stall, truncated …). Carries which client so it can be penalized.
-class _DownloadFailure implements Exception {
-  final int client;
-  final Object cause;
-  const _DownloadFailure(this.client, this.cause);
-  @override
-  String toString() => 'DownloadFailure(client $client): $cause';
-}
-
-class _SupersededException implements Exception {
-  const _SupersededException();
 }
 
 class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
@@ -158,9 +130,11 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
   AudioCache? _cache; // null until ready, or if the disk is unusable
   final Completer<void> _cacheReady = Completer<void>();
 
-  // The download feeding the player right now, and the next-song prefetch.
-  ProgressiveDownload? _activeDownload;
-  ProgressiveDownload? _prefetchDownload;
+  late final SongAcquirer _acquirer = SongAcquirer(
+    resolver: _resolver,
+    cache: () => _cache,
+    log: (m) => nlog('[N] $m'),
+  );
 
   // ── Load pipeline state ───────────────────────────────────────────────────
   // All loads go through this runner: one at a time, newest request wins.
@@ -306,10 +280,7 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
     final tok = ++_tok;
     _retryTimer?.cancel();
     // Stop moving bytes for whatever the user just left behind.
-    _activeDownload?.cancel();
-    _activeDownload = null;
-    _prefetchDownload?.cancel();
-    _prefetchDownload = null;
+    _acquirer.cancelAll();
     _current = song;
 
     playbackState.add(playbackState.value.copyWith(
@@ -337,7 +308,7 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
       nlog('[N] ▶ ${song.title} (attempt ${req.attempt})');
       if (!song.isPlayable) {
         // Corrupt or tampered entry: skip it, never hand it to the network or disk.
-        throw const _StreamResolveException(FailureKind.permanent);
+        throw const ResolveFailure(FailureKind.permanent);
       }
       try {
         await _player.stop();
@@ -349,75 +320,17 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
       await _ensureCache();
       if (!live()) return;
 
-      final AudioSource source;
-      final cachedFile = await _cache?.lookup(song.videoId);
+      final got = await _acquirer.acquire(
+        song.videoId,
+        superseded: ctx.superseded,
+        protect: _protectedIds,
+      );
       if (!live()) return;
-
-      if (cachedFile != null) {
-        // ── Path 1: on disk — instant, works offline ────────────────────────
-        usedDiskCache = true;
-        source = AudioSource.file(cachedFile.path);
-      } else {
-        // ── Resolve the stream (memory cache or network) ────────────────────
-        final res =
-            await _resolver.resolve(song.videoId, superseded: ctx.superseded);
-        if (!live()) return;
-        final info = res.value;
-        if (info == null) throw _StreamResolveException(res.kind);
-
-        final cache = _cache;
-        if (cache != null &&
-            info.totalBytes > 0 &&
-            info.totalBytes <= _kMaxDownloadFirstBytes) {
-          // Download completely, then play the local file. Songs are small
-          // (about 1 MB at the chosen bitrate), a failure here is immediate and
-          // explicit, and the finished file doubles as the offline cache.
-          nlog('[N] downloading ${info.totalBytes} bytes via ${info.origin} '
-              '(client ${info.clientIndex})');
-
-          Uint8List bytes;
-          try {
-            // 1) Plain ranged download with the User-Agent this URL was issued
-            //    to: reports the real HTTP status, and does not stall.
-            bytes = await _download(
-              () => openRangedDownload(info.url, info.totalBytes,
-                  userAgent: info.userAgent),
-              info.totalBytes,
-              ctx,
-            );
-          } on _SupersededException {
-            return;
-          } catch (direct) {
-            nlog('[N] direct download failed: $direct');
-            try {
-              // 2) The library's own downloader (it can refresh the stream
-              //    address itself when it gets a 403).
-              bytes = await _download(info.open, info.totalBytes, ctx);
-            } on _SupersededException {
-              return;
-            } catch (library) {
-              nlog('[N] library download failed: $library');
-              throw _DownloadFailure(
-                  info.clientIndex, 'direct: $direct; library: $library');
-            }
-          }
-          if (!live()) return;
-
-          await cache.put(song.videoId, bytes, protect: _protectedIds);
-          final stored = await cache.lookup(song.videoId);
-          if (!live()) return;
-          if (stored == null) {
-            throw _DownloadFailure(
-                info.clientIndex, 'could not store the song on disk');
-          }
-          nlog('[N] ready: ${bytes.length} bytes');
-          source = AudioSource.file(stored.path);
-        } else {
-          // Too large (or no disk): let the native player stream the URL.
-          nlog('[N] streaming directly from URL');
-          source = AudioSource.uri(info.url);
-        }
-      }
+      usedDiskCache = got.fromCache;
+      final AudioSource source = got.file != null
+          ? AudioSource.file(got.file!.path)
+          : AudioSource.uri(got.url!,
+              headers: got.headers.isEmpty ? null : got.headers);
 
       await _player.setAudioSource(source, initialPosition: req.resumeAt);
       if (!live()) return;
@@ -432,16 +345,18 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
       _consecutiveFailures = 0;
       nlog('[N] ✓ started: ${song.title}');
       _scheduleNextPrefetch(req.tok);
+    } on AcquireSuperseded {
+      return; // the user moved on; nothing to report
     } catch (e, st) {
-      _activeDownload?.cancel();
+      _acquirer.cancelActive();
       if (!live()) return; // superseded: whatever happened is irrelevant now
-      if (e is _DownloadFailure) {
+      if (e is DownloadFailure) {
         nlog('[N] download failed: $e');
         unawaited(_handleDownloadFailure(req, e));
         return;
       }
       var kind =
-          e is _StreamResolveException ? e.kind : classifyPlaybackError(e);
+          e is ResolveFailure ? e.kind : classifyPlaybackError(e);
       nlog('[N] load failed ($kind): $e\n$st');
       if (kind == FailureKind.cancelled) kind = FailureKind.transient;
       if (usedDiskCache) unawaited(_cache?.remove(song.videoId)); // maybe corrupt
@@ -449,34 +364,11 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
     }
   }
 
-  /// Downloads a whole song into memory, abandoning it as soon as the user
-  /// moves on ([_SupersededException]) or no data arrives for 10 seconds.
-  Future<Uint8List> _download(Stream<List<int>> Function() open, int total,
-      RunContext ctx) async {
-    final dl = ProgressiveDownload(
-      open: open,
-      totalBytes: total,
-      stallTimeout: const Duration(seconds: 10),
-    );
-    _activeDownload = dl;
-    dl.start();
-    try {
-      return await Future.any<Uint8List>([
-        dl.completed,
-        ctx.superseded
-            .then<Uint8List>((_) => throw const _SupersededException()),
-      ]);
-    } catch (_) {
-      dl.cancel();
-      rethrow;
-    }
-  }
-
   /// The stream a client handed out could not be downloaded. Penalize that
   /// client for a while and immediately try the next one, so a client that
   /// returns addresses YouTube refuses to serve cannot wedge playback.
   Future<void> _handleDownloadFailure(
-      _LoadRequest req, _DownloadFailure f) async {
+      _LoadRequest req, DownloadFailure f) async {
     final song = req.song;
 
     // A server that answered "403" proves we are online, so skip the offline
@@ -641,34 +533,15 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
     if (_resolver.globalCooldownSeconds > 0) return; // do not add load
 
     unawaited(() async {
-      try {
-        // Let the current song finish downloading first (if it is streaming).
-        final active = _activeDownload;
-        if (active != null) {
-          await active.completed.then((_) {}, onError: (Object _) {});
-        }
-        await Future<void>.delayed(const Duration(seconds: 2));
-        if (_tok != ptok || _runner.isBusy) return;
-        if (cache.contains(next.videoId)) return;
+      // Let the current song finish downloading first, then wait a moment.
+      await _acquirer.activeSettled();
+      await Future<void>.delayed(const Duration(seconds: 2));
+      if (_tok != ptok || _runner.isBusy) return;
+      if (cache.contains(next.videoId)) return;
 
-        nlog('[N] prefetch: ${next.title}');
-        final res = await _resolver.resolve(next.videoId);
-        final info = res.value;
-        if (info == null || _tok != ptok || _runner.isBusy) return;
-
-        final dl = ProgressiveDownload(
-          open: info.open,
-          totalBytes: info.totalBytes,
-          stallTimeout: const Duration(seconds: 15),
-        );
-        _prefetchDownload = dl..start();
-        final bytes = await dl.completed;
-        if (_tok != ptok) return; // user moved on; bytes are discarded
-        await cache.put(next.videoId, bytes, protect: _protectedIds);
-        nlog('[N] prefetch done: ${next.title}');
-      } catch (e) {
-        nlog('[N] prefetch skipped: $e');
-      }
+      nlog('[N] prefetch: ${next.title}');
+      final ok = await _acquirer.prefetch(next.videoId, protect: _protectedIds);
+      if (ok && _tok == ptok) nlog('[N] prefetch done: ${next.title}');
     }());
   }
 
@@ -703,6 +576,7 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
     _tok++;
     _runner.cancel();
     _retryTimer?.cancel();
+    _acquirer.cancelAll();
     try {
       await _player.stop();
     } catch (_) {}
@@ -848,14 +722,13 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
 
   @override
   Future<void> onTaskRemoved() async {
-    _tok++;
+    // The user swiped the app away. Stop cleanly but do NOT dispose the player
+    // or the YouTube client: Android may keep this process (and handler) alive
+    // and the next launch would then reuse a dead one.
     _runner.cancel();
     _retryTimer?.cancel();
-    _activeDownload?.cancel();
-    _prefetchDownload?.cancel();
+    _acquirer.cancelAll();
     await _cache?.flush();
-    await _player.stop();
-    await _player.dispose();
-    _yt.close();
+    await stop();
   }
 }
