@@ -15,6 +15,7 @@ import 'audio_cache.dart';
 import 'backup_settings.dart';
 import 'connectivity_probe.dart';
 import 'fallback_sources.dart';
+import 'http_range_download.dart';
 import 'latest_wins_runner.dart';
 import 'playback_failure.dart';
 import 'progressive_download.dart';
@@ -38,7 +39,7 @@ enum PlayMode { repeatAll, repeatOne, shuffle, sequential }
 const int _kMaxDownloadFirstBytes = 40 * 1024 * 1024;
 
 /// How many different clients/sources a single song may try before giving up.
-const int _kMaxStreamAttempts = 7;
+const int _kMaxStreamAttempts = 4;
 
 class _LoadRequest {
   final Song song;
@@ -150,6 +151,8 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
       mimeType: info.codec.mimeType,
       open: () => _yt.videos.streamsClient.get(info),
       clientIndex: client,
+      userAgent: _clients[client].payload['context']?['client']?['userAgent']
+          as String?,
     );
   }
 
@@ -329,7 +332,6 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
     final song = req.song;
     bool live() => ctx.isCurrent && _tok == req.tok;
     var usedDiskCache = false;
-    ProgressiveDownload? download;
 
     try {
       nlog('[N] ▶ ${song.title} (attempt ${req.attempt})');
@@ -370,28 +372,34 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
           // Download completely, then play the local file. Songs are small
           // (about 1 MB at the chosen bitrate), a failure here is immediate and
           // explicit, and the finished file doubles as the offline cache.
-          download = ProgressiveDownload(
-            open: info.open,
-            totalBytes: info.totalBytes,
-            stallTimeout: const Duration(seconds: 15),
-          );
-          _activeDownload = download;
           nlog('[N] downloading ${info.totalBytes} bytes via ${info.origin} '
               '(client ${info.clientIndex})');
-          download.start();
 
-          final Uint8List bytes;
+          Uint8List bytes;
           try {
-            bytes = await Future.any<Uint8List>([
-              download.completed,
-              ctx.superseded.then<Uint8List>(
-                  (_) => throw const _SupersededException()),
-            ]);
+            // 1) Plain ranged download with the User-Agent this URL was issued
+            //    to: reports the real HTTP status, and does not stall.
+            bytes = await _download(
+              () => openRangedDownload(info.url, info.totalBytes,
+                  userAgent: info.userAgent),
+              info.totalBytes,
+              ctx,
+            );
           } on _SupersededException {
-            download.cancel();
             return;
-          } catch (e) {
-            throw _DownloadFailure(info.clientIndex, e);
+          } catch (direct) {
+            nlog('[N] direct download failed: $direct');
+            try {
+              // 2) The library's own downloader (it can refresh the stream
+              //    address itself when it gets a 403).
+              bytes = await _download(info.open, info.totalBytes, ctx);
+            } on _SupersededException {
+              return;
+            } catch (library) {
+              nlog('[N] library download failed: $library');
+              throw _DownloadFailure(
+                  info.clientIndex, 'direct: $direct; library: $library');
+            }
           }
           if (!live()) return;
 
@@ -425,7 +433,7 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
       nlog('[N] ✓ started: ${song.title}');
       _scheduleNextPrefetch(req.tok);
     } catch (e, st) {
-      download?.cancel();
+      _activeDownload?.cancel();
       if (!live()) return; // superseded: whatever happened is irrelevant now
       if (e is _DownloadFailure) {
         nlog('[N] download failed: $e');
@@ -438,6 +446,29 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
       if (kind == FailureKind.cancelled) kind = FailureKind.transient;
       if (usedDiskCache) unawaited(_cache?.remove(song.videoId)); // maybe corrupt
       unawaited(_handleLoadFailure(req, kind));
+    }
+  }
+
+  /// Downloads a whole song into memory, abandoning it as soon as the user
+  /// moves on ([_SupersededException]) or no data arrives for 10 seconds.
+  Future<Uint8List> _download(Stream<List<int>> Function() open, int total,
+      RunContext ctx) async {
+    final dl = ProgressiveDownload(
+      open: open,
+      totalBytes: total,
+      stallTimeout: const Duration(seconds: 10),
+    );
+    _activeDownload = dl;
+    dl.start();
+    try {
+      return await Future.any<Uint8List>([
+        dl.completed,
+        ctx.superseded
+            .then<Uint8List>((_) => throw const _SupersededException()),
+      ]);
+    } catch (_) {
+      dl.cancel();
+      rethrow;
     }
   }
 

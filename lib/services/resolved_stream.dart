@@ -8,6 +8,7 @@ class ResolvedStream {
     required this.open,
     this.origin = 'youtube',
     this.clientIndex = -1,
+    this.userAgent,
   });
 
   /// Direct URL (used by the raw-URL fallback source).
@@ -25,6 +26,10 @@ class ResolvedStream {
   /// player penalize a client whose streams cannot actually be downloaded.
   final int clientIndex;
 
+  /// The User-Agent the media server expects for this URL (the client it was
+  /// issued to), or null when unknown.
+  final String? userAgent;
+
   ResolvedStream withClient(int index) => ResolvedStream(
         url: url,
         totalBytes: totalBytes,
@@ -32,5 +37,6 @@ class ResolvedStream {
         open: open,
         origin: origin,
         clientIndex: index,
+        userAgent: userAgent,
       );
 }
