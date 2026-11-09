@@ -213,7 +213,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 25, vertical: 10),
                 child: Row(
                   children: [
-                    Text('Nebula', style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: textCol, letterSpacing: -0.5)),
+                    Image.asset('assets/images/noor_wordmark.png', height: 36, semanticLabel: 'Noor'),
                     const Spacer(),
                     _NeuBtn(icon: Icons.search_rounded, color: accentCol, bg: bg, isDark: isDark, size: 52, onTap: () => widget.onNavigate(1)),
                   ],

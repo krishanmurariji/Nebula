@@ -72,7 +72,7 @@ Future<NebulaAudioHandler> _initAudio() => AudioService.init<NebulaAudioHandler>
       builder: () => NebulaAudioHandler(),
       config: const AudioServiceConfig(
         androidNotificationChannelId: 'com.nebula.nebula_music_player.audio',
-        androidNotificationChannelName: 'Nebula Music',
+        androidNotificationChannelName: 'Noor Music',
         androidNotificationOngoing: true,
         androidStopForegroundOnPause: true,
         androidNotificationIcon: 'mipmap/ic_launcher',
@@ -108,13 +108,13 @@ class _BootstrapState extends State<_Bootstrap> {
           return _MessageApp(
             icon: Icons.error_outline_rounded,
             title: 'Audio could not start',
-            message: 'Nebula could not start the audio service on this device.',
+            message: 'Noor could not start the audio service on this device.',
             action: FilledButton(onPressed: _retry, child: const Text('Try again')),
           );
         }
         return const _MessageApp(
           icon: Icons.graphic_eq_rounded,
-          title: 'Nebula',
+          title: 'Noor',
           message: 'Starting…',
         );
       },

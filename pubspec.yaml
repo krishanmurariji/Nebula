@@ -35,10 +35,10 @@ dev_dependencies:
 flutter_launcher_icons:
   android: "launcher_icon"
   ios: true
-  image_path: "assets/images/app_logo_final.png"
+  image_path: "assets/images/noor_app_icon.png"
   # Ensures the icon fits perfectly on modern Android circles/squares
-  adaptive_icon_background: "#0D1117" 
-  adaptive_icon_foreground: "assets/images/app_logo_final.png"
+  adaptive_icon_background: "#F4F0E4"
+  adaptive_icon_foreground: "assets/images/noor_icon_foreground.png"
 
 flutter:
   uses-material-design: true

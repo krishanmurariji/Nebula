@@ -1,4 +1,4 @@
-🌌 Nebula Music Player
+# Noor Music Player
 <p align="center"> <b>A Premium Neumorphic Music Experience built with Flutter</b> </p> <p align="center"> 🎵 Gramophone UI • ⚡ Smooth Performance • 🫧 Soft UI • 🌍 YouTube Streaming </p>
 ## 📸 Screenshots
 

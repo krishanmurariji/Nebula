@@ -24,7 +24,7 @@ class NebulaApp extends ConsumerWidget {
             content: Text(n), duration: const Duration(seconds: 3)));
     });
     return MaterialApp(
-      title: 'Nebula',
+      title: 'Noor',
       scaffoldMessengerKey: _messengerKey,
       builder: (context, child) =>
           ResponsiveFrame(child: child ?? const SizedBox.shrink()),

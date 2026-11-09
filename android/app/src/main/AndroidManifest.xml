@@ -19,7 +19,7 @@
     </queries>
 
     <application
-        android:label="Nebula"
+        android:label="Noor"
         android:name="${applicationName}"
         android:icon="@mipmap/launcher_icon"
         android:allowBackup="false"
