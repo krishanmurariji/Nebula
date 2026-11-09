@@ -12,6 +12,11 @@ enum FailureKind {
 
   /// Video is gone / private / region-locked / age-restricted. Skip it.
   permanent,
+
+  /// The network itself is failing (DNS lookup, connection refused/reset).
+  /// Every other client would hit the same wall, so stop asking and do not
+  /// skip the song: it is not the song's fault.
+  network,
 }
 
 /// Classifies an error thrown by just_audio or youtube_explode_dart.
@@ -46,6 +51,17 @@ FailureKind classifyPlaybackError(Object error) {
       text.contains('age restricted') ||
       text.contains('age-restricted')) {
     return FailureKind.permanent;
+  }
+
+  if (type.contains('socketexception') ||
+      text.contains('failed host lookup') ||
+      text.contains('socketexception') ||
+      text.contains('network is unreachable') ||
+      text.contains('connection refused') ||
+      text.contains('connection reset') ||
+      text.contains('connection closed') ||
+      text.contains('no address associated with hostname')) {
+    return FailureKind.network;
   }
 
   return FailureKind.transient;

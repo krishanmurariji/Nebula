@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:nebula_music_player/services/playback_failure.dart';
 import 'package:nebula_music_player/services/progressive_download.dart';
 import 'package:nebula_music_player/services/resolved_stream.dart';
 import 'package:nebula_music_player/services/stream_resolver.dart';
@@ -137,6 +138,39 @@ void main() {
       final res = await r.resolve('v');
       expect(res.value, isNull);
       expect(r.globalCooldownSeconds, greaterThan(0));
+    });
+  });
+
+  group('network failures (DNS)', () {
+    test('the first DNS failure stops the lookup: no other client is asked', () async {
+      final tried = <int>[];
+      final r = StreamResolver<String>(
+        timeouts: _t,
+        minGap: Duration.zero,
+        fetch: (id, c) async {
+          tried.add(c);
+          throw Exception("ClientException with SocketException: Failed host lookup: 'www.youtube.com'");
+        },
+      );
+      final res = await r.resolve('v');
+      expect(res.kind, FailureKind.network);
+      expect(tried, [0]);
+    });
+
+    test('a network failure does not penalize the client or start a pause', () async {
+      var fail = true;
+      final r = StreamResolver<String>(
+        timeouts: _t,
+        minGap: Duration.zero,
+        fetch: (id, c) async {
+          if (fail) throw Exception('SocketException: Failed host lookup');
+          return 'ok-$c';
+        },
+      );
+      await r.resolve('v');
+      expect(r.globalCooldownSeconds, 0);
+      fail = false;
+      expect((await r.resolve('v')).value, 'ok-0', reason: 'client 0 is still in use');
     });
   });
 

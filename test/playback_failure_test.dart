@@ -33,9 +33,20 @@ void main() {
     test('everything else is transient (worth a retry)', () {
       expect(classifyPlaybackError(Exception('Source error 403')),
           FailureKind.transient);
-      expect(classifyPlaybackError(Exception('SocketException')),
+      expect(classifyPlaybackError(Exception('Timeout while waiting')),
           FailureKind.transient);
     });
+  });
+
+  test('DNS and connection failures are classified as network problems', () {
+    for (final msg in [
+      "ClientException with SocketException: Failed host lookup: 'www.youtube.com' (OS Error: No address associated with hostname, errno = 7)",
+      'SocketException: Connection refused',
+      'Connection reset by peer',
+      'Network is unreachable',
+    ]) {
+      expect(classifyPlaybackError(Exception(msg)), FailureKind.network, reason: msg);
+    }
   });
 
   test('retryDelay backs off and is capped', () {

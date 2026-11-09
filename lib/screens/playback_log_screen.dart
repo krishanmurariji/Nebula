@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../services/app_log.dart';
+import '../services/network_diagnostics.dart';
 import '../services/backup_settings.dart';
 import '../services/fallback_sources.dart';
 
@@ -16,6 +17,11 @@ class PlaybackLogScreen extends StatelessWidget {
       appBar: AppBar(
         title: const Text('Playback Log'),
         actions: [
+          IconButton(
+            tooltip: 'Network check',
+            icon: const Icon(Icons.network_check_rounded),
+            onPressed: () => _showNetworkCheck(context),
+          ),
           IconButton(
             tooltip: 'Copy all',
             icon: const Icon(Icons.copy_rounded),
@@ -182,4 +188,63 @@ class _BackupSourcesDialogState extends State<_BackupSourcesDialog> {
       ],
     );
   }
+}
+
+
+/// Runs the network check and shows a plain-language verdict. Results are also
+/// written to the log so they can be copied together with everything else.
+Future<void> _showNetworkCheck(BuildContext context) async {
+  final future = runNetworkDiagnostics().then((results) {
+    for (final r in results) {
+      nlog('[N] netcheck $r');
+    }
+    final advice = adviceFor(results);
+    nlog('[N] netcheck verdict: $advice');
+    return (results: results, advice: advice);
+  });
+
+  await showDialog<void>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: const Text('Network check'),
+      content: SizedBox(
+        width: double.maxFinite,
+        child: FutureBuilder<({List<DiagnosticResult> results, String advice})>(
+          future: future,
+          builder: (context, snap) {
+            if (!snap.hasData) {
+              return const Padding(
+                padding: EdgeInsets.all(24),
+                child: Center(child: CircularProgressIndicator()),
+              );
+            }
+            final data = snap.data!;
+            return SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  for (final r in data.results)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 2),
+                      child: Text(r.toString(),
+                          style: TextStyle(
+                              fontFamily: 'monospace',
+                              fontSize: 11,
+                              color: r.ok ? null : Colors.redAccent)),
+                    ),
+                  const SizedBox(height: 12),
+                  Text(data.advice,
+                      style: const TextStyle(fontWeight: FontWeight.w600)),
+                ],
+              ),
+            );
+          },
+        ),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close')),
+      ],
+    ),
+  );
 }

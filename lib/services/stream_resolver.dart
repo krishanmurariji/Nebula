@@ -228,6 +228,10 @@ class StreamResolver<T> {
             // Whole-IP limit: stop right here, do not ask the other clients.
             _onRateLimited();
             return const ResolveResult.failed(FailureKind.rateLimited);
+          case FailureKind.network:
+            // DNS / connection failure: the other clients would fail the same
+            // way and each costs up to 20 s, so stop here.
+            return const ResolveResult.failed(FailureKind.network);
           case FailureKind.permanent:
             sawPermanent = true;
           case FailureKind.cancelled:

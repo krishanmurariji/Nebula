@@ -95,7 +95,6 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
     YoutubeApiClient.androidSdkless,
     YoutubeApiClient.androidVr,
     YoutubeApiClient.ios,
-    YoutubeApiClient.safari,
     YoutubeApiClient.tv,
     YoutubeApiClient.mweb,
     YoutubeApiClient.android,
@@ -116,7 +115,6 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
       Duration(seconds: 40), // androidSdkless
       Duration(seconds: 25), // androidVr
       Duration(seconds: 25), // ios
-      Duration(seconds: 30), // safari
       Duration(seconds: 30), // tv
       Duration(seconds: 25), // mweb
       Duration(seconds: 20), // android
@@ -456,6 +454,13 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
     }
     if (_tok != req.tok) return;
 
+    // DNS / connection errors are the network's fault, not this client's:
+    // do not burn through the other clients (each one costs seconds).
+    if (classifyPlaybackError(f.cause) == FailureKind.network) {
+      await _handleLoadFailure(req, FailureKind.network);
+      return;
+    }
+
     _resolver.invalidate(song.videoId);
     _resolver.penalize(f.client, const Duration(minutes: 5));
     if (req.attempt + 1 < _kMaxStreamAttempts) {
@@ -484,6 +489,14 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
     }
     if (_tok != req.tok) return;
 
+    if (kind == FailureKind.network) {
+      // We can reach the internet in general (checked above) but not YouTube:
+      // typically broken DNS on this Wi-Fi. Skipping songs would not help.
+      _notices.add("Can't reach YouTube from this network (DNS/connection "
+          'failed). Try mobile data or a different DNS.');
+      _setError();
+      return;
+    }
     if (kind == FailureKind.rateLimited) {
       // YouTube answered (so we ARE online) but is limiting this network.
       final wait = _resolver.globalCooldownSeconds;
