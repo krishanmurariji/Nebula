@@ -8,7 +8,6 @@ import '../providers/theme_provider.dart';
 import '../theme/noor_palette.dart';
 
 import 'home_screen.dart';
-import 'search_screen.dart'; 
 import 'library_screen.dart';
 import 'settings_screen.dart';
 
@@ -90,9 +89,8 @@ class _MainShellState extends ConsumerState<MainShell> {
         onPageChanged: _onPageChanged,
         physics: const BouncingScrollPhysics(),
         children: [
-          HomeScreen(onNavigate: goTo),
-          SearchScreen(onNavigate: goTo),
-          const LibraryScreen(), // No onNavigate needed
+          const HomeScreen(),
+          const LibraryScreen(),
           SettingsScreen(onNavigate: goTo),
         ],
       ),

@@ -10,7 +10,9 @@ import '../providers/library_provider.dart';
 import '../providers/theme_provider.dart';
 import 'mini_player.dart';
 import '../theme/noor_palette.dart';
-import '../theme/noor_song_tile.dart';
+import '../theme/noor_album_tile.dart';
+import '../theme/ripple_ring_clipper.dart';
+import 'search_screen.dart';
 import '../theme/noor_widgets.dart';
 
 // ── Models ───────────────────────────────────────────────────────────────────
@@ -31,82 +33,10 @@ class _CategoryItem {
   });
 }
 
-// ── Custom Clipper: Flawless Concentric Ring Reveal (CodePen Replica) ──
-
-class _RippleRingClipper extends CustomClipper<Path> {
-  final double fraction;
-  _RippleRingClipper(this.fraction);
-
-  @override
-  Path getClip(Size size) {
-    if (fraction <= 0.0) return Path();
-    if (fraction >= 1.0) return Path()..addRect(Rect.fromLTWH(0, 0, size.width, size.height));
-
-    final center = Offset(size.width / 2, 0); // Top-center
-    final double maxRadius = sqrt(size.width * size.width + size.height * size.height);
-    
-    // Exactly mimics the CodePen spacing and sizing
-    const double ringSpacing = 80.0; 
-    final int numRings = (maxRadius / ringSpacing).ceil() + 1;
-    const double maxStroke = 85.0; // Slightly larger than spacing to ensure they merge
-
-    List<List<double>> intervals = [];
-
-    // 1. Mathematically calculate all expanding rings
-    for (int i = 0; i < numRings; i++) {
-      // Stagger the delay just like the CSS transition-delay
-      final double delayFraction = i * (0.4 / numRings); 
-      double progress = ((fraction - delayFraction) / 0.6).clamp(0.0, 1.0);
-      progress = Curves.easeInOutCubic.transform(progress);
-
-      if (progress > 0.0) {
-        final double baseRadius = (i * ringSpacing) + 20.0;
-        final double currentStroke = progress * maxStroke;
-
-        final double outer = baseRadius + (currentStroke / 2);
-        double inner = baseRadius - (currentStroke / 2);
-        if (inner < 0) inner = 0.0;
-
-        intervals.add([inner, outer]);
-      }
-    }
-
-    // 2. Merge overlapping rings to prevent Impeller from crashing/skipping frames
-    List<List<double>> merged = [];
-    for (var interval in intervals) {
-      if (merged.isEmpty) {
-        merged.add(interval);
-      } else {
-        var last = merged.last;
-        if (interval[0] <= last[1]) {
-          last[1] = max(last[1], interval[1]); // Rings touch and merge!
-        } else {
-          merged.add(interval);
-        }
-      }
-    }
-
-    // 3. Draw the perfectly optimized path
-    Path finalPath = Path()..fillType = PathFillType.evenOdd;
-    for (var interval in merged) {
-      finalPath.addOval(Rect.fromCircle(center: center, radius: interval[1])); // Outer edge
-      if (interval[0] > 0) {
-        finalPath.addOval(Rect.fromCircle(center: center, radius: interval[0])); // Inner edge creates the hole
-      }
-    }
-
-    return finalPath;
-  }
-
-  @override
-  bool shouldReclip(_RippleRingClipper old) => old.fraction != fraction;
-}
-
 // ── Screen Definition ────────────────────────────────────────────────────────
 
 class HomeScreen extends ConsumerStatefulWidget {
-  final void Function(int) onNavigate;
-  const HomeScreen({super.key, required this.onNavigate});
+  const HomeScreen({super.key});
 
   @override
   ConsumerState<HomeScreen> createState() => _HomeScreenState();
@@ -123,6 +53,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       _currentIndex = index;
       _selectedId = id;
     });
+  }
+
+  /// Opens the search page with the same ring wipe the list uses.
+  void _openSearch() {
+    HapticFeedback.selectionClick();
+    Navigator.of(context)
+        .push(NoorRippleRoute<void>(builder: (_) => const SearchScreen()));
+  }
+
+  void _toggleLike(Song song) {
+    HapticFeedback.mediumImpact();
+    ref.read(likedProvider.notifier).toggle(song);
   }
 
   void _playSong(Song song, List<Song> queue) {
@@ -178,7 +120,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     if (_currentIndex > 0) currentVisibleCount++;
     if (_currentIndex < categories.length - 1) currentVisibleCount++;
 
-    const double horizontalPadding = 40.0; 
+    const double horizontalPadding = 24.0; 
     final double totalMargins = currentVisibleCount * 12.0; 
     final double totalAdjacentWidth = (currentVisibleCount - 1) * 48.0; 
     final double activeWidth = screenWidth - horizontalPadding - totalMargins - totalAdjacentWidth - 1.0; 
@@ -206,21 +148,27 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               Container(height: topPad + 10),
               
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 25, vertical: 10),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                 child: Row(
                   children: [
-                    const NoorWordmark(height: 36),
-                    const Spacer(),
-                    NoorRoundButton(size: 52, semanticLabel: 'Search', onTap: () => widget.onNavigate(1), child: const Icon(Icons.search_rounded)),
+                    const NoorAppIcon(size: 46),
+                    const SizedBox(width: 10),
+                    Expanded(child: NoorSearchBarButton(onTap: _openSearch)),
                   ],
                 ),
               ),
 
+              if (categories.isEmpty)
+                const Expanded(
+                  child: NoorEmptyState(
+                    message: 'Nothing here yet',
+                    hint: 'Search for a song and it will appear here.',
+                  ),
+                )
+              else ...[
               SizedBox(
                 height: 170, 
-                child: categories.isEmpty 
-                  ? Center(child: Text('Your library is empty', style: TextStyle(color: mutedCol)))
-                  : GestureDetector(
+                child: GestureDetector(
                       onHorizontalDragEnd: (details) {
                         const threshold = 200.0;
                         if (details.primaryVelocity! < -threshold) { 
@@ -238,7 +186,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         child: ListView.builder(
                           scrollDirection: Axis.horizontal,
                           physics: const NeverScrollableScrollPhysics(),
-                          padding: const EdgeInsets.symmetric(horizontal: 20),
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
                           itemCount: categories.length,
                           itemBuilder: (context, index) {
                             final item = categories[index];
@@ -264,7 +212,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                 curve: Curves.easeOutCubic,
                                 width: width,
                                 margin: EdgeInsets.symmetric(horizontal: margin, vertical: 10),
-                                padding: EdgeInsets.all((isActive || isAdjacent) ? 4 : 0),
+                                padding: EdgeInsets.all((isActive || isAdjacent) ? 2 : 0),
                                 // Outer fine ring (the "second outline")
                                 decoration: BoxDecoration(
                                   borderRadius: BorderRadius.only(
@@ -389,7 +337,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
               if (categories.isNotEmpty)
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(25, 10, 20, 10),
+                  padding: const EdgeInsets.fromLTRB(16, 6, 16, 6),
                   child: Row(
                     children: [
                       Expanded(
@@ -432,7 +380,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         animation: animation,
                         builder: (context, _) {
                           return ClipPath(
-                            clipper: _RippleRingClipper(animation.value),
+                            clipper: RippleRingClipper(animation.value),
                             child: child,
                           );
                         },
@@ -447,7 +395,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           key: const ValueKey('empty'), 
                           color: bg, // ── FIX: Solid Background for clean wiping ──
                           alignment: Alignment.center,
-                          child: Text('No songs found', style: TextStyle(color: mutedCol)),
+                          child: const NoorEmptyState(message: 'No songs here yet', hint: 'Play something and it will show up.'),
                         )
                       : Container(
                           key: ValueKey(_selectedId), 
@@ -467,19 +415,24 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                  (playerState.status == NebulaPlayerStatus.loading || 
                                  (playerState.pendingSong != null && playerState.status != NebulaPlayerStatus.playing && playerState.status != NebulaPlayerStatus.paused));
 
-                              return _CapsuleSongTile(
-                                song: song,
-                                isPlaying: isTargetSong, 
-                                isLoading: isLoading,    
-                                isActuallyPlayingAudio: isTargetSong && isPlayingState,
-                                isDark: isDark,
-                                onTap: () => _playSong(song, displaySongs),
+                              return NoorAlbumTile(
+                                thumbnailUrl: song.thumbnailUrl,
+                                title: song.title,
+                                channel: song.artist,
+                                isOfficial: song.isOfficial,
+                                liked: likedSongs.any((l) => l.videoId == song.videoId),
+                                selected: isTargetSong,
+                                loading: isLoading,
+                                playing: isTargetSong && isPlayingState,
+                                onPlay: () => _playSong(song, displaySongs),
+                                onToggleLike: () => _toggleLike(song),
                               );
                             },
                           ),
                         ),
                 ),
               ),
+              ],
             ],
           ),
 
@@ -565,57 +518,6 @@ class _CollageCover extends StatelessWidget {
           ],
         );
       }
-    );
-  }
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// CUSTOM CAPSULE TILE
-// ═══════════════════════════════════════════════════════════════════════════════
-class _CapsuleSongTile extends StatelessWidget {
-  final Song song;
-  final bool isPlaying;
-  final bool isLoading;
-  final bool isActuallyPlayingAudio;
-  final bool isDark;
-  final VoidCallback onTap;
-
-  const _CapsuleSongTile({
-    required this.song,
-    required this.isPlaying,
-    required this.isLoading,
-    required this.isActuallyPlayingAudio,
-    required this.isDark,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final t = NoorTheme.byMode(isDark);
-    return NoorSongTile(
-      thumbnailUrl: song.thumbnailUrl,
-      title: song.title,
-      subtitle: Text(song.artist,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: noorSubtitleStyle(context)),
-      selected: isPlaying,
-      onTap: onTap,
-      trailing: NoorRoundButton(
-        size: 38,
-        filled: isPlaying && !isLoading,
-        muted: !isPlaying,
-        child: isLoading
-            ? SizedBox(
-                width: 16,
-                height: 16,
-                child: CircularProgressIndicator(strokeWidth: 2, color: t.ac))
-            : Icon(
-                isPlaying && isActuallyPlayingAudio
-                    ? Icons.pause_rounded
-                    : Icons.play_arrow_rounded,
-                size: 20),
-      ),
     );
   }
 }

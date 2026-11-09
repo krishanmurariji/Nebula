@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nebula_music_player/models/song.dart';
+import 'package:nebula_music_player/providers/library_provider.dart';
 import 'package:nebula_music_player/providers/player_provider.dart';
 import 'package:nebula_music_player/providers/search_provider.dart';
 import 'package:nebula_music_player/screens/search_screen.dart';
@@ -56,32 +57,32 @@ void main() {
   group('the chosen filter is remembered', () {
     Future<void> settle() => Future<void>.delayed(const Duration(milliseconds: 40));
 
-    test('defaults to best match', () async {
+    test('defaults to official only', () async {
       final c = ProviderContainer();
       addTearDown(c.dispose);
       c.read(searchFilterProvider);
       await settle();
-      expect(c.read(searchFilterProvider), SearchFilter.bestMatch);
+      expect(c.read(searchFilterProvider), SearchFilter.officialOnly);
     });
 
-    test('official only survives a restart', () async {
+    test('a changed choice (best match) survives a restart', () async {
       final a = ProviderContainer();
-      await a.read(searchFilterProvider.notifier).set(SearchFilter.officialOnly);
+      await a.read(searchFilterProvider.notifier).set(SearchFilter.bestMatch);
       a.dispose();
       final b = ProviderContainer();
       addTearDown(b.dispose);
       b.read(searchFilterProvider);
       await settle();
-      expect(b.read(searchFilterProvider), SearchFilter.officialOnly);
+      expect(b.read(searchFilterProvider), SearchFilter.bestMatch);
     });
 
-    test('a corrupt saved value falls back to best match', () async {
+    test('a corrupt saved value falls back to official only', () async {
       SharedPreferences.setMockInitialValues({'search_filter': 'zzz-not-a-filter'});
       final c = ProviderContainer();
       addTearDown(c.dispose);
       c.read(searchFilterProvider);
       await settle();
-      expect(c.read(searchFilterProvider), SearchFilter.bestMatch);
+      expect(c.read(searchFilterProvider), SearchFilter.officialOnly);
     });
   });
 
@@ -174,35 +175,48 @@ void main() {
           searchProvider.overrideWith((ref) => StubSearch(
               ref, SearchState(results: results, status: SearchStatus.loaded, query: 'q'))),
         ],
-        child: MaterialApp(home: SearchScreen(onNavigate: (_) {})),
+        child: const MaterialApp(home: SearchScreen()),
       ));
       await t.pump(const Duration(milliseconds: 100));
     }
 
-    testWidgets('chips appear with results; Best match shows everything', (t) async {
-      await open(t, results: sample);
-      expect(find.text('Official only'), findsOneWidget);
-      expect(find.text('Fan upload (Lyrics)'), findsOneWidget);
-      expect(find.text('Real Song (Official Audio)'), findsOneWidget);
-      expect(t.takeException(), isNull);
-    });
+    Future<void> chooseFilter(WidgetTester t, String option) async {
+      await t.tap(find.byIcon(Icons.tune_rounded));
+      await t.pump(); // the route appears
+      await t.pump(const Duration(milliseconds: 500)); // it slides down
+      await t.tap(find.text(option));
+      await t.pump(const Duration(milliseconds: 100));
+      await t.tap(find.text('Apply'));
+      await t.pump(); // it starts closing
+      await t.pump(const Duration(milliseconds: 500));
+    }
 
-    testWidgets('tapping "Official only" hides the fan uploads and renames the heading', (t) async {
+    testWidgets('official only is the default: fan uploads are hidden', (t) async {
       await open(t, results: sample);
-      await t.tap(find.text('Official only'));
-      await t.pump(const Duration(milliseconds: 300));
+      expect(find.text('Official uploads'), findsOneWidget);
       expect(find.text('Fan upload (Lyrics)'), findsNothing);
       expect(find.text('Fan upload 8D'), findsNothing);
       expect(find.text('Real Song (Official Audio)'), findsOneWidget);
       expect(find.text('Real Song - Topic'), findsOneWidget);
-      expect(find.text('Official uploads'), findsOneWidget);
+      expect(t.takeException(), isNull);
+    });
+
+    testWidgets('official songs carry the OFFICIAL badge on the border', (t) async {
+      await open(t, results: sample);
+      expect(find.text('OFFICIAL'), findsNWidgets(2));
+    });
+
+    testWidgets('the filter pop-up switches to Best match and remembers it', (t) async {
+      await open(t, results: sample);
+      await chooseFilter(t, 'Best match');
+      expect(find.text('Fan upload (Lyrics)'), findsOneWidget);
+      expect(find.text('Top Results'), findsOneWidget);
+      expect((await SharedPreferences.getInstance()).getString('search_filter'), 'bestMatch');
       expect(t.takeException(), isNull);
     });
 
     testWidgets('with no official result the screen explains it and offers "Show all results"', (t) async {
       await open(t, results: [song('a', 'Only fans'), song('b', 'More fans')]);
-      await t.tap(find.text('Official only'));
-      await t.pump(const Duration(milliseconds: 300));
       expect(find.text('No official upload found for this search'), findsOneWidget);
       expect(find.text('2 other results are available.'), findsOneWidget);
       await t.tap(find.text('Show all results'));
@@ -213,17 +227,32 @@ void main() {
 
     testWidgets('the queue handed to the player is the filtered list', (t) async {
       await open(t, results: sample);
-      await t.tap(find.text('Official only'));
-      await t.pump(const Duration(milliseconds: 300));
-      await t.tap(find.text('Real Song (Official Audio)'));
+      await t.tap(find.text('Play').first);
       await t.pump();
       expect(player.queues.single.map((s) => s.title),
           ['Real Song (Official Audio)', 'Real Song - Topic']);
     });
 
-    testWidgets('no chips while there is nothing to filter', (t) async {
+    testWidgets('double-tapping a song likes it, again unlikes it', (t) async {
+      await open(t, results: sample);
+      final container = ProviderScope.containerOf(t.element(find.byType(SearchScreen)));
+      final tile = find.text('Real Song (Official Audio)');
+      await t.tap(tile);
+      await t.pump(const Duration(milliseconds: 40));
+      await t.tap(tile);
+      await t.pump(const Duration(milliseconds: 100));
+      expect(container.read(likedProvider).map((s) => s.title), ['Real Song (Official Audio)']);
+      await t.pump(const Duration(milliseconds: 600));
+      await t.tap(tile);
+      await t.pump(const Duration(milliseconds: 40));
+      await t.tap(tile);
+      await t.pump(const Duration(milliseconds: 100));
+      expect(container.read(likedProvider), isEmpty);
+    });
+
+    testWidgets('nothing searched yet: the empty page invites a search', (t) async {
       await open(t, results: const []);
-      expect(find.text('Official only'), findsNothing);
+      expect(find.text('No results found'), findsOneWidget);
     });
   });
 }

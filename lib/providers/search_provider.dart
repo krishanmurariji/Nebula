@@ -81,9 +81,9 @@ List<Song> applySearchFilter(List<Song> songs, SearchFilter filter) =>
 
 const _kFilterKey = 'search_filter';
 
-/// The chosen filter, remembered between launches.
+/// The chosen filter, remembered between launches. Official only by default.
 class SearchFilterNotifier extends StateNotifier<SearchFilter> {
-  SearchFilterNotifier() : super(SearchFilter.bestMatch) {
+  SearchFilterNotifier() : super(SearchFilter.officialOnly) {
     _load();
   }
 
@@ -92,8 +92,8 @@ class SearchFilterNotifier extends StateNotifier<SearchFilter> {
       final p = await SharedPreferences.getInstance();
       final saved = p.getString(_kFilterKey);
       if (!mounted) return;
-      if (saved == SearchFilter.officialOnly.name) {
-        state = SearchFilter.officialOnly;
+      if (saved == SearchFilter.bestMatch.name) {
+        state = SearchFilter.bestMatch;
       }
     } catch (_) {/* default is fine */}
   }

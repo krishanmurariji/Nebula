@@ -234,3 +234,111 @@ class _JaliPainter extends CustomPainter {
   @override
   bool shouldRepaint(_JaliPainter old) => old.color != color;
 }
+
+/// The app icon (the Noor mark) in a small outlined badge.
+class NoorAppIcon extends StatelessWidget {
+  const NoorAppIcon({super.key, this.size = 46});
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = NoorTheme.of(context);
+    return Container(
+      width: size,
+      height: size,
+      padding: EdgeInsets.all(size * 0.14),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(size * 0.32),
+        border: Border.all(color: t.soft, width: 1),
+      ),
+      child: Image.asset('assets/images/noor_mark_tight.png',
+          color: t.ac, semanticLabel: 'Noor'),
+    );
+  }
+}
+
+/// Shown when there is nothing to list: a big faded app icon, the small Noor
+/// lettering in the middle and a message under it.
+class NoorEmptyState extends StatelessWidget {
+  const NoorEmptyState({super.key, required this.message, this.hint});
+  final String message;
+  final String? hint;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = NoorTheme.of(context);
+    final w = MediaQuery.of(context).size.width;
+    return Center(
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Opacity(
+            opacity: t.isDark ? 0.10 : 0.12,
+            child: Image.asset('assets/images/noor_mark_tight.png',
+                width: w * 0.86, color: t.ac, fit: BoxFit.contain),
+          ),
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const NoorWordmark(height: 30),
+              const SizedBox(height: 22),
+              Text(message,
+                  textAlign: TextAlign.center,
+                  style: noorSerif(t.ac, size: 24, height: 1.1)),
+              if (hint != null) ...[
+                const SizedBox(height: 6),
+                Text(hint!,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: t.mute, fontSize: 13)),
+              ],
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A search field that only looks like one: tapping it opens the search page.
+class NoorSearchBarButton extends StatelessWidget {
+  const NoorSearchBarButton(
+      {super.key, required this.onTap, this.hint = 'Search songs, artists…'});
+  final VoidCallback onTap;
+  final String hint;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = NoorTheme.of(context);
+    return Semantics(
+      button: true,
+      label: 'Search',
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: NoorFrame(
+          radius: 24,
+          ring: false,
+          child: SizedBox(
+            height: 44,
+            child: Row(
+              children: [
+                const SizedBox(width: 14),
+                Icon(Icons.search_rounded, color: t.ac, size: 20),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(hint,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                          color: t.mute,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500)),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
