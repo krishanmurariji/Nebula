@@ -95,4 +95,87 @@ void main() {
     expect(c.contains('a'), isFalse);
     expect(c.contains('b'), isTrue);
   });
+
+  group('container-correct file names', () {
+    Uint8List webm(int n) {
+      final b = Uint8List(n);
+      b.setRange(0, 4, [0x1A, 0x45, 0xDF, 0xA3]);
+      return b;
+    }
+
+    Uint8List mp4(int n) {
+      final b = Uint8List(n);
+      b.setRange(4, 8, [0x66, 0x74, 0x79, 0x70]);
+      return b;
+    }
+
+    test('extensionFor picks webm from the EBML header, mp4 otherwise', () {
+      expect(AudioCache.extensionFor(webm(100)), 'webm');
+      expect(AudioCache.extensionFor(mp4(100)), 'mp4');
+      expect(AudioCache.extensionFor(const []), 'mp4');
+      expect(AudioCache.extensionFor([0x1A, 0x45]), 'mp4');
+    });
+
+    test('a webm song is stored as .webm and an mp4 song as .mp4', () async {
+      final c = AudioCache(dir);
+      await c.init();
+      await c.put('webmsong01', webm(10000));
+      await c.put('mp4song0001', mp4(10000));
+      expect((await c.lookup('webmsong01'))!.path, endsWith('.webm'));
+      expect((await c.lookup('mp4song0001'))!.path, endsWith('.mp4'));
+    });
+
+    test('the extension survives a restart', () async {
+      final c = AudioCache(dir);
+      await c.init();
+      await c.put('webmsong01', webm(10000));
+      await c.flush();
+      final again = AudioCache(dir);
+      await again.init();
+      expect(again.contains('webmsong01'), isTrue);
+      expect((await again.lookup('webmsong01'))!.path, endsWith('.webm'));
+    });
+
+    test('remove deletes the webm file too, and re-storing as another container leaves no twin', () async {
+      final c = AudioCache(dir);
+      await c.init();
+      await c.put('song000001', webm(10000));
+      await c.remove('song000001');
+      expect(File('${dir.path}/song000001.webm').existsSync(), isFalse);
+
+      await c.put('song000002', webm(10000));
+      await c.put('song000002', mp4(12000)); // same id, other container
+      expect(File('${dir.path}/song000002.webm').existsSync(), isFalse);
+      expect(File('${dir.path}/song000002.mp4').existsSync(), isTrue);
+      expect((await c.lookup('song000002'))!.path, endsWith('.mp4'));
+    });
+
+    test('index entries from the old version (no ext) still load as mp4', () async {
+      await dir.create(recursive: true);
+      File('${dir.path}/oldsong0001.mp4').writeAsBytesSync(mp4(10000));
+      File('${dir.path}/index.json')
+          .writeAsStringSync('[{"id":"oldsong0001","sz":10000,"ts":1}]');
+      final c = AudioCache(dir);
+      await c.init();
+      expect((await c.lookup('oldsong0001'))!.path, endsWith('.mp4'));
+    });
+
+    test('startup removes orphan webm files too', () async {
+      await dir.create(recursive: true);
+      File('${dir.path}/orphan0001.webm').writeAsBytesSync(webm(10000));
+      final c = AudioCache(dir);
+      await c.init();
+      expect(File('${dir.path}/orphan0001.webm').existsSync(), isFalse);
+    });
+
+    test('eviction removes a webm song completely', () async {
+      final c = AudioCache(dir, maxBytes: 15000);
+      await c.init();
+      await c.put('older00001', webm(10000));
+      await Future<void>.delayed(const Duration(milliseconds: 5));
+      await c.put('newer00001', mp4(10000));
+      expect(c.contains('older00001'), isFalse);
+      expect(File('${dir.path}/older00001.webm').existsSync(), isFalse);
+    });
+  });
 }

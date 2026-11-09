@@ -7,9 +7,13 @@ class _Entry {
   final String id;
   final int size;
   int lastUsed;
-  _Entry(this.id, this.size, this.lastUsed);
 
-  Map<String, dynamic> toJson() => {'id': id, 'sz': size, 'ts': lastUsed};
+  /// 'mp4' (AAC) or 'webm' (Opus). The extension must match the contents so the
+  /// player picks the right decoder instead of having to guess.
+  final String ext;
+  _Entry(this.id, this.size, this.lastUsed, [this.ext = 'mp4']);
+
+  Map<String, dynamic> toJson() => {'id': id, 'sz': size, 'ts': lastUsed, 'ext': ext};
 
   static _Entry? tryParse(Object? j) {
     if (j is! Map) return null;
@@ -17,7 +21,8 @@ class _Entry {
     final sz = j['sz'];
     final ts = j['ts'];
     if (id is! String || sz is! int || ts is! int) return null;
-    return _Entry(id, sz, ts);
+    final ext = j['ext'] == 'webm' ? 'webm' : 'mp4';
+    return _Entry(id, sz, ts, ext);
   }
 }
 
@@ -39,7 +44,22 @@ class AudioCache {
   bool _ready = false;
 
   File get _indexFile => File('${dir.path}/index.json');
-  File fileFor(String id) => File('${dir.path}/$id.mp4');
+  /// The file for [id] (its extension comes from the index; `.mp4` if unknown).
+  File fileFor(String id) =>
+      File('${dir.path}/$id.${_index[id]?.ext ?? 'mp4'}');
+
+  File _fileWith(String id, String ext) => File('${dir.path}/$id.$ext');
+
+  /// Picks the container from the first bytes: EBML header = webm/opus,
+  /// anything else is treated as mp4/m4a.
+  static String extensionFor(List<int> bytes) =>
+      bytes.length >= 4 &&
+              bytes[0] == 0x1A &&
+              bytes[1] == 0x45 &&
+              bytes[2] == 0xDF &&
+              bytes[3] == 0xA3
+          ? 'webm'
+          : 'mp4';
 
   /// The id becomes part of a file name, so only plain YouTube-style ids are
   /// allowed. Anything else (e.g. "../../x") is never read, written or deleted.
@@ -60,7 +80,9 @@ class AudioCache {
         if (raw is List) {
           for (final item in raw) {
             final e = _Entry.tryParse(item);
-            if (e != null && isSafeId(e.id) && await fileFor(e.id).exists()) {
+            if (e != null &&
+                isSafeId(e.id) &&
+                await _fileWith(e.id, e.ext).exists()) {
               _index[e.id] = e;
             }
           }
@@ -77,8 +99,10 @@ class AudioCache {
         if (f is! File) continue;
         final name = f.uri.pathSegments.last;
         final isTmp = name.endsWith('.tmp');
-        final isOrphanSong = name.endsWith('.mp4') &&
-            !_index.containsKey(name.substring(0, name.length - 4));
+        final dot = name.lastIndexOf('.');
+        final ext = dot < 0 ? '' : name.substring(dot + 1);
+        final isOrphanSong = (ext == 'mp4' || ext == 'webm') &&
+            _index[name.substring(0, dot)]?.ext != ext;
         if (isTmp || isOrphanSong) {
           try {
             await f.delete();
@@ -116,9 +140,16 @@ class AudioCache {
     final tmp = File('${dir.path}/$id.${_seq++}.tmp');
     try {
       await tmp.writeAsBytes(bytes, flush: true);
-      await tmp.rename(fileFor(id).path);
+      final ext = extensionFor(bytes);
+      final old = _index[id];
+      await tmp.rename(_fileWith(id, ext).path);
+      if (old != null && old.ext != ext) {
+        try {
+          await _fileWith(id, old.ext).delete();
+        } catch (_) {}
+      }
       _index[id] =
-          _Entry(id, bytes.length, DateTime.now().millisecondsSinceEpoch);
+          _Entry(id, bytes.length, DateTime.now().millisecondsSinceEpoch, ext);
       _scheduleSave();
       await _evict(protect: {id, ...protect});
     } catch (_) {
@@ -131,9 +162,12 @@ class AudioCache {
   Future<void> remove(String id) async {
     if (!isSafeId(id)) return;
     _index.remove(id);
-    try {
-      await fileFor(id).delete();
-    } catch (_) {}
+    // Delete whichever container the song was stored in (and any stray twin).
+    for (final ext in const ['mp4', 'webm']) {
+      try {
+        await _fileWith(id, ext).delete();
+      } catch (_) {}
+    }
     _scheduleSave();
   }
 

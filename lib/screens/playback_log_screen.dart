@@ -62,9 +62,13 @@ class PlaybackLogScreen extends ConsumerWidget {
             itemCount: lines.length,
             itemBuilder: (_, i) {
               final line = lines[lines.length - 1 - i];
-              final isBad = line.contains('failed') ||
+              // Highlight real problems only. (The word "offline" also appears
+              // in good lines such as "Saved for offline".)
+              final isBad = line.contains('✗') ||
+                  line.contains('failed') ||
                   line.contains('error') ||
-                  line.contains('offline');
+                  line.contains('refused') ||
+                  line.contains('offline →');
               return Padding(
                 padding: const EdgeInsets.symmetric(vertical: 2),
                 child: Text(
