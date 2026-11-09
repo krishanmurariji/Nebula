@@ -6,6 +6,9 @@ import '../models/song.dart';
 import '../providers/player_provider.dart';
 import '../providers/library_provider.dart';
 import '../providers/theme_provider.dart';
+import '../theme/noor_palette.dart';
+import '../theme/noor_song_tile.dart';
+import '../theme/noor_widgets.dart';
 
 class UpNextScreen extends ConsumerWidget {
   const UpNextScreen({super.key});
@@ -19,10 +22,11 @@ class UpNextScreen extends ConsumerWidget {
     final isDark = ref.watch(themeProvider) == ThemeMode.dark;
     final h = MediaQuery.of(context).size.height;
 
-    final bg = isDark ? const Color(0xFF1C1814) : const Color(0xFFDCD8CD);
-    final textCol = isDark ? Colors.white : const Color(0xFF2B2420);
-    final mutedCol = isDark ? Colors.white54 : const Color(0xFF6E6459);
-    const accentCol = Color(0xFFB0653A);
+    final t = NoorTheme.byMode(isDark);
+    final bg = t.bg;
+    final textCol = t.ac;
+    final mutedCol = t.mute;
+    final accentCol = t.ac;
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -37,9 +41,7 @@ class UpNextScreen extends ConsumerWidget {
             decoration: BoxDecoration(
               color: bg,
               borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
-              boxShadow: const [
-                BoxShadow(color: Colors.black26, blurRadius: 24, offset: Offset(0, -8))
-              ],
+              border: Border.all(color: t.soft, width: 1),
             ),
             child: SafeArea(
               top: false,
@@ -53,7 +55,7 @@ class UpNextScreen extends ConsumerWidget {
                       width: 40,
                       margin: const EdgeInsets.only(top: 14, bottom: 16),
                       decoration: BoxDecoration(
-                        color: isDark ? Colors.white24 : Colors.black12,
+                        color: t.soft,
                         borderRadius: BorderRadius.circular(4)
                       ),
                     ),
@@ -61,31 +63,22 @@ class UpNextScreen extends ConsumerWidget {
 
                   // ── Capsule Header ──
                   Center(
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                      margin: const EdgeInsets.only(bottom: 12),
-                      decoration: BoxDecoration(
-                        color: isDark ? const Color(0xFF28221C) : const Color(0xFFE9E5DB),
-                        borderRadius: BorderRadius.circular(24),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(isDark ? 0.3 : 0.05),
-                            blurRadius: 12,
-                            offset: const Offset(0, 4)
-                          )
-                        ]
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.queue_music_rounded, color: accentCol, size: 20),
-                          const SizedBox(width: 8),
-                          Text('Up Next', style: TextStyle(
-                              fontSize: 15, fontWeight: FontWeight.w900, color: textCol)),
-                          const SizedBox(width: 8),
-                          Text('•  hold & drag', style: TextStyle(
-                              fontSize: 12, fontWeight: FontWeight.w600, color: mutedCol)),
-                        ],
+                    child: Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: NoorFrame(
+                        radius: 20,
+                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.queue_music_rounded, color: accentCol, size: 20),
+                            const SizedBox(width: 8),
+                            Text('Up Next', style: noorSerif(textCol, size: 22, height: 1.0)),
+                            const SizedBox(width: 8),
+                            Text('•  hold & drag', style: TextStyle(
+                                fontSize: 12, fontWeight: FontWeight.w600, color: mutedCol)),
+                          ],
+                        ),
                       ),
                     ),
                   ),
@@ -144,12 +137,12 @@ class UpNextScreen extends ConsumerWidget {
                                     // ── ALIGNED ICON TO LEFT WITH LEFT PADDING ──
                                     alignment: Alignment.centerLeft,
                                     padding: const EdgeInsets.only(left: 28),
-                                    margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
+                                    margin: const EdgeInsets.symmetric(horizontal: 22, vertical: 10),
                                     decoration: BoxDecoration(
-                                      color: Colors.redAccent.shade400,
-                                      borderRadius: BorderRadius.circular(36)
+                                      color: t.ac,
+                                      borderRadius: BorderRadius.circular(22)
                                     ),
-                                    child: const Icon(Icons.delete_outline_rounded, color: Colors.white, size: 26),
+                                    child: Icon(Icons.delete_outline_rounded, color: t.bg, size: 26),
                                   ),
                                   onDismissed: (direction) {
                                     HapticFeedback.mediumImpact();
@@ -201,115 +194,30 @@ class _CapsuleSongTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cardBg = isDark ? const Color(0xFF28221C) : const Color(0xFFE9E5DB);
-    final textCol = isDark ? Colors.white : const Color(0xFF2B2420);
-    final mutedCol = isDark ? Colors.white54 : const Color(0xFF6E6459);
-    const accentCol = Color(0xFFB0653A);
-
-    return GestureDetector(
+    final t = NoorTheme.byMode(isDark);
+    return NoorSongTile(
+      thumbnailUrl: song.thumbnailUrl,
+      title: song.title,
+      subtitle: Text(song.artist,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: noorSubtitleStyle(context)),
+      selected: isPlaying,
       onTap: onTap,
-      child: Container(
-        height: 72,
-        margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
-        decoration: BoxDecoration(
-          color: isPlaying ? accentCol.withOpacity(0.08) : cardBg,
-          borderRadius: BorderRadius.circular(36),
-          border: isPlaying ? Border.all(color: accentCol.withOpacity(0.3), width: 1.5) : null,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(isDark ? 0.3 : 0.08),
-              blurRadius: 20,
-              offset: const Offset(0, 4),
-            )
-          ],
-        ),
-        child: Row(
-          children: [
-            const SizedBox(width: 6),
-            
-            // ── Circular Album Art (Matches MiniPlayer image) ──
-            Container(
-              width: 60,
-              height: 60,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.15),
-                    blurRadius: 8,
-                    offset: const Offset(0, 3)
-                  )
-                ],
-              ),
-              child: ClipOval(
-                child: Transform.scale(
-                  scale: 1.35, // Eliminates black bars on YouTube thumbnails
-                  child: CachedNetworkImage(
-                    imageUrl: song.thumbnailUrl,
-                    fit: BoxFit.cover,
-                    width: double.infinity,
-                    height: double.infinity,
-                    errorWidget: (_, __, ___) => Container(
-                      color: Colors.grey[800],
-                      child: const Icon(Icons.music_note, color: Colors.white54, size: 18)
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            
-            const SizedBox(width: 14),
-            
-            // ── Song Info ──
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    song.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w800,
-                      color: isPlaying ? accentCol : textCol,
-                    ),
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    song.artist,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: mutedCol,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            
-            // ── Badges & Indicators ──
-            if (isLiked)
-              const Padding(
-                padding: EdgeInsets.only(right: 12.0),
-                child: Icon(Icons.favorite_rounded, color: Colors.pinkAccent, size: 18),
-              ),
-              
-            if (isPlaying)
-              const Padding(
-                padding: EdgeInsets.only(right: 18.0),
-                child: Icon(Icons.equalizer_rounded, color: accentCol, size: 22),
-              )
-            else
-              Padding(
-                padding: const EdgeInsets.only(right: 20.0),
-                child: Icon(Icons.drag_indicator_rounded, color: mutedCol.withOpacity(0.3), size: 22),
-              ),
-          ],
-        ),
+      extras: [
+        if (isLiked)
+          Padding(
+            padding: const EdgeInsets.only(right: 10),
+            child: Icon(Icons.favorite_rounded, color: t.ac, size: 17),
+          ),
+      ],
+      trailing: NoorRoundButton(
+        size: 38,
+        filled: isPlaying,
+        muted: !isPlaying,
+        child: Icon(
+            isPlaying ? Icons.equalizer_rounded : Icons.drag_indicator_rounded,
+            size: 20),
       ),
     );
   }

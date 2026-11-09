@@ -7,6 +7,8 @@ import '../providers/library_provider.dart';
 import '../providers/theme_provider.dart';
 import 'playback_log_screen.dart';
 import 'mini_player.dart';
+import '../theme/noor_palette.dart';
+import '../theme/noor_widgets.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   final void Function(int) onNavigate;
@@ -32,163 +34,137 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> with TickerProv
   @override
   Widget build(BuildContext context) {
     final isDark = ref.watch(themeProvider) == ThemeMode.dark;
-    
-    // Theme Colors
-    final bg = isDark ? const Color(0xFF1C1814) : const Color(0xFFDCD8CD);
-    final cardBg = isDark ? const Color(0xFF28221C) : const Color(0xFFE9E5DB);
-    final textCol = isDark ? Colors.white : const Color(0xFF2B2420);
-    final mutedCol = isDark ? Colors.white54 : const Color(0xFF6E6459);
-    final shadowD = isDark ? Colors.black54 : const Color(0xFFB8B3A6);
-    final shadowL = isDark ? const Color(0xFF332B24) : const Color(0xFFF7F5EE);
+    final t = NoorTheme.byMode(isDark);
+    final textCol = t.ac;
+    final mutedCol = t.mute;
 
     return Scaffold(
-      backgroundColor: bg,
-      body: SafeArea(
-        bottom: false,
-        child: Column(
-          children: [
-            Expanded(
-              child: SingleChildScrollView(
-                physics: const BouncingScrollPhysics(),
-                padding: const EdgeInsets.fromLTRB(24, 24, 24, 120),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Settings',
-                      style: TextStyle(
-                        fontSize: 32,
-                        fontWeight: FontWeight.w900,
-                        color: textCol,
-                        letterSpacing: -1,
-                      ),
-                    ),
-                    const SizedBox(height: 32),
+      backgroundColor: t.bg,
+      body: Stack(
+        children: [
+          const Positioned(top: 0, left: 0, right: 0, child: NoorBackdrop()),
+          SafeArea(
+            bottom: false,
+            child: Column(
+              children: [
+                Expanded(
+                  child: SingleChildScrollView(
+                    physics: const BouncingScrollPhysics(),
+                    padding: const EdgeInsets.fromLTRB(24, 24, 24, 120),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Settings',
+                            style: noorSerif(textCol, size: 38, height: 1.0)),
+                        const SizedBox(height: 28),
 
-                    // ── THEME ORBIT SELECTOR ──────────────────────────────────
-                    _SectionLabel('VISUAL EXPERIENCE', mutedCol),
-                    const SizedBox(height: 16),
-                    _CircularThemeSelector(
-                      isDark: isDark,
-                      cardBg: cardBg,
-                      shadowD: shadowD,
-                      shadowL: shadowL,
-                    ),
+                        // ── THEME ORBIT SELECTOR ──────────────────────────
+                        _SectionLabel('VISUAL EXPERIENCE', mutedCol),
+                        const SizedBox(height: 16),
+                        _CircularThemeSelector(isDark: isDark),
 
-                    const SizedBox(height: 32),
+                        const SizedBox(height: 32),
 
-                    _SectionLabel('DATA', mutedCol),
-                    const SizedBox(height: 16),
+                        _SectionLabel('DATA', mutedCol),
+                        const SizedBox(height: 16),
 
-                    // ── MEMORY & STORAGE ───────────────────────────────────────
-                    _MemoryCard(
-                      label: 'Clear History',
-                      subtitle: 'Wipe all playback logs',
-                      icon: Icons.history_rounded,
-                      iconColor: Colors.redAccent,
-                      cardBg: cardBg,
-                      shadowD: shadowD,
-                      shadowL: shadowL,
-                      onTap: () {
-                        ref.read(historyProvider.notifier).clear();
-                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                          content: const Text('Playback history shredded!'),
-                          behavior: SnackBarBehavior.floating,
-                          backgroundColor: const Color(0xFF2B2420),
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12)),
-                        ));
-                      },
-                    ),
+                        // ── MEMORY & STORAGE ───────────────────────────────
+                        _MemoryCard(
+                          label: 'Clear History',
+                          subtitle: 'Wipe all playback logs',
+                          icon: Icons.history_rounded,
+                          onTap: () {
+                            ref.read(historyProvider.notifier).clear();
+                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                              content: const Text('Playback history cleared'),
+                              behavior: SnackBarBehavior.floating,
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(14)),
+                            ));
+                          },
+                        ),
+                        const SizedBox(height: 16),
+                        _MemoryCard(
+                          label: 'Backup Sources',
+                          subtitle: 'Used if YouTube blocks or breaks',
+                          icon: Icons.shield_moon_rounded,
+                          onTap: () => showBackupSourcesDialog(context),
+                        ),
+                        const SizedBox(height: 16),
+                        _MemoryCard(
+                          label: 'Playback Log',
+                          subtitle: 'See what the player is doing',
+                          icon: Icons.bug_report_rounded,
+                          onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                  builder: (_) => const PlaybackLogScreen())),
+                        ),
 
-                    const SizedBox(height: 16),
-                    _MemoryCard(
-                      label: 'Backup Sources',
-                      subtitle: 'Used if YouTube blocks or breaks',
-                      icon: Icons.shield_moon_rounded,
-                      iconColor: const Color(0xFFB0653A),
-                      cardBg: cardBg,
-                      shadowD: shadowD,
-                      shadowL: shadowL,
-                      onTap: () => showBackupSourcesDialog(context),
-                    ),
-                    const SizedBox(height: 16),
-                    _MemoryCard(
-                      label: 'Playback Log',
-                      subtitle: 'See what the player is doing',
-                      icon: Icons.bug_report_rounded,
-                      iconColor: Colors.orangeAccent,
-                      cardBg: cardBg,
-                      shadowD: shadowD,
-                      shadowL: shadowL,
-                      onTap: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                              builder: (_) => const PlaybackLogScreen())),
-                    ),
+                        const SizedBox(height: 32),
 
-                    const SizedBox(height: 32),
-
-                    // ── DEVELOPER SECTION ──────────────────────────────────────
-                    _SectionLabel('DEVELOPER', mutedCol),
-                    const SizedBox(height: 16),
-                    _NeumorphicContainer(
-                      cardBg: cardBg,
-                      shadowD: shadowD,
-                      shadowL: shadowL,
-                      child: Column(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(3),
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                  color: const Color(0xFFB0653A).withOpacity(0.5),
-                                  width: 2),
-                            ),
-                            child: CircleAvatar(
-                              radius: 40,
-                              backgroundColor: Colors.grey[200],
-                              backgroundImage: const CachedNetworkImageProvider(
-                                'https://avatars.githubusercontent.com/Krishan-Vineforce?size=400',
-                              ),
+                        // ── DEVELOPER SECTION ──────────────────────────────
+                        _SectionLabel('DEVELOPER', mutedCol),
+                        const SizedBox(height: 16),
+                        NoorFrame(
+                          radius: 26,
+                          padding: const EdgeInsets.all(20),
+                          child: SizedBox(
+                            width: double.infinity,
+                            child: Column(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(3),
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    border: Border.all(color: t.soft, width: 1.5),
+                                  ),
+                                  child: CircleAvatar(
+                                    radius: 40,
+                                    backgroundColor: t.tint(0.2),
+                                    backgroundImage: const CachedNetworkImageProvider(
+                                      'https://avatars.githubusercontent.com/Krishan-Vineforce?size=400',
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
+                                Text('Krishan Murari',
+                                    style: noorSerif(textCol, size: 26, height: 1.0)),
+                                const SizedBox(height: 4),
+                                Text('Noor  •  v1.0.0',
+                                    style: TextStyle(fontSize: 12, color: mutedCol)),
+                                const SizedBox(height: 24),
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    NoorRoundButton(
+                                        size: 50,
+                                        semanticLabel: 'LinkedIn',
+                                        onTap: () => _launchUrl(
+                                            'https://www.linkedin.com/in/krishan-murari/'),
+                                        child: const FaIcon(FontAwesomeIcons.linkedinIn)),
+                                    const SizedBox(width: 20),
+                                    NoorRoundButton(
+                                        size: 50,
+                                        semanticLabel: 'GitHub',
+                                        onTap: () => _launchUrl(
+                                            'https://github.com/krishanmurariji'),
+                                        child: const FaIcon(FontAwesomeIcons.github)),
+                                  ],
+                                )
+                              ],
                             ),
                           ),
-                          const SizedBox(height: 16),
-                          Text('Krishan Murari',
-                              style: TextStyle(
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.w900,
-                                  color: textCol)),
-                          Text('v1.0.0 • The Sonic Nebula',
-                              style: TextStyle(fontSize: 12, color: mutedCol)),
-                          const SizedBox(height: 24),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              _SocialCircle(
-                                  icon: FontAwesomeIcons.linkedinIn,
-                                  color: const Color(0xFF0077B5),
-                                  onTap: () => _launchUrl(
-                                      'https://www.linkedin.com/in/krishan-murari/')),
-                              const SizedBox(width: 20),
-                              _SocialCircle(
-                                  icon: FontAwesomeIcons.github,
-                                  color: isDark ? Colors.white : const Color(0xFF181717),
-                                  onTap: () => _launchUrl(
-                                      'https://github.com/krishanmurariji')),
-                            ],
-                          )
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
-              ),
+                const MiniPlayer(),
+              ],
             ),
-            const MiniPlayer(),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -202,55 +178,45 @@ class _SectionLabel extends StatelessWidget {
   Widget build(BuildContext context) => Text(text,
       style: TextStyle(
           fontSize: 11,
-          fontWeight: FontWeight.w900,
+          fontWeight: FontWeight.w700,
           color: color,
-          letterSpacing: 2));
+          letterSpacing: 2.2));
 }
 
 class _CircularThemeSelector extends ConsumerWidget {
   final bool isDark;
-  final Color cardBg, shadowD, shadowL;
-  const _CircularThemeSelector(
-      {required this.isDark,
-      required this.cardBg,
-      required this.shadowD,
-      required this.shadowL});
+  const _CircularThemeSelector({required this.isDark});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return Container(
-      height: 100,
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      decoration: BoxDecoration(
-        color: cardBg,
-        borderRadius: BorderRadius.circular(50),
-        boxShadow: [
-          BoxShadow(color: shadowD, blurRadius: 10, offset: const Offset(5, 5)),
-          BoxShadow(color: shadowL, blurRadius: 10, offset: const Offset(-5, -5))
-        ],
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          _ThemeOption(
-              label: 'Light',
-              icon: Icons.wb_sunny_rounded,
-              active: !isDark,
-              onTap: () =>
-                  !isDark ? null : ref.read(themeProvider.notifier).toggle()),
-          AnimatedRotation(
-            duration: const Duration(milliseconds: 500),
-            turns: isDark ? 0.5 : 0,
-            child: const Icon(Icons.sync_rounded,
-                color: Color(0xFFB0653A), size: 28),
-          ),
-          _ThemeOption(
-              label: 'Dark',
-              icon: Icons.nightlight_round,
-              active: isDark,
-              onTap: () =>
-                  isDark ? null : ref.read(themeProvider.notifier).toggle()),
-        ],
+    final t = NoorTheme.byMode(isDark);
+    return NoorFrame(
+      radius: 50,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      child: SizedBox(
+        height: 84,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            _ThemeOption(
+                label: 'Light',
+                icon: Icons.wb_sunny_rounded,
+                active: !isDark,
+                onTap: () =>
+                    !isDark ? null : ref.read(themeProvider.notifier).toggle()),
+            AnimatedRotation(
+              duration: const Duration(milliseconds: 500),
+              turns: isDark ? 0.5 : 0,
+              child: Icon(Icons.sync_rounded, color: t.ac, size: 28),
+            ),
+            _ThemeOption(
+                label: 'Dark',
+                icon: Icons.nightlight_round,
+                active: isDark,
+                onTap: () =>
+                    isDark ? null : ref.read(themeProvider.notifier).toggle()),
+          ],
+        ),
       ),
     );
   }
@@ -269,54 +235,29 @@ class _ThemeOption extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = NoorTheme.of(context);
+    final fg = active ? t.onAc : t.mute;
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 300),
-        width: 80,
-        height: 80,
+        width: 76,
+        height: 76,
         decoration: BoxDecoration(
-          color: active ? const Color(0xFFB0653A) : Colors.transparent,
+          color: active ? t.ac : Colors.transparent,
           shape: BoxShape.circle,
+          border: Border.all(color: active ? t.ac : t.soft, width: 1),
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, color: active ? Colors.white : Colors.grey, size: 24),
+            Icon(icon, color: fg, size: 24),
             Text(label,
                 style: TextStyle(
-                    fontSize: 10,
-                    color: active ? Colors.white : Colors.grey,
-                    fontWeight: FontWeight.bold)),
+                    fontSize: 10, color: fg, fontWeight: FontWeight.w700)),
           ],
         ),
       ),
-    );
-  }
-}
-
-class _NeumorphicContainer extends StatelessWidget {
-  final Widget child;
-  final Color cardBg, shadowD, shadowL;
-  const _NeumorphicContainer(
-      {required this.child,
-      required this.cardBg,
-      required this.shadowD,
-      required this.shadowL});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: cardBg,
-        borderRadius: BorderRadius.circular(28),
-        boxShadow: [
-          BoxShadow(color: shadowD, blurRadius: 10, offset: const Offset(5, 5)),
-          BoxShadow(color: shadowL, blurRadius: 10, offset: const Offset(-5, -5))
-        ],
-      ),
-      child: child,
     );
   }
 }
@@ -324,81 +265,39 @@ class _NeumorphicContainer extends StatelessWidget {
 class _MemoryCard extends StatelessWidget {
   final String label, subtitle;
   final IconData icon;
-  final Color iconColor, cardBg, shadowD, shadowL;
   final VoidCallback onTap;
   const _MemoryCard(
       {required this.label,
       required this.subtitle,
       required this.icon,
-      required this.iconColor,
-      required this.cardBg,
-      required this.shadowD,
-      required this.shadowL,
       required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    final t = NoorTheme.of(context);
+    return NoorFrame(
+      radius: 22,
+      padding: const EdgeInsets.all(14),
       onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: cardBg,
-          borderRadius: BorderRadius.circular(28),
-          boxShadow: [
-            BoxShadow(color: shadowD, blurRadius: 10, offset: const Offset(5, 5)),
-            BoxShadow(color: shadowL, blurRadius: 10, offset: const Offset(-5, -5))
-          ],
-        ),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                  color: iconColor.withOpacity(0.1), shape: BoxShape.circle),
-              child: Icon(icon, color: iconColor),
-            ),
-            const SizedBox(width: 16),
-            Column(
+      child: Row(
+        children: [
+          NoorRoundButton(size: 46, child: Icon(icon)),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(label,
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                Text(subtitle, style: const TextStyle(color: Colors.grey, fontSize: 12)),
+                    style: TextStyle(
+                        fontWeight: FontWeight.w700, fontSize: 15, color: t.ac)),
+                const SizedBox(height: 2),
+                Text(subtitle, style: TextStyle(color: t.mute, fontSize: 12)),
               ],
             ),
-            const Spacer(),
-            const Icon(Icons.chevron_right_rounded, color: Colors.grey),
-          ],
-        ),
+          ),
+          Icon(Icons.chevron_right_rounded, color: t.mute),
+        ],
       ),
     );
   }
 }
-
-class _SocialCircle extends StatelessWidget {
-  final dynamic icon; // Fixed: Use dynamic to accept both IconData and FaIconData
-  final Color color;
-  final VoidCallback onTap;
-  const _SocialCircle(
-      {required this.icon, required this.color, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 50,
-        height: 50,
-        decoration: BoxDecoration(
-            color: color.withOpacity(0.1),
-            shape: BoxShape.circle,
-            border: Border.all(color: color.withOpacity(0.2))),
-        child: Center(
-          child: FaIcon(icon, color: color, size: 22),
-        ),
-      ),
-    );
-  }
-}
-

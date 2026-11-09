@@ -37,29 +37,36 @@ class NebulaApp extends ConsumerWidget {
     );
   }
 
-  ThemeData _light() => ThemeData(
-    useMaterial3: true,
-    brightness: Brightness.light,
-    scaffoldBackgroundColor: NoorColors.bg,
-    colorScheme: const ColorScheme.light(
-      primary: NoorColors.copper,
-      secondary: NoorColors.copperDeep,
-      surface: NoorColors.bg,
-      onSurface: NoorColors.ink,
-    ),
-  );
+  ThemeData _light() => _themeFor(NoorTheme.light);
+  ThemeData _dark() => _themeFor(NoorTheme.dark);
 
-  ThemeData _dark() => ThemeData(
-    useMaterial3: true,
-    brightness: Brightness.dark,
-    scaffoldBackgroundColor: NoorColors.darkBg,
-    colorScheme: const ColorScheme.dark(
-      primary: NoorColors.copper,
-      secondary: NoorColors.copperSoft,
-      surface: NoorColors.darkSurface,
-      onSurface: Colors.white,
-    ),
-  );
+  ThemeData _themeFor(NoorTheme t) => ThemeData(
+        useMaterial3: true,
+        brightness: t.isDark ? Brightness.dark : Brightness.light,
+        scaffoldBackgroundColor: t.bg,
+        canvasColor: t.bg,
+        splashFactory: NoSplash.splashFactory,
+        highlightColor: Colors.transparent,
+        textTheme: ThemeData(brightness: t.isDark ? Brightness.dark : Brightness.light)
+            .textTheme
+            .apply(bodyColor: t.ac, displayColor: t.ac),
+        colorScheme: ColorScheme(
+          brightness: t.isDark ? Brightness.dark : Brightness.light,
+          primary: t.ac,
+          onPrimary: t.bg,
+          secondary: t.ac,
+          onSecondary: t.bg,
+          error: const Color(0xFFA83836),
+          onError: Colors.white,
+          surface: t.bg,
+          onSurface: t.ac,
+        ),
+        snackBarTheme: SnackBarThemeData(
+          backgroundColor: t.ac,
+          contentTextStyle: TextStyle(color: t.bg),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
 }
 
 

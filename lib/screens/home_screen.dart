@@ -9,6 +9,9 @@ import '../providers/player_provider.dart';
 import '../providers/library_provider.dart';
 import '../providers/theme_provider.dart';
 import 'mini_player.dart';
+import '../theme/noor_palette.dart';
+import '../theme/noor_song_tile.dart';
+import '../theme/noor_widgets.dart';
 
 // ── Models ───────────────────────────────────────────────────────────────────
 
@@ -140,10 +143,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final playerState = ref.watch(playerProvider);
 
     final isDark = ref.watch(themeProvider) == ThemeMode.dark;
-    final bg = isDark ? const Color(0xFF1C1814) : const Color(0xFFDCD8CD); 
-    final textCol = isDark ? Colors.white : const Color(0xFF2B2420);
-    final mutedCol = isDark ? Colors.white54 : const Color(0xFF6E6459);
-    const accentCol = Color(0xFFB0653A);
+    final t = NoorTheme.byMode(isDark);
+    final bg = t.bg;
+    final textCol = t.ac;
+    final mutedCol = t.mute;
     
     final topPad = MediaQuery.of(context).padding.top;
     final screenWidth = MediaQuery.of(context).size.width;
@@ -195,14 +198,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       backgroundColor: bg,
       body: Stack(
         children: [
-          Positioned.fill(
-            child: Center(
-              child: Opacity(
-                opacity: isDark ? 0.02 : 0.04, 
-                child: Image.asset('assets/images/app_logo_final.png', width: screenWidth * 0.8, fit: BoxFit.contain, errorBuilder: (_, __, ___) => const SizedBox()),
-              ),
-            ),
-          ),
+          const Positioned(top: 0, left: 0, right: 0, child: NoorBackdrop()),
 
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -213,9 +209,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 25, vertical: 10),
                 child: Row(
                   children: [
-                    Image.asset('assets/images/noor_wordmark.png', height: 36, semanticLabel: 'Noor'),
+                    const NoorWordmark(height: 36),
                     const Spacer(),
-                    _NeuBtn(icon: Icons.search_rounded, color: accentCol, bg: bg, isDark: isDark, size: 52, onTap: () => widget.onNavigate(1)),
+                    NoorRoundButton(size: 52, semanticLabel: 'Search', onTap: () => widget.onNavigate(1), child: const Icon(Icons.search_rounded)),
                   ],
                 ),
               ),
@@ -268,92 +264,120 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                 curve: Curves.easeOutCubic,
                                 width: width,
                                 margin: EdgeInsets.symmetric(horizontal: margin, vertical: 10),
-                                clipBehavior: Clip.antiAlias,
+                                padding: EdgeInsets.all((isActive || isAdjacent) ? 4 : 0),
+                                // Outer fine ring (the "second outline")
                                 decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(isActive ? 32 : 24),
-                                  color: isDark ? const Color(0xFF28221C) : Colors.grey.shade300,
-                                  boxShadow: [
-                                    if (isActive) BoxShadow(
-                                      color: Colors.black.withOpacity(isDark ? 0.4 : 0.15),
-                                      blurRadius: 15,
-                                      offset: const Offset(0, 8)
-                                    )
-                                  ],
+                                  borderRadius: BorderRadius.only(
+                                    topLeft: Radius.circular(isActive ? 96 : 34),
+                                    topRight: Radius.circular(isActive ? 96 : 34),
+                                    bottomLeft: const Radius.circular(20),
+                                    bottomRight: const Radius.circular(20),
+                                  ),
+                                  border: (isActive || isAdjacent)
+                                      ? Border.all(color: t.faint, width: 1)
+                                      : null,
                                 ),
-                                child: Stack(
-                                  children: [
-                                    Positioned.fill(
-                                      child: Opacity(
-                                        opacity: isActive ? 1.0 : 0.4,
-                                        child: _CollageCover(urls: item.imageUrls),
-                                      ),
+                                child: AnimatedContainer(
+                                  duration: const Duration(milliseconds: 500),
+                                  curve: Curves.easeOutCubic,
+                                  clipBehavior: Clip.antiAlias,
+                                  decoration: BoxDecoration(
+                                    color: t.tint(0.3),
+                                    borderRadius: BorderRadius.only(
+                                      topLeft: Radius.circular(isActive ? 92 : 30),
+                                      topRight: Radius.circular(isActive ? 92 : 30),
+                                      bottomLeft: const Radius.circular(16),
+                                      bottomRight: const Radius.circular(16),
                                     ),
-                                    Positioned.fill(
-                                      child: DecoratedBox(
-                                        decoration: BoxDecoration(
-                                          gradient: LinearGradient(
-                                            begin: Alignment.bottomCenter,
-                                            end: Alignment.topCenter,
-                                            colors: [
-                                              Colors.black.withOpacity(isActive ? 0.8 : 0.6),
-                                              Colors.transparent
-                                            ],
-                                          ),
+                                    border: (isActive || isAdjacent)
+                                        ? Border.all(color: t.ac, width: 1)
+                                        : null,
+                                  ),
+                                  child: Stack(
+                                    children: [
+                                      Positioned.fill(
+                                        child: Opacity(
+                                          opacity: isActive ? 1.0 : 0.55,
+                                          child: _CollageCover(urls: item.imageUrls),
                                         ),
                                       ),
-                                    ),
-                                    Positioned.fill(
-                                      child: Center(
-                                        child: SingleChildScrollView(
-                                          scrollDirection: Axis.horizontal,
-                                          physics: const NeverScrollableScrollPhysics(),
-                                          child: Container(
-                                            constraints: const BoxConstraints(minWidth: 48), 
-                                            child: Row(
-                                              mainAxisSize: MainAxisSize.min,
-                                              mainAxisAlignment: MainAxisAlignment.center,
-                                              children: [
-                                                Icon(item.icon, color: Colors.white, size: 24),
-                                                ClipRect(
-                                                  child: AnimatedAlign(
-                                                    duration: const Duration(milliseconds: 400),
-                                                    curve: Curves.easeOutCubic,
-                                                    alignment: Alignment.centerLeft,
-                                                    widthFactor: isActive ? 1.0 : 0.0,
-                                                    child: AnimatedOpacity(
-                                                      duration: const Duration(milliseconds: 300),
-                                                      opacity: isActive ? 1.0 : 0.0,
-                                                      child: Padding(
-                                                        padding: const EdgeInsets.only(left: 12.0, right: 8.0),
-                                                        child: Column(
-                                                          mainAxisSize: MainAxisSize.min,
-                                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                                          children: [
-                                                            Text(item.title, 
-                                                              maxLines: 1,
-                                                              softWrap: false,
-                                                              overflow: TextOverflow.fade,
-                                                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)
-                                                            ),
-                                                            Text(item.subtitle, 
-                                                              maxLines: 1, 
-                                                              softWrap: false,
-                                                              overflow: TextOverflow.fade,
-                                                              style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 12)
-                                                            ),
-                                                          ],
-                                                        ),
-                                                      ),
-                                                    ),
-                                                  ),
-                                                ),
+                                      Positioned.fill(
+                                        child: DecoratedBox(
+                                          decoration: BoxDecoration(
+                                            gradient: LinearGradient(
+                                              begin: Alignment.bottomCenter,
+                                              end: Alignment.topCenter,
+                                              colors: [
+                                                t.ac.withOpacity(isActive ? 0.92 : 0.7),
+                                                t.ac.withOpacity(0.0),
                                               ],
+                                              stops: const [0.0, 0.75],
                                             ),
                                           ),
                                         ),
                                       ),
-                                    ),
-                                  ],
+                                      Positioned.fill(
+                                        child: Center(
+                                          child: SingleChildScrollView(
+                                            scrollDirection: Axis.horizontal,
+                                            physics: const NeverScrollableScrollPhysics(),
+                                            child: Container(
+                                              constraints: const BoxConstraints(minWidth: 40),
+                                              child: Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                mainAxisAlignment: MainAxisAlignment.center,
+                                                children: [
+                                                  Container(
+                                                    width: 36,
+                                                    height: 36,
+                                                    decoration: BoxDecoration(
+                                                      shape: BoxShape.circle,
+                                                      color: t.bg,
+                                                      border: Border.all(color: t.ac, width: 1),
+                                                    ),
+                                                    child: Icon(item.icon, color: t.ac, size: 18),
+                                                  ),
+                                                  ClipRect(
+                                                    child: AnimatedAlign(
+                                                      duration: const Duration(milliseconds: 400),
+                                                      curve: Curves.easeOutCubic,
+                                                      alignment: Alignment.centerLeft,
+                                                      widthFactor: isActive ? 1.0 : 0.0,
+                                                      child: AnimatedOpacity(
+                                                        duration: const Duration(milliseconds: 300),
+                                                        opacity: isActive ? 1.0 : 0.0,
+                                                        child: Padding(
+                                                          padding: const EdgeInsets.only(left: 12.0, right: 8.0),
+                                                          child: Column(
+                                                            mainAxisSize: MainAxisSize.min,
+                                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                                            children: [
+                                                              Text(item.title,
+                                                                maxLines: 1,
+                                                                softWrap: false,
+                                                                overflow: TextOverflow.fade,
+                                                                style: TextStyle(color: t.bg, fontWeight: FontWeight.w700, fontSize: 16)
+                                                              ),
+                                                              Text(item.subtitle,
+                                                                maxLines: 1,
+                                                                softWrap: false,
+                                                                overflow: TextOverflow.fade,
+                                                                style: TextStyle(color: t.bg.withOpacity(0.8), fontSize: 12)
+                                                              ),
+                                                            ],
+                                                          ),
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               ),
                             );
@@ -368,8 +392,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   padding: const EdgeInsets.fromLTRB(25, 10, 20, 10),
                   child: Row(
                     children: [
-                      Text(currentHeading, style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: textCol, letterSpacing: -0.5)),
-                      const Spacer(),
+                      Expanded(
+                        child: Row(
+                          children: [
+                            Flexible(
+                              child: Text(currentHeading,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: noorSerif(textCol, size: 28, height: 1.0)),
+                            ),
+                            const SizedBox(width: 10),
+                            const NoorDivider(width: 36),
+                          ],
+                        ),
+                      ),
                       Text('${displaySongs.length} tracks', style: TextStyle(color: mutedCol, fontSize: 13, fontWeight: FontWeight.w600)),
                     ],
                   ),
@@ -463,13 +499,16 @@ class _CollageCover extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (urls.isEmpty) return Container(color: Colors.grey[800]);
+    if (urls.isEmpty) return Container(color: NoorTheme.of(context).tint(0.35));
 
     return LayoutBuilder(
       builder: (context, constraints) {
         if (constraints.maxWidth < 5) return const SizedBox.shrink();
 
-        Widget img(String url) => ClipRect(
+        final tl = NoorTheme.of(context);
+        Widget img(String url) => url.isEmpty
+          ? Container(color: tl.tint(0.35))
+          : ClipRect(
           child: Transform.scale(
             scale: 1.35, 
             child: CachedNetworkImage(
@@ -477,7 +516,7 @@ class _CollageCover extends StatelessWidget {
               fit: BoxFit.cover,
               width: double.infinity,
               height: double.infinity,
-              errorWidget: (_, __, ___) => Container(color: Colors.grey[900], child: const Icon(Icons.music_note, color: Colors.white54)),
+              errorWidget: (_, __, ___) => Container(color: tl.tint(0.35), child: Icon(Icons.music_note, color: tl.bg)),
             ),
           ),
         );
@@ -552,105 +591,31 @@ class _CapsuleSongTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cardBg = isDark ? const Color(0xFF28221C) : const Color(0xFFE9E5DB);
-    final textCol = isDark ? Colors.white : const Color(0xFF2B2420);
-    final mutedCol = isDark ? Colors.white54 : const Color(0xFF6E6459);
-    const accentCol = Color(0xFFB0653A);
-
-    return GestureDetector(
+    final t = NoorTheme.byMode(isDark);
+    return NoorSongTile(
+      thumbnailUrl: song.thumbnailUrl,
+      title: song.title,
+      subtitle: Text(song.artist,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: noorSubtitleStyle(context)),
+      selected: isPlaying,
       onTap: onTap,
-      child: Container(
-        height: 72,
-        margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
-        decoration: BoxDecoration(
-          color: isPlaying ? accentCol.withOpacity(0.08) : cardBg,
-          borderRadius: BorderRadius.circular(36),
-          border: isPlaying ? Border.all(color: accentCol.withOpacity(0.3), width: 1.5) : null,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(isDark ? 0.3 : 0.08),
-              blurRadius: 20,
-              offset: const Offset(0, 4),
-            )
-          ],
-        ),
-        child: Row(
-          children: [
-            const SizedBox(width: 6),
-            
-            Container(
-              width: 60, height: 60,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 8, offset: const Offset(0, 3))]
-              ),
-              child: ClipOval(
-                child: Transform.scale(
-                  scale: 1.35, 
-                  child: CachedNetworkImage(
-                    imageUrl: song.thumbnailUrl,
-                    fit: BoxFit.cover,
-                    width: double.infinity, height: double.infinity,
-                    errorWidget: (_, __, ___) => Container(color: Colors.grey[800], child: const Icon(Icons.music_note, color: Colors.white54, size: 18)),
-                  ),
-                ),
-              ),
-            ),
-            
-            const SizedBox(width: 14),
-            
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(song.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: isPlaying ? accentCol : textCol)),
-                  const SizedBox(height: 3),
-                  Text(song.artist, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, color: mutedCol, fontWeight: FontWeight.w600)),
-                ],
-              ),
-            ),
-            
-            Padding(
-              padding: const EdgeInsets.only(right: 18.0),
-              child: isLoading 
-                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: accentCol, strokeWidth: 2.5))
-                  : isPlaying
-                      ? Icon(isActuallyPlayingAudio ? Icons.pause_rounded : Icons.play_arrow_rounded, color: accentCol, size: 24)
-                      : Icon(Icons.play_arrow_rounded, color: mutedCol.withOpacity(0.3), size: 24),
-            ),
-          ],
-        ),
+      trailing: NoorRoundButton(
+        size: 38,
+        filled: isPlaying && !isLoading,
+        muted: !isPlaying,
+        child: isLoading
+            ? SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(strokeWidth: 2, color: t.ac))
+            : Icon(
+                isPlaying && isActuallyPlayingAudio
+                    ? Icons.pause_rounded
+                    : Icons.play_arrow_rounded,
+                size: 20),
       ),
     );
   }
-}
-
-// ── Shared UI ──────────────────────────────────────────────────────────────────
-class _NeuBtn extends StatelessWidget {
-  final IconData icon;
-  final Color color, bg;
-  final bool isDark;
-  final VoidCallback onTap;
-  final double size;
-  
-  const _NeuBtn({
-    required this.icon, required this.color, required this.bg, required this.isDark, required this.onTap, required this.size,
-  });
-
-  @override
-  Widget build(BuildContext context) => GestureDetector(
-        onTap: onTap,
-        child: Container(
-          width: size, height: size,
-          decoration: BoxDecoration(
-              color: bg,
-              shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(color: isDark ? Colors.black54 : Colors.grey[300]!, blurRadius: 10, offset: const Offset(5, 5)),
-                BoxShadow(color: isDark ? Colors.white.withOpacity(0.05) : const Color(0xFFF7F5EE), blurRadius: 10, offset: const Offset(-5, -5)),
-              ]),
-          child: Icon(icon, color: color, size: size * 0.5),
-        ),
-      );
 }

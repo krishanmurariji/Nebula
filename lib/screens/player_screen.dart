@@ -8,6 +8,8 @@ import '../models/song.dart';
 import '../providers/player_provider.dart';
 import '../providers/library_provider.dart';
 import '../providers/theme_provider.dart';
+import '../theme/noor_palette.dart';
+import '../theme/noor_widgets.dart';
 import '../services/audio_handler.dart';
 import 'upnext_screen.dart';
 
@@ -288,11 +290,12 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
     final prog = progress.fraction;
 
     final isDark = ref.watch(themeProvider) == ThemeMode.dark;
-    final bg = isDark ? const Color(0xFF1C1814) : const Color(0xFFDCD8CD);
-    final cardBg = isDark ? const Color(0xFF28221C) : const Color(0xFFE9E5DB);
-    final textCol = isDark ? Colors.white : const Color(0xFF2B2420);
-    final mutedCol = isDark ? Colors.white54 : const Color(0xFF6E6459);
-    const accentCol = Color(0xFFB0653A);
+    final t = NoorTheme.byMode(isDark);
+    final bg = t.bg;
+    final cardBg = t.bg;
+    final textCol = t.ac;
+    final mutedCol = t.mute;
+    final accentCol = t.ac;
 
     final h = MediaQuery.of(context).size.height;
     final topPad = MediaQuery.of(context).padding.top;
@@ -463,7 +466,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
               left: 20,
               child: _NeuBtn(
                 icon: Icons.expand_more_rounded,
-                color: const Color(0xFFB0653A),
+                color: accentCol,
                 bg: bg,
                 isDark: isDark,
                 size: 52,
@@ -496,7 +499,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
                 builder: (_, __) => GestureDetector(
                   onTap: _closeAll,
                   child: Container(
-                    color: Colors.black.withOpacity(
+                    color: NoorTheme.byMode(isDark).ac.withOpacity(
                         _panelState == _PanelState.naming
                             ? (_nameFade.value * 0.55)
                             : _scrimOpacity.value),
@@ -617,11 +620,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               textAlign: TextAlign.center,
-              style: TextStyle(
-                  fontSize: 19,
-                  fontWeight: FontWeight.w800,
-                  color: textCol,
-                  letterSpacing: -0.2)),
+              style: noorSerif(textCol, size: 28, height: 1.05)),
           const SizedBox(height: 4),
           Text(song?.artist ?? '',
               style: TextStyle(fontSize: 13, color: mutedCol)),
@@ -630,7 +629,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
 
   Widget _buildTransportRow(Color textCol, Color bg, bool isDark,
       Song? song, Color mutedCol) {
-    const accentCol = Color(0xFFB0653A);
+    final accentCol = NoorTheme.byMode(isDark).ac;
     final IconData modeIcon;
     final Color modeColor;
     final String modeLabel;
@@ -680,7 +679,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
           ),
           _NeuBtn(
             icon: Icons.skip_previous_rounded,
-            color: const Color(0xFFB0653A),
+            color: accentCol,
             bg: bg,
             isDark: isDark,
             size: 52,
@@ -689,7 +688,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
           ),
           _NeuBtn(
             icon: Icons.skip_next_rounded,
-            color: const Color(0xFFB0653A),
+            color: accentCol,
             bg: bg,
             isDark: isDark,
             size: 52,
@@ -697,7 +696,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
           ),
           _NeuBtn(
             icon: Icons.playlist_add_rounded,
-            color: const Color(0xFFB0653A),
+            color: accentCol,
             bg: bg,
             isDark: isDark,
             size: 52,
@@ -726,135 +725,79 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
 
   Widget _buildVinylRecord(
       double size, Color bg, Song? song, bool isDark) {
+    final t = NoorTheme.byMode(isDark);
+    final disc = Color.lerp(t.ac, Colors.black, 0.62)!;
     return Container(
-      width: size,
-      height: size,
+      padding: const EdgeInsets.all(6),
       decoration: BoxDecoration(
-        color: const Color(0xFF0A0A0A),
         shape: BoxShape.circle,
-        gradient: const RadialGradient(
-          colors: [
-            Color(0xFF222222),
-            Color(0xFF0F0F0F),
-            Color(0xFF050505)
-          ],
-          stops: [0.0, 0.6, 1.0],
-        ),
-        boxShadow: [
-          BoxShadow(
-              color: isDark
-                  ? Colors.black.withOpacity(0.8)
-                  : Colors.black.withOpacity(0.4),
-              blurRadius: 30,
-              spreadRadius: 4,
-              offset: const Offset(8, 16)),
-          BoxShadow(
-              color: Colors.white.withOpacity(isDark ? 0.05 : 0.15),
-              blurRadius: 1,
-              spreadRadius: 0,
-              offset: const Offset(-1, -1)),
-        ],
+        border: Border.all(color: t.faint, width: 1),
       ),
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          Container(
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: SweepGradient(
-                colors: [
-                  Colors.white.withOpacity(0.0),
-                  Colors.white.withOpacity(0.12),
-                  Colors.white.withOpacity(0.3),
-                  Colors.white.withOpacity(0.12),
-                  Colors.white.withOpacity(0.0),
-                  Colors.white.withOpacity(0.0),
-                  Colors.white.withOpacity(0.12),
-                  Colors.white.withOpacity(0.3),
-                  Colors.white.withOpacity(0.12),
-                  Colors.white.withOpacity(0.0),
-                ],
-                stops: const [
-                  0.0, 0.1, 0.15, 0.2, 0.35, 0.5, 0.6, 0.65, 0.7, 0.85
-                ],
-                transform: const GradientRotation(pi / 3),
-              ),
-            ),
-          ),
-          ...List.generate(16, (i) {
-            final factor = 0.96 - (i * 0.035);
-            return Container(
-              width: size * factor,
-              height: size * factor,
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          color: disc,
+          shape: BoxShape.circle,
+          border: Border.all(color: t.ac, width: 1),
+        ),
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            ...List.generate(14, (i) {
+              final factor = 0.95 - (i * 0.04);
+              return Container(
+                width: size * factor,
+                height: size * factor,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: t.bg.withOpacity(i % 2 == 0 ? 0.12 : 0.05),
+                    width: 0.8,
+                  ),
+                ),
+              );
+            }),
+            Container(
+              width: size * 0.36,
+              height: size * 0.36,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                border: Border.all(
-                  color: Colors.white
-                      .withOpacity(i % 2 == 0 ? 0.04 : 0.01),
-                  width: 0.8,
-                ),
+                color: bg,
+                border: Border.all(color: t.ac, width: 2),
               ),
-            );
-          }),
-          Container(
-            width: size * 0.36,
-            height: size * 0.36,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: bg,
-              boxShadow: [
-                BoxShadow(
-                    color: Colors.black.withOpacity(0.7),
-                    blurRadius: 8,
-                    spreadRadius: 2),
-              ],
-              border:
-                  Border.all(color: const Color(0xFF111111), width: 3),
-            ),
-            child: ClipOval(
-              child: song?.thumbnailUrl.isNotEmpty == true
-                  ? Transform.scale(
-                      scale: 1.35, 
-                      child: CachedNetworkImage(
-                        imageUrl: song!.thumbnailUrl, 
-                        fit: BoxFit.cover,
-                        width: double.infinity,
-                        height: double.infinity,
-                      ),
-                    )
-                  : Container(color: Colors.grey[800]),
-            ),
-          ),
-          Container(
-            width: 12,
-            height: 12,
-            decoration: BoxDecoration(
-              color: const Color(0xFFD6D6D6),
-              shape: BoxShape.circle,
-              gradient: const RadialGradient(
-                colors: [
-                  Colors.white,
-                  Color(0xFF888888),
-                  Color(0xFF222222)
-                ],
-                stops: [0.1, 0.6, 1.0],
+              child: ClipOval(
+                child: song?.thumbnailUrl.isNotEmpty == true
+                    ? Transform.scale(
+                        scale: 1.35,
+                        child: CachedNetworkImage(
+                          imageUrl: song!.thumbnailUrl,
+                          fit: BoxFit.cover,
+                          width: double.infinity,
+                          height: double.infinity,
+                        ),
+                      )
+                    : Container(color: t.tint(0.3)),
               ),
-              boxShadow: [
-                BoxShadow(
-                    color: Colors.black.withOpacity(0.8),
-                    blurRadius: 4,
-                    offset: const Offset(1, 2))
-              ],
             ),
-          ),
-        ],
+            Container(
+              width: 10,
+              height: 10,
+              decoration: BoxDecoration(
+                color: bg,
+                shape: BoxShape.circle,
+                border: Border.all(color: t.ac, width: 1),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildNeedleRight(bool isDark, double width, double height) {
-    final armColor =
-        isDark ? const Color(0xFF352D25) : const Color(0xFFE9E5DB);
+    final t = NoorTheme.byMode(isDark);
+    final armColor = t.ac;
     return SizedBox(
       width: width,
       height: height,
@@ -874,12 +817,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
                 decoration: BoxDecoration(
                     color: armColor,
                     borderRadius: BorderRadius.circular(8),
-                    boxShadow: const [
-                      BoxShadow(
-                          color: Colors.black26,
-                          blurRadius: 4,
-                          offset: Offset(-2, 2))
-                    ]),
+                    border: Border.all(color: NoorTheme.byMode(isDark).soft, width: 1),),
                 child: Column(
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
@@ -888,7 +826,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
                           width: 4,
                           margin: const EdgeInsets.only(bottom: 6),
                           decoration: BoxDecoration(
-                              color: Colors.grey[400],
+                              color: t.bg,
                               borderRadius:
                                   BorderRadius.circular(2)))
                     ]),
@@ -904,18 +842,13 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
                   decoration: BoxDecoration(
                       color: armColor,
                       shape: BoxShape.circle,
-                      boxShadow: const [
-                        BoxShadow(
-                            color: Colors.black38,
-                            blurRadius: 8,
-                            offset: Offset(0, 4))
-                      ]),
+                      border: Border.all(color: NoorTheme.byMode(isDark).soft, width: 1),),
                   child: Center(
                       child: Container(
                           width: 14,
                           height: 14,
-                          decoration: const BoxDecoration(
-                              color: Colors.pinkAccent,
+                          decoration: BoxDecoration(
+                              color: t.bg,
                               shape: BoxShape.circle))))),
         ],
       ),
@@ -970,13 +903,7 @@ class _AddToPlaylistPanel extends ConsumerWidget {
           topLeft: Radius.circular(28),
           bottomLeft: Radius.circular(28),
         ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(isDark ? 0.55 : 0.18),
-            blurRadius: 32,
-            offset: const Offset(-8, 0),
-          ),
-        ],
+        border: Border.all(color: NoorTheme.byMode(isDark).soft, width: 1),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -988,7 +915,7 @@ class _AddToPlaylistPanel extends ConsumerWidget {
                 _NeuBtn(
                   icon: Icons.close_rounded,
                   color: mutedCol,
-                  bg: isDark ? const Color(0xFF1C1814) : const Color(0xFFDCD8CD),
+                  bg: NoorTheme.byMode(isDark).bg,
                   isDark: isDark,
                   size: 44,
                   onTap: onClose,
@@ -1007,7 +934,7 @@ class _AddToPlaylistPanel extends ConsumerWidget {
                 _NeuBtn(
                   icon: Icons.add_rounded,
                   color: accentCol,
-                  bg: isDark ? const Color(0xFF1C1814) : const Color(0xFFDCD8CD),
+                  bg: NoorTheme.byMode(isDark).bg,
                   isDark: isDark,
                   size: 44,
                   onTap: onAdd,
@@ -1030,7 +957,7 @@ class _AddToPlaylistPanel extends ConsumerWidget {
                     _NeuIconBox(
                       icon: Icons.queue_music_rounded,
                       isDark: isDark,
-                      bg: isDark ? const Color(0xFF1C1814) : const Color(0xFFDCD8CD),
+                      bg: NoorTheme.byMode(isDark).bg,
                       color: accentCol,
                       size: 72,
                     ),
@@ -1065,16 +992,7 @@ class _AddToPlaylistPanel extends ConsumerWidget {
                       decoration: BoxDecoration(
                         color: bg,
                         borderRadius: BorderRadius.circular(18),
-                        boxShadow: [
-                          BoxShadow(
-                              color: isDark ? Colors.black54 : Colors.grey.shade300,
-                              blurRadius: 8,
-                              offset: const Offset(3, 3)),
-                          BoxShadow(
-                              color: isDark ? Colors.white.withOpacity(0.04) : const Color(0xFFF7F5EE),
-                              blurRadius: 8,
-                              offset: const Offset(-3, -3)),
-                        ],
+                        border: Border.all(color: NoorTheme.byMode(isDark).soft, width: 1),
                       ),
                       child: Row(
                         children: [
@@ -1084,12 +1002,7 @@ class _AddToPlaylistPanel extends ConsumerWidget {
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
                               color: accentCol.withOpacity(0.12),
-                              boxShadow: [
-                                BoxShadow(
-                                    color: isDark ? Colors.black38 : Colors.grey.shade200,
-                                    blurRadius: 6,
-                                    offset: const Offset(2, 2)),
-                              ],
+                              border: Border.all(color: NoorTheme.byMode(isDark).soft, width: 1),
                             ),
                             child: Icon(Icons.queue_music_rounded, color: accentCol, size: 22),
                           ),
@@ -1164,13 +1077,7 @@ class _NamingPanel extends StatelessWidget {
           topRight: Radius.circular(28),
           bottomRight: Radius.circular(28),
         ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(isDark ? 0.55 : 0.18),
-            blurRadius: 32,
-            offset: const Offset(8, 0),
-          ),
-        ],
+        border: Border.all(color: NoorTheme.byMode(isDark).soft, width: 1),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1180,7 +1087,7 @@ class _NamingPanel extends StatelessWidget {
               _NeuBtn(
                 icon: Icons.arrow_back_rounded,
                 color: mutedCol,
-                bg: isDark ? const Color(0xFF1C1814) : const Color(0xFFDCD8CD),
+                bg: NoorTheme.byMode(isDark).bg,
                 isDark: isDark,
                 size: 44,
                 onTap: onCancel,
@@ -1202,7 +1109,7 @@ class _NamingPanel extends StatelessWidget {
             child: _NeuIconBox(
               icon: Icons.album_rounded,
               isDark: isDark,
-              bg: isDark ? const Color(0xFF1C1814) : const Color(0xFFDCD8CD),
+              bg: NoorTheme.byMode(isDark).bg,
               color: accentCol,
               size: 88,
             ),
@@ -1220,18 +1127,9 @@ class _NamingPanel extends StatelessWidget {
           const SizedBox(height: 10),
           Container(
             decoration: BoxDecoration(
-              color: isDark ? const Color(0xFF1C1814) : const Color(0xFFDCD8CD),
+              color: NoorTheme.byMode(isDark).bg,
               borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                    color: isDark ? Colors.black54 : Colors.grey.shade300,
-                    blurRadius: 10,
-                    offset: const Offset(4, 4)),
-                BoxShadow(
-                    color: isDark ? Colors.white.withOpacity(0.04) : const Color(0xFFF7F5EE),
-                    blurRadius: 10,
-                    offset: const Offset(-4, -4)),
-              ],
+              border: Border.all(color: NoorTheme.byMode(isDark).soft, width: 1),
             ),
             child: TextField(
               controller: controller,
@@ -1257,16 +1155,7 @@ class _NamingPanel extends StatelessWidget {
               decoration: BoxDecoration(
                 color: accentCol,
                 borderRadius: BorderRadius.circular(18),
-                boxShadow: [
-                  BoxShadow(
-                      color: accentCol.withOpacity(0.45),
-                      blurRadius: 18,
-                      offset: const Offset(0, 6)),
-                  BoxShadow(
-                      color: Colors.black.withOpacity(0.2),
-                      blurRadius: 8,
-                      offset: const Offset(0, 3)),
-                ],
+                border: Border.all(color: NoorTheme.byMode(isDark).soft, width: 1),
               ),
               child: const Center(
                 child: Text(
@@ -1340,10 +1229,9 @@ class _VolumeArcPainter extends CustomPainter {
     const sweepFull = pi * 1.5;
     const endAngle = startAngle + sweepFull;
 
+    final t = NoorTheme.byMode(isDark);
     final trackPaint = Paint()
-      ..color = isDark
-          ? Colors.white.withOpacity(0.10)
-          : Colors.black.withOpacity(0.07)
+      ..color = t.ac.withOpacity(0.18)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 7.0
       ..strokeCap = StrokeCap.round;
@@ -1361,11 +1249,7 @@ class _VolumeArcPainter extends CustomPainter {
       final gradientShader = SweepGradient(
         startAngle: startAngle,
         endAngle: startAngle + sweepFull * volume,
-        colors: const [
-          Color(0xFF8E4A27),
-          Color(0xFFB0653A),
-          Color(0xFFD79A6B),
-        ],
+        colors: [t.ac, t.ac, t.ac],
         stops: const [0.0, 0.6, 1.0],
       ).createShader(rect);
 
@@ -1388,12 +1272,16 @@ class _VolumeArcPainter extends CustomPainter {
       final thumbY = center.dy + radius * sin(thumbAngle);
 
       canvas.drawCircle(
-          Offset(thumbX, thumbY), 8, Paint()..color = Colors.white);
-      canvas.drawCircle(Offset(thumbX, thumbY), 5,
-          Paint()..color = const Color(0xFFB0653A));
+          Offset(thumbX, thumbY), 8, Paint()..color = t.bg);
+      canvas.drawCircle(Offset(thumbX, thumbY), 8,
+          Paint()
+            ..color = t.ac
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 1.5);
+      canvas.drawCircle(Offset(thumbX, thumbY), 4, Paint()..color = t.ac);
     }
 
-    const iconBlue = Color(0xFFB0653A);
+    final iconBlue = t.ac;
     final iconRadius = radius + 24;
 
     final startIconX = center.dx + iconRadius * cos(startAngle);
@@ -1426,6 +1314,7 @@ class _Waveform extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const barCount = 34;
+    final t = NoorTheme.byMode(isDark);
     return GestureDetector(
       onHorizontalDragUpdate: (d) {
         final box = context.findRenderObject() as RenderBox;
@@ -1460,11 +1349,7 @@ class _Waveform extends StatelessWidget {
                 width: 6,
                 height: barHeight,
                 decoration: BoxDecoration(
-                  color: active
-                      ? const Color(0xFFA8582E)
-                      : (isDark
-                          ? Colors.white10
-                          : const Color(0xFFCFCABD)),
+                  color: active ? t.ac : t.ac.withOpacity(0.22),
                   borderRadius: BorderRadius.circular(12),
                 ),
               );
@@ -1496,7 +1381,6 @@ class _ArmPainterRight extends CustomPainter {
     path.moveTo(size.width - 26, 26);
     path.quadraticBezierTo(
         0, size.height * 0.5, 20, size.height - 20);
-    canvas.drawPath(path.shift(const Offset(-2, 4)), shadowPaint);
     canvas.drawPath(path, paint);
   }
 
@@ -1519,28 +1403,10 @@ class _NeuBtn extends StatelessWidget {
     required this.size,
   });
   @override
-  Widget build(BuildContext context) => GestureDetector(
+  Widget build(BuildContext context) => NoorRoundButton(
+        size: size,
         onTap: onTap,
-        child: Container(
-          width: size,
-          height: size,
-          decoration: BoxDecoration(
-              color: bg,
-              shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                    color: isDark ? Colors.black54 : Colors.grey[300]!,
-                    blurRadius: 10,
-                    offset: const Offset(5, 5)),
-                BoxShadow(
-                    color: isDark
-                        ? Colors.white.withOpacity(0.05)
-                        : const Color(0xFFF7F5EE),
-                    blurRadius: 10,
-                    offset: const Offset(-5, -5)),
-              ]),
-          child: Icon(icon, color: color, size: size * 0.5),
-        ),
+        child: Icon(icon, color: color),
       );
 }
 
@@ -1559,24 +1425,9 @@ class _NeuIconBox extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) => Container(
-        width: size,
-        height: size,
-        decoration: BoxDecoration(
-          color: bg,
-          shape: BoxShape.circle,
-          boxShadow: [
-            BoxShadow(
-                color: isDark ? Colors.black54 : Colors.grey[300]!,
-                blurRadius: 14,
-                offset: const Offset(6, 6)),
-            BoxShadow(
-                color: isDark ? Colors.white.withOpacity(0.05) : const Color(0xFFF7F5EE),
-                blurRadius: 14,
-                offset: const Offset(-6, -6)),
-          ],
-        ),
-        child: Icon(icon, color: color, size: size * 0.46),
+  Widget build(BuildContext context) => NoorRoundButton(
+        size: size,
+        child: Icon(icon, color: color),
       );
 }
 
@@ -1591,7 +1442,7 @@ class _NeuDivider extends StatelessWidget {
         decoration: BoxDecoration(
           gradient: LinearGradient(colors: [
             Colors.transparent,
-            isDark ? Colors.white.withOpacity(0.08) : Colors.black.withOpacity(0.06),
+            NoorTheme.byMode(isDark).ac.withOpacity(0.18),
             Colors.transparent,
           ]),
         ),

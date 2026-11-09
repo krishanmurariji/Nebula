@@ -1,28 +1,55 @@
 import 'package:flutter/material.dart';
 
-/// Noor's colours. The light background is #DCD8CD and the accents come from
-/// the copper of the Noor logo. Change a value here for the shared widgets
-/// (app theme, neumorphic cards); screens still carry a few inline values that
-/// were migrated to the same numbers.
+/// Noor uses exactly two colours: ivory + copper by day, espresso + gold by
+/// night. Everything else is a tint of those two (see [NoorTheme]).
 class NoorColors {
   NoorColors._();
 
-  // light
-  static const bg = Color(0xFFDCD8CD);
-  static const card = Color(0xFFE9E5DB);       // raised surface on bg
-  static const shadowDark = Color(0xFFB8B3A6); // neumorphic dark side
-  static const shadowLight = Color(0xFFF7F5EE); // neumorphic light side
-  static const ink = Color(0xFF2B2420);        // main text
-  static const muted = Color(0xFF6E6459);      // secondary text
-  static const outline = Color(0xFFB5AE9F);
+  static const ivory = Color(0xFFE8E0CE);
+  static const copper = Color(0xFF8E4A27);
+  static const espresso = Color(0xFF1F1914);
+  static const gold = Color(0xFFD8B06A);
+}
 
-  // brand (from the logo)
-  static const copper = Color(0xFFB0653A);
-  static const copperDeep = Color(0xFF8E4A27);
-  static const copperSoft = Color(0xFFD79A6B);
+/// The two colours of the current theme plus their tints.
+class NoorTheme {
+  const NoorTheme._(this.isDark, this.bg, this.ac);
 
-  // dark
-  static const darkBg = Color(0xFF1C1814);
-  static const darkSurface = Color(0xFF28221C);
-  static const darkRaised = Color(0xFF352D25);
+  static const light = NoorTheme._(false, NoorColors.ivory, NoorColors.copper);
+  static const dark = NoorTheme._(true, NoorColors.espresso, NoorColors.gold);
+
+  static NoorTheme ofBrightness(Brightness b) =>
+      b == Brightness.dark ? dark : light;
+
+  /// The theme of the nearest [Theme]; the app switches it with ThemeMode.
+  static NoorTheme of(BuildContext context) =>
+      ofBrightness(Theme.of(context).brightness);
+
+  static NoorTheme byMode(bool isDark) => isDark ? dark : light;
+
+  final bool isDark;
+
+  /// Page / surface colour.
+  final Color bg;
+
+  /// The one accent: text, icons, outlines and filled buttons.
+  final Color ac;
+
+  /// Text or icon colour on top of a filled [ac] surface.
+  Color get onAc => bg;
+
+  /// Main text (the accent itself).
+  Color get text => ac;
+
+  /// Secondary text.
+  Color get mute => Color.lerp(bg, ac, 0.62)!;
+
+  /// Outline strength levels.
+  Color get soft => ac.withOpacity(0.45);
+  Color get faint => ac.withOpacity(0.22);
+  Color get wash => ac.withOpacity(0.10);
+
+  /// Artwork tint: [level] 0..1 of accent over the surface. Used where the app
+  /// has no picture to show, and for the optional two-colour artwork.
+  Color tint(double level) => Color.lerp(bg, ac, level)!;
 }

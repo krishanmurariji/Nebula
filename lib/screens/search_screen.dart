@@ -9,6 +9,9 @@ import '../providers/theme_provider.dart';
 import 'player_screen.dart';
 import 'mini_player.dart';
 import '../widgets/search_filter_bar.dart';
+import '../theme/noor_palette.dart';
+import '../theme/noor_song_tile.dart';
+import '../theme/noor_widgets.dart';
 
 class SearchScreen extends ConsumerStatefulWidget {
   final void Function(int) onNavigate;
@@ -39,30 +42,15 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     // Watch liked songs to show the heart badge on search results
     final likedSongs = ref.watch(likedSongsProvider); 
     
-    final bg      = isDark ? const Color(0xFF1C1814) : const Color(0xFFDCD8CD);
-    final cardBg  = isDark ? const Color(0xFF28221C) : const Color(0xFFE9E5DB);
-    final textCol = isDark ? Colors.white : const Color(0xFF2B2420);
-    
-    final screenSize = MediaQuery.of(context).size;
+    final t       = NoorTheme.byMode(isDark);
+    final bg      = t.bg;
+    final textCol = t.ac;
 
     return Scaffold(
       backgroundColor: bg,
       body: Stack(
         children: [
-          // ── Big Background App Logo Watermark ─────────────────────────────
-          Positioned.fill(
-            child: Center(
-              child: Opacity(
-                opacity: isDark ? 0.03 : 0.05, 
-                child: Image.asset(
-                  'assets/images/app_logo_final.png',
-                  width: screenSize.width * 0.85, 
-                  fit: BoxFit.contain,
-                  errorBuilder: (_, __, ___) => const SizedBox(),
-                ),
-              ),
-            ),
-          ),
+          const Positioned(top: 0, left: 0, right: 0, child: NoorBackdrop()),
 
           // ── Main Foreground Content ───────────────────────────────────────
           SafeArea(
@@ -72,32 +60,25 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                 // ── Search bar ────────────────────────────────────────────────
                 Padding(
                   padding: const EdgeInsets.fromLTRB(20, 20, 20, 10),
-                  child: Container(
-                    height: 48,
-                    decoration: BoxDecoration(
-                      color: cardBg,
-                      borderRadius: BorderRadius.circular(24),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(isDark ? 0.3 : 0.07),
-                          blurRadius: 12, offset: const Offset(0, 3)
-                        )
-                      ]
-                    ),
+                  child: NoorFrame(
+                    radius: 26,
+                    child: SizedBox(
+                    height: 46,
                     child: TextField(
                       controller: _ctrl,
                       onSubmitted: _search,
                       onChanged: (_) => setState(() {}),
                       autofocus: false, 
                       textInputAction: TextInputAction.search,
-                      style: TextStyle(color: textCol, fontSize: 14, fontWeight: FontWeight.w500),
+                      cursorColor: t.ac,
+                      style: TextStyle(color: textCol, fontSize: 14, fontWeight: FontWeight.w600),
                       decoration: InputDecoration(
                         hintText: 'Artists, songs...',
-                        hintStyle: const TextStyle(color: Color(0xFF9A9082), fontSize: 14),
-                        prefixIcon: const Icon(Icons.search, color: Color(0xFFB0653A), size: 20),
+                        hintStyle: TextStyle(color: t.mute, fontSize: 14),
+                        prefixIcon: Icon(Icons.search, color: t.ac, size: 20),
                         suffixIcon: _ctrl.text.isNotEmpty
                             ? IconButton(
-                                icon: const Icon(Icons.close, color: Color(0xFF9A9082), size: 18),
+                                icon: Icon(Icons.close, color: t.mute, size: 18),
                                 onPressed: () {
                                   _ctrl.clear();
                                   ref.read(searchProvider.notifier).clear();
@@ -105,8 +86,9 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                                 })
                             : null,
                         border: InputBorder.none,
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14)
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13)
                       ),
+                    ),
                     ),
                   ),
                 ),
@@ -156,32 +138,33 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   }
 
   Widget _buildBody(SearchState search, NebulaPlayerState player, Color textCol, bool isDark, List<Song> likedSongs, SearchFilter filter) {
+    final t = NoorTheme.byMode(isDark);
     switch (search.status) {
       case SearchStatus.loading:
-        return const Center(child: CircularProgressIndicator(
-            color: Color(0xFFB0653A), strokeWidth: 2));
+        return Center(child: CircularProgressIndicator(
+            color: t.ac, strokeWidth: 2));
       case SearchStatus.error:
         return Center(child: Padding(
           padding: const EdgeInsets.all(32),
           child: Column(mainAxisSize: MainAxisSize.min, children: [
-            const Icon(Icons.wifi_off_outlined, size: 52, color: Color(0xFFB5AE9F)),
+            Icon(Icons.wifi_off_outlined, size: 52, color: t.soft),
             const SizedBox(height: 16),
             Text(search.error ?? 'Error', textAlign: TextAlign.center,
-              style: const TextStyle(color: Color(0xFF6E6459))),
+              style: TextStyle(color: t.mute)),
             const SizedBox(height: 20),
             GestureDetector(
               onTap: () => _search(_ctrl.text),
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 12),
-                decoration: BoxDecoration(color: const Color(0xFFB0653A),
+                decoration: BoxDecoration(color: t.ac,
                     borderRadius: BorderRadius.circular(30)),
-                child: const Text('Retry', style: TextStyle(color: Colors.white,
+                child: Text('Retry', style: TextStyle(color: t.bg,
                     fontWeight: FontWeight.w600)))),
           ])));
       case SearchStatus.loaded:
-        if (search.results.isEmpty) return const Center(
+        if (search.results.isEmpty) return Center(
           child: Text('No results found',
-              style: TextStyle(color: Color(0xFF6E6459))));
+              style: TextStyle(color: t.mute)));
         final visible = applySearchFilter(search.results, filter);
         if (visible.isEmpty) {
           // The filter hid everything: say so and offer the way out.
@@ -189,7 +172,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
             child: Padding(
               padding: const EdgeInsets.all(32),
               child: Column(mainAxisSize: MainAxisSize.min, children: [
-                const Icon(Icons.verified_outlined, size: 52, color: Color(0xFFB5AE9F)),
+                Icon(Icons.verified_outlined, size: 52, color: t.soft),
                 const SizedBox(height: 16),
                 Text('No official upload found for this search',
                     textAlign: TextAlign.center,
@@ -197,16 +180,16 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                 const SizedBox(height: 6),
                 Text('${search.results.length} other results are available.',
                     textAlign: TextAlign.center,
-                    style: const TextStyle(color: Color(0xFF6E6459), fontSize: 13)),
+                    style: TextStyle(color: t.mute, fontSize: 13)),
                 const SizedBox(height: 20),
                 GestureDetector(
                   onTap: () => ref.read(searchFilterProvider.notifier).set(SearchFilter.bestMatch),
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 12),
-                    decoration: BoxDecoration(color: const Color(0xFFB0653A),
+                    decoration: BoxDecoration(color: t.ac,
                         borderRadius: BorderRadius.circular(30)),
-                    child: const Text('Show all results', style: TextStyle(
-                        color: Colors.white, fontWeight: FontWeight.w600)))),
+                    child: Text('Show all results', style: TextStyle(
+                        color: t.bg, fontWeight: FontWeight.w600)))),
               ]),
             ),
           );
@@ -219,8 +202,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
               padding: const EdgeInsets.fromLTRB(24, 12, 24, 14),
               child: Text(
                   filter == SearchFilter.officialOnly ? 'Official uploads' : 'Top Results',
-                  style: TextStyle(fontSize: 20,
-                      fontWeight: FontWeight.w800, color: textCol))),
+                  style: noorSerif(textCol, size: 28, height: 1.0))),
             ...visible.map((s) {
               final isPlaying = player.song?.videoId == s.videoId &&
                   (player.status == NebulaPlayerStatus.playing || player.status == NebulaPlayerStatus.loading);
@@ -247,28 +229,12 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       default:
         return Center(
           child: Column(
-            mainAxisSize: MainAxisSize.min, 
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Container(
-                width: 72,
-                height: 72,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, 4))
-                  ]
-                ),
-                child: ClipOval(
-                  child: Image.asset(
-                    'assets/images/app_logo_final.png',
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => const Icon(Icons.search_outlined, size: 56, color: Color(0xFFB5AE9F)),
-                  ),
-                ),
-              ),
+              const NoorRoundButton(size: 72, child: Icon(Icons.search_rounded)),
               const SizedBox(height: 20),
               Text('Search for any song or artist',
-                  style: TextStyle(color: textCol.withOpacity(0.5))),
+                  style: TextStyle(color: t.mute)),
             ]
           )
         );
@@ -294,180 +260,72 @@ class _CapsuleSongTile extends StatelessWidget {
     required this.onTap,
   });
 
+  Widget _tag(NoorTheme t, String text) => Container(
+        margin: const EdgeInsets.only(right: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+        decoration: BoxDecoration(
+          border: Border.all(color: t.soft, width: 1),
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: Text(text,
+            style: TextStyle(
+                fontSize: 8,
+                fontWeight: FontWeight.w800,
+                color: t.ac,
+                letterSpacing: 0.6)),
+      );
+
   @override
   Widget build(BuildContext context) {
-    final cardBg = isDark ? const Color(0xFF28221C) : const Color(0xFFE9E5DB);
-    final textCol = isDark ? Colors.white : const Color(0xFF2B2420);
-    final mutedCol = isDark ? Colors.white54 : const Color(0xFF6E6459);
-    const accentCol = Color(0xFFB0653A);
+    final t = NoorTheme.byMode(isDark);
 
-    // ── DYNAMIC SMART BADGE LOGIC ──
+    // Smart badge: official upload, live recording or cover.
     final titleLower = song.title.toLowerCase();
-    
-    // Check if it's live or a cover
     final isLive = titleLower.contains('live');
     final isCover = titleLower.contains('cover');
-    
-    // We can use the isOfficial property directly from your Song model!
     final isOfficial = song.isOfficial;
-    
-    // FIX: Using Dart's native caseSensitive parameter instead of the inline (?i) flag
-    final cleanArtist = song.artist.replaceAll(RegExp(r' - topic', caseSensitive: false), '').trim();
+    final cleanArtist =
+        song.artist.replaceAll(RegExp(r' - topic', caseSensitive: false), '').trim();
 
-    return GestureDetector(
+    return NoorSongTile(
+      height: 76,
+      thumbnailUrl: song.thumbnailUrl,
+      title: song.title,
+      selected: isPlaying,
       onTap: onTap,
-      child: Container(
-        height: 76, 
-        margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
-        decoration: BoxDecoration(
-          color: isPlaying ? accentCol.withOpacity(0.08) : cardBg,
-          borderRadius: BorderRadius.circular(38),
-          border: isPlaying ? Border.all(color: accentCol.withOpacity(0.3), width: 1.5) : null,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(isDark ? 0.3 : 0.08),
-              blurRadius: 20,
-              offset: const Offset(0, 4),
-            )
+      subtitle: Row(
+        children: [
+          if (isOfficial)
+            _tag(t, 'OFFICIAL')
+          else if (isLive)
+            _tag(t, 'LIVE')
+          else if (isCover)
+            _tag(t, 'COVER'),
+          Flexible(
+            child: Text(cleanArtist,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: noorSubtitleStyle(context)),
+          ),
+          if (isOfficial) ...[
+            const SizedBox(width: 4),
+            Icon(Icons.check_circle_outline_rounded, size: 12, color: t.ac),
           ],
-        ),
-        child: Row(
-          children: [
-            const SizedBox(width: 6),
-            
-            // ── Circular Album Art ──
-            Container(
-              width: 64,
-              height: 64,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.15),
-                    blurRadius: 8,
-                    offset: const Offset(0, 3)
-                  )
-                ],
-              ),
-              child: ClipOval(
-                child: Transform.scale(
-                  scale: 1.35, 
-                  child: CachedNetworkImage(
-                    imageUrl: song.thumbnailUrl,
-                    fit: BoxFit.cover,
-                    width: double.infinity,
-                    height: double.infinity,
-                    errorWidget: (_, __, ___) => Container(
-                      color: Colors.grey[800],
-                      child: const Icon(Icons.music_note, color: Colors.white54, size: 18)
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            
-            const SizedBox(width: 14),
-            
-            // ── Song Info & Badges ──
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  // TITLE
-                  Text(
-                    song.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w800,
-                      color: isPlaying ? accentCol : textCol,
-                      letterSpacing: -0.3,
-                    ),
-                  ),
-                  const SizedBox(height: 5),
-                  
-                  // BADGES AND ARTIST ROW
-                  Row(
-                    children: [
-                      // ── Smart Badges ──
-                      if (isOfficial) ...[
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: isDark ? Colors.white12 : Colors.black.withOpacity(0.05),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text('OFFICIAL', style: TextStyle(fontSize: 8, fontWeight: FontWeight.w900, color: textCol, letterSpacing: 0.5)),
-                        ),
-                        const SizedBox(width: 6),
-                      ] else if (isLive) ...[
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: Colors.red.withOpacity(0.15),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: const Text('LIVE', style: TextStyle(fontSize: 8, fontWeight: FontWeight.w900, color: Colors.redAccent, letterSpacing: 0.5)),
-                        ),
-                        const SizedBox(width: 6),
-                      ] else if (isCover) ...[
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: Colors.orange.withOpacity(0.15),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: const Text('COVER', style: TextStyle(fontSize: 8, fontWeight: FontWeight.w900, color: Colors.orange, letterSpacing: 0.5)),
-                        ),
-                        const SizedBox(width: 6),
-                      ],
-
-                      // ── Artist Name ──
-                      Flexible(
-                        child: Text(
-                          cleanArtist,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: mutedCol,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                      
-                      // ── Verified Tick ──
-                      if (isOfficial) ...[
-                        const SizedBox(width: 4),
-                        const Icon(Icons.check_circle, size: 12, color: Color(0xFFB0653A)),
-                      ],
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            
-            // ── Interactive Indicators ──
-            if (isLiked)
-              const Padding(
-                padding: EdgeInsets.only(right: 12.0),
-                child: Icon(Icons.favorite_rounded, color: Colors.pinkAccent, size: 18),
-              ),
-              
-            if (isPlaying)
-              const Padding(
-                padding: EdgeInsets.only(right: 18.0),
-                child: Icon(Icons.equalizer_rounded, color: accentCol, size: 22),
-              )
-            else
-              Padding(
-                padding: const EdgeInsets.only(right: 20.0),
-                child: Icon(Icons.play_arrow_rounded, color: mutedCol.withOpacity(0.3), size: 24),
-              ),
-          ],
-        ),
+        ],
+      ),
+      extras: [
+        if (isLiked)
+          Padding(
+            padding: const EdgeInsets.only(right: 10),
+            child: Icon(Icons.favorite_rounded, color: t.ac, size: 17),
+          ),
+      ],
+      trailing: NoorRoundButton(
+        size: 38,
+        filled: isPlaying,
+        muted: !isPlaying,
+        child: Icon(isPlaying ? Icons.equalizer_rounded : Icons.play_arrow_rounded,
+            size: 20),
       ),
     );
   }

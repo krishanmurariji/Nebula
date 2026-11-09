@@ -4,6 +4,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../providers/player_provider.dart';
 import '../providers/theme_provider.dart';
 import '../screens/player_screen.dart';
+import '../theme/noor_palette.dart';
 
 class MiniPlayer extends ConsumerStatefulWidget {
   const MiniPlayer({super.key});
@@ -48,9 +49,10 @@ class _MiniPlayerState extends ConsumerState<MiniPlayer>
     final isError = ps.status == NebulaPlayerStatus.error;
     final isDark  = ref.watch(themeProvider) == ThemeMode.dark;
 
-    final cardBg  = isDark ? const Color(0xFF28221C) : const Color(0xFFE9E5DB);
-    final textCol = isDark ? Colors.white : const Color(0xFF2B2420);
-    final mutedCol= isDark ? Colors.white54 : const Color(0xFF6E6459);
+    final t = NoorTheme.byMode(isDark);
+    final cardBg  = t.ac;                       // solid accent bar
+    final textCol = t.bg;                       // text sits on the accent
+    final mutedCol= t.bg.withOpacity(0.78);
 
     if (playing && !loading) {
       if (!_rotationCtrl.isAnimating) _rotationCtrl.repeat();
@@ -66,17 +68,16 @@ class _MiniPlayerState extends ConsumerState<MiniPlayer>
           MaterialPageRoute(builder: (_) => const PlayerScreen()),
         ),
         child: Container(
+          padding: const EdgeInsets.all(4),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(34),
+            border: Border.all(color: t.soft, width: 1),
+          ),
+          child: Container(
           height: 72,
           decoration: BoxDecoration(
             color: cardBg,
-            borderRadius: BorderRadius.circular(36),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(isDark ? 0.3 : 0.08),
-                blurRadius: 20,
-                offset: const Offset(0, 4),
-              )
-            ],
+            borderRadius: BorderRadius.circular(30),
           ),
           child: Column(
             children: [
@@ -164,9 +165,7 @@ class _MiniPlayerState extends ConsumerState<MiniPlayer>
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                 fontSize: 11,
-                                color: isError
-                                    ? const Color(0xFFFF6B6B)
-                                    : mutedCol,
+                                color: mutedCol,
                                 fontWeight: FontWeight.w500,
                               ),
                             ),
@@ -192,15 +191,15 @@ class _MiniPlayerState extends ConsumerState<MiniPlayer>
                       child: Container(
                         width: 44,
                         height: 44,
-                        decoration: const BoxDecoration(
-                          color: Color(0xFFB0653A),
+                        decoration: BoxDecoration(
+                          color: t.bg,
                           shape: BoxShape.circle,
                         ),
                         child: loading
-                            ? const Padding(
-                                padding: EdgeInsets.all(12),
+                            ? Padding(
+                                padding: const EdgeInsets.all(12),
                                 child: CircularProgressIndicator(
-                                    color: Colors.white, strokeWidth: 2.5),
+                                    color: t.ac, strokeWidth: 2.5),
                               )
                             : Icon(
                                 isError
@@ -208,7 +207,7 @@ class _MiniPlayerState extends ConsumerState<MiniPlayer>
                                     : (playing
                                         ? Icons.pause_rounded
                                         : Icons.play_arrow_rounded),
-                                color: Colors.white,
+                                color: t.ac,
                                 size: 24,
                               ),
                       ),
@@ -225,6 +224,7 @@ class _MiniPlayerState extends ConsumerState<MiniPlayer>
 
             ],
           ),
+        ),
         ),
       ),
     );
@@ -245,8 +245,9 @@ class _MiniPlayerState extends ConsumerState<MiniPlayer>
     return Container(
       width: size,
       height: size,
-      decoration: const BoxDecoration(
-          color: Color(0xFF111111), shape: BoxShape.circle),
+      decoration: BoxDecoration(
+          color: Color.lerp(NoorTheme.byMode(isDark).ac, Colors.black, 0.6),
+          shape: BoxShape.circle),
       child: Stack(
         alignment: Alignment.center,
         children: [
@@ -291,8 +292,7 @@ class _MiniPlayerState extends ConsumerState<MiniPlayer>
   }
 
   Widget _buildMiniNeedle(bool isDark) {
-    final armColor =
-        isDark ? const Color(0xFF9A9082) : const Color(0xFF5E544A);
+    final armColor = NoorTheme.byMode(isDark).bg;
     return SizedBox(
       width: 24,
       height: 34,

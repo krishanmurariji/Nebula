@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../providers/theme_provider.dart';
+import '../theme/noor_palette.dart';
 
 import 'home_screen.dart';
 import 'search_screen.dart'; 
@@ -78,7 +79,7 @@ class _MainShellState extends ConsumerState<MainShell> {
     });
 
     final isDark = ref.watch(themeProvider) == ThemeMode.dark;
-    final bg = isDark ? const Color(0xFF1C1814) : const Color(0xFFDCD8CD);
+    final bg = NoorTheme.byMode(isDark).bg;
 
     return Scaffold(
       backgroundColor: bg,

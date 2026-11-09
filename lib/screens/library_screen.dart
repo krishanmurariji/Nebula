@@ -6,6 +6,9 @@ import '../models/song.dart';
 import '../providers/player_provider.dart';
 import '../providers/library_provider.dart';
 import '../providers/theme_provider.dart';
+import '../theme/noor_palette.dart';
+import '../theme/noor_song_tile.dart';
+import '../theme/noor_widgets.dart';
 import 'mini_player.dart';
 
 // ── Panel visibility state ────────────────────────────────────────────────────
@@ -145,11 +148,12 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
   @override
   Widget build(BuildContext context) {
     final isDark = ref.watch(themeProvider) == ThemeMode.dark;
-    final bg = isDark ? const Color(0xFF1C1814) : const Color(0xFFDCD8CD);
-    final cardBg = isDark ? const Color(0xFF28221C) : const Color(0xFFE9E5DB);
-    final textCol = isDark ? Colors.white : const Color(0xFF2B2420);
-    final mutedCol = isDark ? Colors.white54 : const Color(0xFF6E6459);
-    const accentCol = Color(0xFFB0653A);
+    final bg = isDark ? NoorColors.espresso : NoorColors.ivory;
+    final t = NoorTheme.byMode(isDark);
+    final cardBg = t.bg;
+    final textCol = t.ac;
+    final mutedCol = t.mute;
+    final accentCol = t.ac;
     final topPad = MediaQuery.of(context).padding.top;
     final screenSize = MediaQuery.of(context).size;
 
@@ -167,20 +171,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
       resizeToAvoidBottomInset: false,
       body: Stack(
         children: [
-          // ── Big Background App Logo Watermark ─────────────────────────────
-          Positioned.fill(
-            child: Center(
-              child: Opacity(
-                opacity: isDark ? 0.03 : 0.05, 
-                child: Image.asset(
-                  'assets/images/app_logo_final.png',
-                  width: screenSize.width * 0.85, 
-                  fit: BoxFit.contain,
-                  errorBuilder: (_, __, ___) => const SizedBox(),
-                ),
-              ),
-            ),
-          ),
+          const Positioned(top: 0, left: 0, right: 0, child: NoorBackdrop()),
 
           // ── Main content ─────────────────────────────────────────────────
           Column(
@@ -209,7 +200,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
               builder: (_, __) => GestureDetector(
                 onTap: _closeAll,
                 child: Container(
-                  color: Colors.black.withOpacity(
+                  color: NoorTheme.byMode(isDark).ac.withOpacity(
                       _panelState == _PanelState.naming
                           ? (_nameFade.value * 0.55)
                           : _scrimOpacity.value),
@@ -300,15 +291,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
       child: Row(
         children: [
           const SizedBox(width: 14),
-          Text(
-            'Library',
-            style: TextStyle(
-              fontSize: 28,
-              fontWeight: FontWeight.w900,
-              color: textCol,
-              letterSpacing: -0.6,
-            ),
-          ),
+          Text('Library', style: noorSerif(textCol, size: 36, height: 1.0)),
           const Spacer(),
           _NeuBtn(
             icon: Icons.queue_music_rounded,
@@ -353,41 +336,23 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
                 decoration: BoxDecoration(
                   color: active ? accentCol : cardBg,
                   borderRadius: BorderRadius.circular(16),
-                  boxShadow: active
-                      ? [
-                          BoxShadow(
-                              color: accentCol.withOpacity(0.35),
-                              blurRadius: 14,
-                              offset: const Offset(0, 4))
-                        ]
-                      : [
-                          BoxShadow(
-                              color: isDark
-                                  ? Colors.black54
-                                  : Colors.grey.shade300,
-                              blurRadius: 8,
-                              offset: const Offset(3, 3)),
-                          BoxShadow(
-                              color: isDark
-                                  ? Colors.white.withOpacity(0.04)
-                                  : const Color(0xFFF7F5EE),
-                              blurRadius: 8,
-                              offset: const Offset(-3, -3)),
-                        ],
+                  border: Border.all(
+                      color: active ? accentCol : NoorTheme.byMode(isDark).soft,
+                      width: 1),
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Icon(tabs[i].$1,
                         size: 16,
-                        color: active ? Colors.white : accentCol),
+                        color: active ? bg : accentCol),
                     const SizedBox(width: 6),
                     Text(
                       tabs[i].$2,
                       style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w700,
-                        color: active ? Colors.white : textCol,
+                        color: active ? bg : textCol,
                       ),
                     ),
                   ],
@@ -524,13 +489,7 @@ class _PlaylistListPanel extends StatelessWidget {
           topLeft: Radius.circular(28),
           bottomLeft: Radius.circular(28),
         ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(isDark ? 0.55 : 0.18),
-            blurRadius: 32,
-            offset: const Offset(-8, 0),
-          ),
-        ],
+        border: Border.all(color: NoorTheme.byMode(isDark).soft, width: 1),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -542,26 +501,19 @@ class _PlaylistListPanel extends StatelessWidget {
                 _NeuBtn(
                   icon: Icons.close_rounded,
                   color: mutedCol,
-                  bg: isDark ? const Color(0xFF1C1814) : const Color(0xFFDCD8CD),
+                  bg: NoorTheme.byMode(isDark).bg,
                   isDark: isDark,
                   size: 44,
                   onTap: onClose,
                 ),
                 const SizedBox(width: 14),
-                Text(
-                  'My Playlists',
-                  style: TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w900,
-                    color: textCol,
-                    letterSpacing: -0.4,
-                  ),
-                ),
+                Text('My Playlists',
+                    style: noorSerif(textCol, size: 28, height: 1.0)),
                 const Spacer(),
                 _NeuBtn(
                   icon: Icons.add_rounded,
                   color: accentCol,
-                  bg: isDark ? const Color(0xFF1C1814) : const Color(0xFFDCD8CD),
+                  bg: NoorTheme.byMode(isDark).bg,
                   isDark: isDark,
                   size: 44,
                   onTap: onAdd,
@@ -584,7 +536,7 @@ class _PlaylistListPanel extends StatelessWidget {
                     _NeuIconBox(
                       icon: Icons.queue_music_rounded,
                       isDark: isDark,
-                      bg: isDark ? const Color(0xFF1C1814) : const Color(0xFFDCD8CD),
+                      bg: NoorTheme.byMode(isDark).bg,
                       color: accentCol,
                       size: 72,
                     ),
@@ -612,7 +564,7 @@ class _PlaylistListPanel extends StatelessWidget {
                   return _PlaylistRow(
                     pl: pl,
                     isDark: isDark,
-                    bg: isDark ? const Color(0xFF1C1814) : const Color(0xFFDCD8CD),
+                    bg: NoorTheme.byMode(isDark).bg,
                     cardBg: cardBg,
                     textCol: textCol,
                     mutedCol: mutedCol,
@@ -659,18 +611,7 @@ class _PlaylistRow extends StatelessWidget {
         decoration: BoxDecoration(
           color: bg,
           borderRadius: BorderRadius.circular(18),
-          boxShadow: [
-            BoxShadow(
-                color: isDark ? Colors.black54 : Colors.grey.shade300,
-                blurRadius: 8,
-                offset: const Offset(3, 3)),
-            BoxShadow(
-                color: isDark
-                    ? Colors.white.withOpacity(0.04)
-                    : const Color(0xFFF7F5EE),
-                blurRadius: 8,
-                offset: const Offset(-3, -3)),
-          ],
+          border: Border.all(color: NoorTheme.byMode(isDark).soft, width: 1),
         ),
         child: Row(
           children: [
@@ -680,14 +621,7 @@ class _PlaylistRow extends StatelessWidget {
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: accentCol.withOpacity(0.12),
-                boxShadow: [
-                  BoxShadow(
-                      color: isDark
-                          ? Colors.black38
-                          : Colors.grey.shade200,
-                      blurRadius: 6,
-                      offset: const Offset(2, 2)),
-                ],
+                border: Border.all(color: NoorTheme.byMode(isDark).soft, width: 1),
               ),
               child: Icon(Icons.queue_music_rounded,
                   color: accentCol, size: 22),
@@ -719,7 +653,7 @@ class _PlaylistRow extends StatelessWidget {
             const SizedBox(width: 8),
             _SmallNeuBtn(
               icon: Icons.delete_outline_rounded,
-              color: Colors.redAccent.withOpacity(0.8),
+              color: accentCol,
               bg: bg,
               isDark: isDark,
               onTap: onDelete,
@@ -773,13 +707,7 @@ class _NamingPanel extends StatelessWidget {
           topRight: Radius.circular(28),
           bottomRight: Radius.circular(28),
         ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(isDark ? 0.55 : 0.18),
-            blurRadius: 32,
-            offset: const Offset(8, 0),
-          ),
-        ],
+        border: Border.all(color: NoorTheme.byMode(isDark).soft, width: 1),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -789,23 +717,14 @@ class _NamingPanel extends StatelessWidget {
               _NeuBtn(
                 icon: Icons.arrow_back_rounded,
                 color: mutedCol,
-                bg: isDark
-                    ? const Color(0xFF1C1814)
-                    : const Color(0xFFDCD8CD),
+                bg: NoorTheme.byMode(isDark).bg,
                 isDark: isDark,
                 size: 44,
                 onTap: onCancel,
               ),
               const SizedBox(width: 14),
-              Text(
-                isEditing ? 'Rename' : 'New Playlist',
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w900,
-                  color: textCol,
-                  letterSpacing: -0.4,
-                ),
-              ),
+              Text(isEditing ? 'Rename' : 'New Playlist',
+                  style: noorSerif(textCol, size: 28, height: 1.0)),
             ],
           ),
           const SizedBox(height: 32),
@@ -813,9 +732,7 @@ class _NamingPanel extends StatelessWidget {
             child: _NeuIconBox(
               icon: Icons.album_rounded,
               isDark: isDark,
-              bg: isDark
-                  ? const Color(0xFF1C1814)
-                  : const Color(0xFFDCD8CD),
+              bg: NoorTheme.byMode(isDark).bg,
               color: accentCol,
               size: 88,
             ),
@@ -833,24 +750,9 @@ class _NamingPanel extends StatelessWidget {
           const SizedBox(height: 10),
           Container(
             decoration: BoxDecoration(
-              color: isDark
-                  ? const Color(0xFF1C1814)
-                  : const Color(0xFFDCD8CD),
+              color: NoorTheme.byMode(isDark).bg,
               borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                    color: isDark
-                        ? Colors.black54
-                        : Colors.grey.shade300,
-                    blurRadius: 10,
-                    offset: const Offset(4, 4)),
-                BoxShadow(
-                    color: isDark
-                        ? Colors.white.withOpacity(0.04)
-                        : const Color(0xFFF7F5EE),
-                    blurRadius: 10,
-                    offset: const Offset(-4, -4)),
-              ],
+              border: Border.all(color: NoorTheme.byMode(isDark).soft, width: 1),
             ),
             child: TextField(
               controller: controller,
@@ -882,22 +784,13 @@ class _NamingPanel extends StatelessWidget {
               decoration: BoxDecoration(
                 color: accentCol,
                 borderRadius: BorderRadius.circular(18),
-                boxShadow: [
-                  BoxShadow(
-                      color: accentCol.withOpacity(0.45),
-                      blurRadius: 18,
-                      offset: const Offset(0, 6)),
-                  BoxShadow(
-                      color: Colors.black.withOpacity(0.2),
-                      blurRadius: 8,
-                      offset: const Offset(0, 3)),
-                ],
+                border: Border.all(color: NoorTheme.byMode(isDark).soft, width: 1),
               ),
               child: Center(
                 child: Text(
                   isEditing ? 'Save Changes' : 'Create Playlist',
-                  style: const TextStyle(
-                    color: Colors.white,
+                  style: TextStyle(
+                    color: NoorTheme.byMode(isDark).bg,
                     fontWeight: FontWeight.w800,
                     fontSize: 16,
                     letterSpacing: 0.3,
@@ -966,7 +859,7 @@ class _LikedTab extends StatelessWidget {
       );
     }
     return ReorderableListView.builder(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+      padding: const EdgeInsets.fromLTRB(0, 8, 0, 8),
       physics: const BouncingScrollPhysics(),
       onReorder: onReorder,
       itemCount: songs.length,
@@ -996,10 +889,10 @@ class _LikedTab extends StatelessWidget {
               padding: const EdgeInsets.only(left: 20),
               margin: const EdgeInsets.symmetric(vertical: 6),
               decoration: BoxDecoration(
-                color: Colors.redAccent.shade400,
+                color: NoorTheme.byMode(isDark).ac,
                 borderRadius: BorderRadius.circular(36) // MATCHES NEW CAPSULE
               ),
-              child: const Icon(Icons.delete_outline_rounded, color: Colors.white),
+              child: Icon(Icons.delete_outline_rounded, color: NoorTheme.byMode(isDark).bg),
             ),
             onDismissed: (_) => onUnlike(s),
             child: _SongRow(
@@ -1135,18 +1028,7 @@ class _PlaylistAccordion extends StatelessWidget {
       decoration: BoxDecoration(
         color: cardBg,
         borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-              color: isDark ? Colors.black54 : Colors.grey.shade300,
-              blurRadius: 10,
-              offset: const Offset(4, 4)),
-          BoxShadow(
-              color: isDark
-                  ? Colors.white.withOpacity(0.04)
-                  : const Color(0xFFF7F5EE),
-              blurRadius: 10,
-              offset: const Offset(-4, -4)),
-        ],
+        border: Border.all(color: NoorTheme.byMode(isDark).soft, width: 1),
       ),
       child: Column(
         children: [
@@ -1164,14 +1046,7 @@ class _PlaylistAccordion extends StatelessWidget {
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       color: accentCol.withOpacity(0.12),
-                      boxShadow: [
-                        BoxShadow(
-                            color: isDark
-                                ? Colors.black38
-                                : Colors.grey.shade200,
-                            blurRadius: 6,
-                            offset: const Offset(2, 2)),
-                      ],
+                      border: Border.all(color: NoorTheme.byMode(isDark).soft, width: 1),
                     ),
                     child: Icon(Icons.queue_music_rounded,
                         color: accentCol, size: 22),
@@ -1248,18 +1123,16 @@ class _PlaylistAccordion extends StatelessWidget {
                                 padding: const EdgeInsets.only(left: 20),
                                 margin: const EdgeInsets.symmetric(vertical: 6), // UPDATED MARGIN
                                 decoration: BoxDecoration(
-                                  color: Colors.redAccent.shade400,
+                                  color: NoorTheme.byMode(isDark).ac,
                                   borderRadius: BorderRadius.circular(36) // MATCHES NEW CAPSULE
                                 ),
-                                child: const Icon(Icons.delete_outline_rounded, color: Colors.white),
+                                child: Icon(Icons.delete_outline_rounded, color: NoorTheme.byMode(isDark).bg),
                               ),
                               onDismissed: (_) => onRemoveSong(pl.id, s.videoId),
                               child: _SongRow(
                                 song: s,
                                 isDark: isDark,
-                                bg: isDark
-                                    ? const Color(0xFF1C1814)
-                                    : const Color(0xFFDCD8CD),
+                                bg: NoorTheme.byMode(isDark).bg,
                                 cardBg: cardBg,
                                 textCol: textCol,
                                 mutedCol: mutedCol,
@@ -1338,35 +1211,20 @@ class _HistoryTab extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(
                       horizontal: 14, vertical: 7),
                   decoration: BoxDecoration(
-                    color: isDark
-                        ? const Color(0xFF1C1814)
-                        : const Color(0xFFDCD8CD),
+                    color: NoorTheme.byMode(isDark).bg,
                     borderRadius: BorderRadius.circular(20),
-                    boxShadow: [
-                      BoxShadow(
-                          color: isDark
-                              ? Colors.black54
-                              : Colors.grey.shade300,
-                          blurRadius: 6,
-                          offset: const Offset(2, 2)),
-                      BoxShadow(
-                          color: isDark
-                              ? Colors.white.withOpacity(0.04)
-                              : const Color(0xFFF7F5EE),
-                          blurRadius: 6,
-                          offset: const Offset(-2, -2)),
-                    ],
+                    border: Border.all(color: NoorTheme.byMode(isDark).soft, width: 1),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(Icons.clear_all_rounded,
-                          color: Colors.redAccent.withOpacity(0.8),
+                          color: accentCol,
                           size: 15),
                       const SizedBox(width: 5),
                       Text('Clear',
                           style: TextStyle(
-                              color: Colors.redAccent.withOpacity(0.8),
+                              color: accentCol,
                               fontSize: 12,
                               fontWeight: FontWeight.w700)),
                     ],
@@ -1378,7 +1236,7 @@ class _HistoryTab extends StatelessWidget {
         ),
         Expanded(
           child: ListView.builder(
-            padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+            padding: const EdgeInsets.fromLTRB(0, 4, 0, 8),
             physics: const BouncingScrollPhysics(),
             itemCount: songs.length,
             itemBuilder: (_, i) {
@@ -1433,107 +1291,22 @@ class _SongRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    final Widget trail = isPlaying
+        ? NoorRoundButton(
+            size: 38, filled: true, child: const Icon(Icons.equalizer_rounded))
+        : (trailing is SizedBox
+            ? const SizedBox(width: 4)
+            : NoorRoundButton(size: 38, muted: true, child: trailing));
+    return NoorSongTile(
+      thumbnailUrl: song.thumbnailUrl,
+      title: song.title,
+      subtitle: Text(song.artist,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: noorSubtitleStyle(context)),
+      selected: isPlaying,
       onTap: onTap,
-      child: Container(
-        height: 72,
-        margin: const EdgeInsets.symmetric(vertical: 6),
-        decoration: BoxDecoration(
-          color: isPlaying ? accentCol.withOpacity(0.08) : cardBg, // Use cardBg so it looks like a floating pill
-          borderRadius: BorderRadius.circular(36), // Fully rounded like the capsule
-          border: isPlaying ? Border.all(color: accentCol.withOpacity(0.3), width: 1.5) : null,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(isDark ? 0.3 : 0.08),
-              blurRadius: 20,
-              offset: const Offset(0, 4),
-            )
-          ],
-        ),
-        child: Row(
-          children: [
-            const SizedBox(width: 6),
-            
-            // ── Circular Album Art ──
-            Container(
-              width: 60,
-              height: 60,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.15),
-                    blurRadius: 8,
-                    offset: const Offset(0, 3)
-                  )
-                ],
-              ),
-              child: ClipOval(
-                child: Transform.scale(
-                  scale: 1.35, // Eliminates black bars on YouTube thumbnails
-                  child: CachedNetworkImage(
-                    imageUrl: song.thumbnailUrl,
-                    fit: BoxFit.cover,
-                    width: double.infinity,
-                    height: double.infinity,
-                    errorWidget: (_, __, ___) => Container(
-                      color: Colors.grey[800],
-                      child: const Icon(Icons.music_note, color: Colors.white54, size: 18)
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            
-            const SizedBox(width: 14),
-            
-            // ── Song Info ──
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    song.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w800,
-                      color: isPlaying ? accentCol : textCol,
-                    ),
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    song.artist,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: mutedCol,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            
-            // ── Indicators & Trailing Icons ──
-            if (isPlaying)
-              Padding(
-                padding: const EdgeInsets.only(right: 18.0),
-                child: Icon(Icons.equalizer_rounded, color: accentCol, size: 22),
-              )
-            else if (trailing is! SizedBox) // If there is a trailing icon like the history clock
-              Padding(
-                padding: const EdgeInsets.only(right: 20.0),
-                child: trailing,
-              )
-            else
-              const SizedBox(width: 12),
-          ],
-        ),
-      ),
+      trailing: trail,
     );
   }
 }
@@ -1568,11 +1341,7 @@ class _EmptyState extends StatelessWidget {
             size: 80,
           ),
           const SizedBox(height: 20),
-          Text(title,
-              style: TextStyle(
-                  color: mutedCol,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700)),
+          Text(title, style: noorSerif(accentCol, size: 26, height: 1.0)),
           const SizedBox(height: 6),
           Text(subtitle,
               style: TextStyle(
@@ -1582,6 +1351,8 @@ class _EmptyState extends StatelessWidget {
     );
   }
 }
+
+
 
 // ── Neumorphic primitives ─────────────────────────────────────────────────────
 
@@ -1602,28 +1373,10 @@ class _NeuBtn extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) => GestureDetector(
+  Widget build(BuildContext context) => NoorRoundButton(
+        size: size,
         onTap: onTap,
-        child: Container(
-          width: size,
-          height: size,
-          decoration: BoxDecoration(
-              color: bg,
-              shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                    color: isDark ? Colors.black54 : Colors.grey[300]!,
-                    blurRadius: 10,
-                    offset: const Offset(5, 5)),
-                BoxShadow(
-                    color: isDark
-                        ? Colors.white.withOpacity(0.05)
-                        : const Color(0xFFF7F5EE),
-                    blurRadius: 10,
-                    offset: const Offset(-5, -5)),
-              ]),
-          child: Icon(icon, color: color, size: size * 0.46),
-        ),
+        child: Icon(icon, color: color),
       );
 }
 
@@ -1642,28 +1395,10 @@ class _SmallNeuBtn extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) => GestureDetector(
+  Widget build(BuildContext context) => NoorRoundButton(
+        size: 38,
         onTap: onTap,
-        child: Container(
-          width: 36,
-          height: 36,
-          decoration: BoxDecoration(
-              color: bg,
-              shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                    color: isDark ? Colors.black45 : Colors.grey[300]!,
-                    blurRadius: 7,
-                    offset: const Offset(3, 3)),
-                BoxShadow(
-                    color: isDark
-                        ? Colors.white.withOpacity(0.04)
-                        : const Color(0xFFF7F5EE),
-                    blurRadius: 7,
-                    offset: const Offset(-3, -3)),
-              ]),
-          child: Icon(icon, color: color, size: 17),
-        ),
+        child: Icon(icon, color: color),
       );
 }
 
@@ -1682,26 +1417,9 @@ class _NeuIconBox extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) => Container(
-        width: size,
-        height: size,
-        decoration: BoxDecoration(
-          color: bg,
-          shape: BoxShape.circle,
-          boxShadow: [
-            BoxShadow(
-                color: isDark ? Colors.black54 : Colors.grey[300]!,
-                blurRadius: 14,
-                offset: const Offset(6, 6)),
-            BoxShadow(
-                color: isDark
-                    ? Colors.white.withOpacity(0.05)
-                    : const Color(0xFFF7F5EE),
-                blurRadius: 14,
-                offset: const Offset(-6, -6)),
-          ],
-        ),
-        child: Icon(icon, color: color, size: size * 0.46),
+  Widget build(BuildContext context) => NoorRoundButton(
+        size: size,
+        child: Icon(icon, color: color),
       );
 }
 
@@ -1716,9 +1434,7 @@ class _NeuDivider extends StatelessWidget {
         decoration: BoxDecoration(
           gradient: LinearGradient(colors: [
             Colors.transparent,
-            isDark
-                ? Colors.white.withOpacity(0.08)
-                : Colors.black.withOpacity(0.06),
+            NoorTheme.byMode(isDark).ac.withOpacity(0.18),
             Colors.transparent,
           ]),
         ),

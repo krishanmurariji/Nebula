@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../theme/noor_palette.dart';
 
 /// How search results are shown.
 enum SearchFilter {
@@ -75,10 +76,8 @@ class _FilterChipButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const accent = Color(0xFFB0653A);
-    final idleBg = isDark ? const Color(0xFF28221C) : const Color(0xFFE9E5DB);
-    final idleFg = isDark ? Colors.white70 : const Color(0xFF5E544A);
-    final fg = selected ? Colors.white : idleFg;
+    final t = NoorTheme.byMode(isDark);
+    final fg = selected ? t.onAc : t.mute;
 
     return Semantics(
       button: true,
@@ -96,17 +95,9 @@ class _FilterChipButton extends StatelessWidget {
           constraints: const BoxConstraints(minHeight: 40),
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
           decoration: BoxDecoration(
-            color: selected ? accent : idleBg,
+            color: selected ? t.ac : null,
             borderRadius: BorderRadius.circular(22),
-            boxShadow: [
-              BoxShadow(
-                color: selected
-                    ? accent.withOpacity(0.35)
-                    : Colors.black.withOpacity(isDark ? 0.3 : 0.07),
-                blurRadius: selected ? 10 : 8,
-                offset: const Offset(0, 3),
-              ),
-            ],
+            border: Border.all(color: selected ? t.ac : t.soft, width: 1),
           ),
           // Shrinks to fit instead of overflowing on very narrow screens or
           // with huge system text.
