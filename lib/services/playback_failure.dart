@@ -77,7 +77,8 @@ Duration retryDelay(int attempt) {
 /// The HTTP status a media/API server answered with, taken from an error
 /// message such as "HTTP 403 from rr6---sn-x.googlevideo.com", or null when no
 /// server answer is mentioned.
-int? httpStatusInCause(Object cause) {
+int? httpStatusInCause(Object? cause) {
+  if (cause == null) return null;
   final m = RegExp(r'HTTP (\d{3})').firstMatch(cause.toString());
   return m == null ? null : int.parse(m[1]!);
 }
