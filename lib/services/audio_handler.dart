@@ -21,6 +21,7 @@ import 'playback_failure.dart';
 import 'progressive_download.dart';
 import 'resolved_stream.dart';
 import 'stream_resolver.dart';
+import 'youtube_clients.dart';
 import 'webview_js_solver.dart';
 
 final audioHandlerProvider =
@@ -89,16 +90,16 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
 
   // ── Stream resolution ─────────────────────────────────────────────────────
   // androidVr first — bypasses IP-level blocks that hit android/ios/mweb.
-  // Order matters. androidSdkless is the library's recommended client (based
-  // on yt-dlp's android_sdkless); the rest are tried only when the earlier ones
-  // fail or hand out streams that cannot be downloaded.
+  // Order matters. The first two are yt-dlp's current default clients and the
+  // only ones that were not refused (HTTP 403 / "unplayable") on a real device;
+  // androidSdkless and mweb are kept as fallbacks. Dead clients (androidVr,
+  // ios, tv, android …) were removed: each one costs seconds and one more
+  // request to YouTube, which is how rate limiting gets triggered.
   static final _clients = [
+    kTvSamsungClient,
+    kVisionOsClient,
     YoutubeApiClient.androidSdkless,
-    YoutubeApiClient.androidVr,
-    YoutubeApiClient.ios,
-    YoutubeApiClient.tv,
     YoutubeApiClient.mweb,
-    YoutubeApiClient.android,
   ];
 
   // The backup source (Piped/Invidious) comes after every YouTube client.
@@ -113,13 +114,11 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
     log: (m) => nlog('[N] resolver: $m'),
     // Generous: the first lookup also loads and runs the JavaScript solver.
     timeouts: const [
-      Duration(seconds: 40), // androidSdkless
-      Duration(seconds: 25), // androidVr
-      Duration(seconds: 25), // ios
-      Duration(seconds: 30), // tv
-      Duration(seconds: 25), // mweb
-      Duration(seconds: 20), // android
-      Duration(seconds: 25), // backup source (up to two instances)
+      Duration(seconds: 40), // tv_samsung (first call also runs the solver)
+      Duration(seconds: 25), // visionos
+      Duration(seconds: 30), // androidSdkless
+      Duration(seconds: 30), // mweb
+      Duration(seconds: 20), // backup source (up to two instances)
     ],
   );
 
@@ -135,15 +134,13 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
         .getManifest(videoId, ytClients: [_clients[client]]);
     if (m.audioOnly.isEmpty) return null;
 
-    // Lowest-bitrate mp4 (AAC) first: fastest start, smallest download.
-    final mp4 = m.audioOnly
-        .where((s) => s.codec.mimeType.contains('mp4'))
-        .toList()
+    // Lowest bitrate among plain downloadable audio (no HLS/DASH fragments):
+    // fastest start and smallest download. Codec does not matter: Android
+    // plays both AAC (mp4) and Opus (webm).
+    final usable = m.audioOnly.where((s) => s.fragments.isEmpty).toList()
       ..sort((a, b) => a.bitrate.compareTo(b.bitrate));
-    final info = mp4.isNotEmpty
-        ? mp4.first
-        : (m.audioOnly.toList()..sort((a, b) => a.bitrate.compareTo(b.bitrate)))
-            .first;
+    if (usable.isEmpty) return null;
+    final info = usable.first;
     nlog('[N] ✓ manifest ok client=$client ${info.codec.mimeType} @ ${info.bitrate}');
     return ResolvedStream(
       url: info.url,
