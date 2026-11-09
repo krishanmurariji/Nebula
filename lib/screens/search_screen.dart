@@ -8,6 +8,7 @@ import '../providers/library_provider.dart';
 import '../providers/theme_provider.dart';
 import 'player_screen.dart';
 import 'mini_player.dart';
+import '../widgets/search_filter_bar.dart';
 
 class SearchScreen extends ConsumerStatefulWidget {
   final void Function(int) onNavigate;
@@ -31,6 +32,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   @override
   Widget build(BuildContext context) {
     final search  = ref.watch(searchProvider);
+    final filter  = ref.watch(searchFilterProvider);
     final player  = ref.watch(playerProvider);
     final isDark  = ref.watch(themeProvider) == ThemeMode.dark;
     
@@ -109,6 +111,16 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                   ),
                 ),
 
+                // ── Filter chips (only once there are results) ───────────────
+                if (search.status == SearchStatus.loaded && search.results.isNotEmpty)
+                  SearchFilterBar(
+                    filter: filter,
+                    isDark: isDark,
+                    totalCount: search.results.length,
+                    officialCount: search.results.where((s) => s.isOfficial).length,
+                    onChanged: (f) => ref.read(searchFilterProvider.notifier).set(f),
+                  ),
+
                 // ── Results & MiniPlayer Stack ────────────────────────────────
                 Expanded(
                   child: Stack(
@@ -124,7 +136,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                             ).createShader(bounds);
                           },
                           blendMode: BlendMode.dstIn,
-                          child: _buildBody(search, player, textCol, isDark, likedSongs),
+                          child: _buildBody(search, player, textCol, isDark, likedSongs, filter),
                         ),
                       ),
 
@@ -143,7 +155,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     );
   }
 
-  Widget _buildBody(SearchState search, NebulaPlayerState player, Color textCol, bool isDark, List<Song> likedSongs) {
+  Widget _buildBody(SearchState search, NebulaPlayerState player, Color textCol, bool isDark, List<Song> likedSongs, SearchFilter filter) {
     switch (search.status) {
       case SearchStatus.loading:
         return const Center(child: CircularProgressIndicator(
@@ -170,15 +182,46 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         if (search.results.isEmpty) return const Center(
           child: Text('No results found',
               style: TextStyle(color: Color(0xFF8A9BB0))));
+        final visible = applySearchFilter(search.results, filter);
+        if (visible.isEmpty) {
+          // The filter hid everything: say so and offer the way out.
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(32),
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                const Icon(Icons.verified_outlined, size: 52, color: Color(0xFFD0DBE8)),
+                const SizedBox(height: 16),
+                Text('No official upload found for this search',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: textCol.withOpacity(0.7), fontWeight: FontWeight.w600)),
+                const SizedBox(height: 6),
+                Text('${search.results.length} other results are available.',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: Color(0xFF8A9BB0), fontSize: 13)),
+                const SizedBox(height: 20),
+                GestureDetector(
+                  onTap: () => ref.read(searchFilterProvider.notifier).set(SearchFilter.bestMatch),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 12),
+                    decoration: BoxDecoration(color: const Color(0xFF4993FC),
+                        borderRadius: BorderRadius.circular(30)),
+                    child: const Text('Show all results', style: TextStyle(
+                        color: Colors.white, fontWeight: FontWeight.w600)))),
+              ]),
+            ),
+          );
+        }
         return ListView(
           padding: const EdgeInsets.only(bottom: 130), 
           physics: const BouncingScrollPhysics(),
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(24, 16, 24, 14),
-              child: Text('Top Results', style: TextStyle(fontSize: 20,
-                  fontWeight: FontWeight.w800, color: textCol))),
-            ...search.results.map((s) {
+              padding: const EdgeInsets.fromLTRB(24, 12, 24, 14),
+              child: Text(
+                  filter == SearchFilter.officialOnly ? 'Official uploads' : 'Top Results',
+                  style: TextStyle(fontSize: 20,
+                      fontWeight: FontWeight.w800, color: textCol))),
+            ...visible.map((s) {
               final isPlaying = player.song?.videoId == s.videoId &&
                   (player.status == NebulaPlayerStatus.playing || player.status == NebulaPlayerStatus.loading);
               
@@ -190,8 +233,9 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                 isLiked: isLiked,
                 isDark: isDark,
                 onTap: () {
+                  // Next/Previous stay within what is on screen.
                   ref.read(playerProvider.notifier)
-                      .playSong(s, queue: search.results);
+                      .playSong(s, queue: visible);
                   ref.read(historyProvider.notifier).add(s);
                   Navigator.push(context,
                       MaterialPageRoute(builder: (_) => const PlayerScreen()));

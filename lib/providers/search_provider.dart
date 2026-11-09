@@ -1,6 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/song.dart';
 import '../services/youtube_search_service.dart';
+import '../widgets/search_filter_bar.dart';
 
 enum SearchStatus { idle, loading, loaded, error }
 
@@ -68,3 +70,43 @@ class SearchNotifier extends StateNotifier<SearchState> {
 
 final searchProvider =
     StateNotifierProvider<SearchNotifier, SearchState>((ref) => SearchNotifier(ref));
+
+
+/// The results to show for [filter]. "Official only" keeps just the uploads
+/// the ranking trusts (Topic / VEVO / label / the artist's own channel).
+List<Song> applySearchFilter(List<Song> songs, SearchFilter filter) =>
+    filter == SearchFilter.officialOnly
+        ? songs.where((s) => s.isOfficial).toList()
+        : songs;
+
+const _kFilterKey = 'search_filter';
+
+/// The chosen filter, remembered between launches.
+class SearchFilterNotifier extends StateNotifier<SearchFilter> {
+  SearchFilterNotifier() : super(SearchFilter.bestMatch) {
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final p = await SharedPreferences.getInstance();
+      final saved = p.getString(_kFilterKey);
+      if (!mounted) return;
+      if (saved == SearchFilter.officialOnly.name) {
+        state = SearchFilter.officialOnly;
+      }
+    } catch (_) {/* default is fine */}
+  }
+
+  Future<void> set(SearchFilter filter) async {
+    state = filter;
+    try {
+      final p = await SharedPreferences.getInstance();
+      await p.setString(_kFilterKey, filter.name);
+    } catch (_) {/* not remembering is harmless */}
+  }
+}
+
+final searchFilterProvider =
+    StateNotifierProvider<SearchFilterNotifier, SearchFilter>(
+        (ref) => SearchFilterNotifier());
