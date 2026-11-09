@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1100" viewBox="0 0 1600 1100">
+<defs><filter id="emb" x="-10%" y="-10%" width="120%" height="120%" color-interpolation-filters="sRGB">
+<feGaussianBlur in="SourceAlpha" stdDeviation="3.5" result="b"/>
+<feSpecularLighting in="b" surfaceScale="7" specularConstant="1.2" specularExponent="24" lighting-color="#fff2c4" result="sp"><feDistantLight azimuth="225" elevation="46"/></feSpecularLighting>
+<feComposite in="sp" in2="SourceAlpha" operator="in" result="spi"/>
+<feDiffuseLighting in="b" surfaceScale="7" diffuseConstant="1.05" lighting-color="#e0b660" result="df"><feDistantLight azimuth="225" elevation="52"/></feDiffuseLighting>
+<feComposite in="df" in2="SourceAlpha" operator="in" result="dfi"/>
+<feComposite in="dfi" in2="spi" operator="arithmetic" k1="0" k2="1" k3="1" k4="0" result="lit"/>
+<feGaussianBlur in="SourceAlpha" stdDeviation="7" result="sb"/><feOffset in="sb" dx="8" dy="12" result="so"/>
+<feColorMatrix in="so" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 .6 0" result="sh"/>
+<feMerge><feMergeNode in="sh"/><feMergeNode in="lit"/></feMerge></filter>
+<radialGradient id="bgg" cx=".3" cy=".2" r="1"><stop offset="0" stop-color="#2a3a36"/><stop offset="1" stop-color="#0f1816"/></radialGradient>
+<filter id="grain" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency=".9" numOctaves="3" seed="3"/><feColorMatrix type="matrix" values="0 0 0 0 .9  0 0 0 0 .9  0 0 0 0 .9  0 0 0 .8 -.3"/><feComposite in2="SourceGraphic" operator="in"/></filter>
+<clipPath id="cl"><rect width="1600" height="1100" rx="0"/></clipPath>
+<mask id="m"><rect width="1600" height="1100" fill="#000"/><g fill="#fff"><path d="M360 600 A440 440 0 0 1 1240 600" fill="none" stroke="#fff" stroke-width="62"/><rect x="290.0" y="570" width="140" height="330" rx="70.0"/><rect x="1170.0" y="570" width="140" height="330" rx="70.0"/><g transform="translate(-6.0 0)"><rect x="480" y="600" width="40" height="200"/><rect x="590" y="600" width="40" height="200"/><polygon points="518,600 562,600 592,800 548,800"/><ellipse cx="734.0" cy="700.0" rx="48.0" ry="78.0" fill="none" stroke="#fff" stroke-width="44"/><ellipse cx="904.0" cy="700.0" rx="48.0" ry="78.0" fill="none" stroke="#fff" stroke-width="44"/><rect x="1008.0" y="450" width="38" height="350"/><path d="M1044.0 622.0 H1066.0 A34.00000000000001 34.00000000000001 0 0 1 1066.0 690.0 H1044.0" fill="none" stroke="#fff" stroke-width="44"/><polygon points="1058.0,700.0 1104.0,700.0 1130.0,800 1082.0,800"/><path d="M1027.0 466 C1034.0 500 1080.0 494 1078.0 538" fill="none" stroke="#fff" stroke-width="28" stroke-linecap="round"/></g></g><g fill="#000"><g transform="translate(-6.0 0)"><rect x="476" y="630" width="158" height="9"/><rect x="476" y="664" width="158" height="9"/><rect x="476" y="698" width="158" height="9"/><rect x="476" y="732" width="158" height="9"/><rect x="476" y="766" width="158" height="9"/></g></g></mask></defs>
+<g clip-path="url(#cl)"><rect width="1600" height="1100" fill="url(#bgg)"/><rect width="1600" height="1100" filter="url(#grain)" opacity=".35"/></g>
+<g filter="url(#emb)"><rect width="1600" height="1100" fill="#aaa" mask="url(#m)"/></g></svg>
