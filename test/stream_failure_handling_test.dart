@@ -102,7 +102,14 @@ void main() {
       now = now.add(const Duration(minutes: 6));
       tried.clear();
       await r.resolve('b');
-      expect(tried, [0]);
+      // Client 1 worked while 0 was penalized, so it is now the favourite and
+      // is asked first; the expired penalty only means 0 is allowed again.
+      expect(tried, [1]);
+      r.invalidate('b');
+      r.penalize(1, const Duration(minutes: 5));
+      tried.clear();
+      await r.resolve('b');
+      expect(tried, [0], reason: 'once 1 is penalized, 0 (no longer penalized) is used');
     });
 
     test('penalizing out-of-range or negative clients is ignored', () {

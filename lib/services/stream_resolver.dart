@@ -84,6 +84,10 @@ class StreamResolver<T> {
   final Map<String, ({T value, DateTime at})> _cache = {};
   final Map<String, _InFlight<T>> _inFlight = {};
 
+  /// The client that last produced a usable stream. It is asked first next
+  /// time, so the app adapts by itself when YouTube changes which one works.
+  int? _lastGood;
+
   int get clientCount => timeouts.length;
 
   /// A fresh cached value, without touching the network.
@@ -149,6 +153,7 @@ class StreamResolver<T> {
   /// which a successful manifest lookup cannot reveal.
   void penalize(int i, Duration duration) {
     if (i < 0 || i >= clientCount) return;
+    if (_lastGood == i) _lastGood = null;
     _breakers[i].openUntil = _now().add(duration);
     log?.call('client $i penalized for ${duration.inSeconds}s');
   }
@@ -200,7 +205,14 @@ class StreamResolver<T> {
     var sawPermanent = false;
     var attempted = 0;
 
-    for (var ci = 0; ci < clientCount; ci++) {
+    final good = _lastGood;
+    final order = <int>[
+      if (good != null && good < clientCount) good,
+      for (var i = 0; i < clientCount; i++)
+        if (i != good) i,
+    ];
+
+    for (final ci in order) {
       if (flight.abandoned) return cancelled;
       if (_isOpen(ci)) continue;
 
@@ -215,6 +227,7 @@ class StreamResolver<T> {
           continue; // this client had nothing; try next
         }
         _onSuccess(ci);
+        _lastGood = ci;
         _cache[videoId] = (value: value, at: _now());
         return ResolveResult.ok(value);
       } on TimeoutException {

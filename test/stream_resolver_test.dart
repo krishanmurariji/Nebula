@@ -181,6 +181,68 @@ void main() {
     expect(gaps, [const Duration(milliseconds: 400), const Duration(milliseconds: 400)]);
   });
 
+  group('remembers the client that worked', () {
+    test('the last good client is asked first next time', () async {
+      final tried = <int>[];
+      final r = StreamResolver<String>(
+        timeouts: _t,
+        minGap: Duration.zero,
+        fetch: (id, c) async {
+          tried.add(c);
+          if (c == 0) throw Exception('refused');
+          return 'ok-$c';
+        },
+      );
+      await r.resolve('a');
+      expect(tried, [0, 1], reason: 'first time: in order, 0 fails, 1 works');
+      tried.clear();
+      await r.resolve('b');
+      expect(tried, [1], reason: 'client 1 is asked first now and succeeds');
+    });
+
+    test('if the remembered client stops working the others are tried again', () async {
+      final tried = <int>[];
+      var oneWorks = true;
+      final r = StreamResolver<String>(
+        timeouts: _t,
+        minGap: Duration.zero,
+        fetch: (id, c) async {
+          tried.add(c);
+          if (c == 1 && !oneWorks) throw Exception('now refused');
+          if (c == 0) throw Exception('refused');
+          return 'ok-$c';
+        },
+      );
+      await r.resolve('a'); // 1 becomes the good one
+      oneWorks = false;
+      tried.clear();
+      final res = await r.resolve('b');
+      expect(res.value, 'ok-2');
+      expect(tried, [1, 0, 2], reason: 'remembered first, then the rest in order');
+      tried.clear();
+      await r.resolve('c');
+      expect(tried, [2], reason: '2 is the new favourite');
+    });
+
+    test('a client penalized for undownloadable streams is forgotten as the favourite', () async {
+      final tried = <int>[];
+      final r = StreamResolver<String>(
+        timeouts: _t,
+        minGap: Duration.zero,
+        fetch: (id, c) async {
+          tried.add(c);
+          return 'ok-$c';
+        },
+      );
+      await r.resolve('a'); // 0 is good
+      r.invalidate('a');
+      r.penalize(0, const Duration(minutes: 5));
+      tried.clear();
+      await r.resolve('a');
+      expect(tried, [1], reason: 'penalized client 0 is skipped, 1 takes over');
+    });
+  });
+
   test('unavailable video is reported as permanent', () async {
     var calls = 0;
     final r = StreamResolver<String>(

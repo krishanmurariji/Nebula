@@ -90,14 +90,15 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
 
   // ── Stream resolution ─────────────────────────────────────────────────────
   // androidVr first — bypasses IP-level blocks that hit android/ios/mweb.
-  // Order matters. The first two are yt-dlp's current default clients and the
-  // only ones that were not refused (HTTP 403 / "unplayable") on a real device;
+  // Order matters (and the resolver then remembers the last one that worked).
+  // The first two are yt-dlp's current default clients and the only ones that
+  // were not refused (HTTP 403 / "unplayable") on a real device;
   // androidSdkless and mweb are kept as fallbacks. Dead clients (androidVr,
   // ios, tv, android …) were removed: each one costs seconds and one more
   // request to YouTube, which is how rate limiting gets triggered.
   static final _clients = [
+    kVisionOsClient, // worked first on the device, and needs no JS challenge
     kTvSamsungClient,
-    kVisionOsClient,
     YoutubeApiClient.androidSdkless,
     YoutubeApiClient.mweb,
   ];
@@ -114,8 +115,8 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
     log: (m) => nlog('[N] resolver: $m'),
     // Generous: the first lookup also loads and runs the JavaScript solver.
     timeouts: const [
-      Duration(seconds: 40), // tv_samsung (first call also runs the solver)
       Duration(seconds: 25), // visionos
+      Duration(seconds: 40), // tv_samsung (also runs the JS solver)
       Duration(seconds: 30), // androidSdkless
       Duration(seconds: 30), // mweb
       Duration(seconds: 20), // backup source (up to two instances)
