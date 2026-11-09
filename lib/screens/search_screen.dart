@@ -242,7 +242,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
               padding: const EdgeInsets.fromLTRB(16, 6, 16, 8),
               child: Row(
                 children: [
-                  Flexible(
+                  Expanded(
                     child: Text(
                         filter == SearchFilter.officialOnly
                             ? 'Official uploads'
@@ -251,7 +251,6 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                         overflow: TextOverflow.ellipsis,
                         style: noorSerif(t.ac, size: 28, height: 1.0)),
                   ),
-                  const Spacer(),
                   Text('${visible.length} songs',
                       style: TextStyle(
                           color: t.mute,
@@ -420,6 +419,11 @@ class _FilterSheet extends ConsumerWidget {
                   'Official only', 'Topic, VEVO, labels and the artist'),
               option(SearchFilter.bestMatch, Icons.auto_awesome_outlined,
                   'Best match', 'Everything, best first'),
+              const Spacer(),
+              Center(
+                child: Text('Your choice is remembered.',
+                    style: TextStyle(color: t.mute, fontSize: 11.5)),
+              ),
             ],
           ),
         ),

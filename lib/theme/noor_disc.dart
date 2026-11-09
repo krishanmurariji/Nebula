@@ -92,16 +92,22 @@ class _GroovePainter extends CustomPainter {
       groove.color = (i.isEven ? Colors.black : light).withOpacity(0.10);
       canvas.drawCircle(c, rr, groove);
     }
-    // A single soft light sweep so it catches the light while it spins.
-    canvas.drawArc(
-        Rect.fromCircle(center: c, radius: r * 0.6),
-        -0.6,
-        0.9,
-        false,
+    // Two soft light sweeps so the record catches the light as it spins.
+    canvas.drawCircle(
+        c,
+        r,
         Paint()
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = r * 0.5
-          ..color = light.withOpacity(0.07));
+          ..shader = SweepGradient(
+            colors: [
+              Colors.transparent,
+              light.withOpacity(0.10),
+              Colors.transparent,
+              Colors.transparent,
+              light.withOpacity(0.10),
+              Colors.transparent,
+            ],
+            stops: const [0.0, 0.08, 0.2, 0.5, 0.58, 0.7],
+          ).createShader(Rect.fromCircle(center: c, radius: r)));
   }
 
   @override

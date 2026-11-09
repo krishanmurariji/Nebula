@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import '../providers/player_provider.dart';
 import '../providers/theme_provider.dart';
 import '../screens/player_screen.dart';
 import '../theme/noor_palette.dart';
+import '../theme/noor_disc.dart';
 
 class MiniPlayer extends ConsumerStatefulWidget {
   const MiniPlayer({super.key});
@@ -101,8 +101,7 @@ class _MiniPlayerState extends ConsumerState<MiniPlayer>
                             top: 7,
                             child: RotationTransition(
                               turns: _rotationCtrl,
-                              child: _buildMiniRecord(
-                                  50, isDark, song.thumbnailUrl),
+                              child: NoorDisc(url: song.thumbnailUrl, size: 50),
                             ),
                           ),
 
@@ -236,57 +235,6 @@ class _MiniPlayerState extends ConsumerState<MiniPlayer>
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 6),
         child: Icon(icon, color: color, size: 22),
-      ),
-    );
-  }
-
-  // ── UPDATED TO COMPLETELY FILL THE CIRCLE ──
-  Widget _buildMiniRecord(double size, bool isDark, String thumbUrl) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-          color: Color.lerp(NoorTheme.byMode(isDark).ac, Colors.black, 0.6),
-          shape: BoxShape.circle),
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          Container(
-            width: size * 0.8,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(
-                  color: Colors.white.withOpacity(0.05), width: 1),
-            ),
-          ),
-          Container(
-            width: size * 0.5,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(
-                  color: Colors.white.withOpacity(0.05), width: 1),
-            ),
-          ),
-          Container(
-            width: size * 0.38,
-            height: size * 0.38,
-            decoration: const BoxDecoration(
-                shape: BoxShape.circle, color: Colors.black),
-            child: ClipOval(
-              child: thumbUrl.isNotEmpty
-                  ? Transform.scale(
-                      scale: 1.35, // Ensures image fills completely
-                      child: CachedNetworkImage(
-                          imageUrl: thumbUrl, 
-                          fit: BoxFit.cover,
-                          width: double.infinity,
-                          height: double.infinity),
-                    )
-                  : const Icon(Icons.music_note,
-                      color: Colors.white24, size: 10),
-            ),
-          ),
-        ],
       ),
     );
   }
