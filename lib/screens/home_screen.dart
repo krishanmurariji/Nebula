@@ -83,6 +83,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final history = ref.watch(historyProvider);
     final likedSongs = ref.watch(likedSongsProvider);
     final playerState = ref.watch(playerProvider);
+    final libraryReady = ref.watch(libraryReadyProvider).valueOrNull ?? false;
 
     final isDark = ref.watch(themeProvider) == ThemeMode.dark;
     final t = NoorTheme.byMode(isDark);
@@ -151,19 +152,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                 child: Row(
                   children: [
-                    const NoorAppIcon(size: 46),
-                    const SizedBox(width: 10),
                     Expanded(child: NoorSearchBarButton(onTap: _openSearch)),
                   ],
                 ),
               ),
 
               if (categories.isEmpty)
-                const Expanded(
-                  child: NoorEmptyState(
-                    message: 'Nothing here yet',
-                    hint: 'Search for a song and it will appear here.',
-                  ),
+                Expanded(
+                  // Say "nothing here yet" only once the saved library has
+                  // really been read; until then show nothing at all.
+                  child: libraryReady
+                      ? const NoorEmptyState(
+                          message: 'Nothing here yet',
+                          hint: 'Search for a song and it will appear here.',
+                        )
+                      : const SizedBox.shrink(),
                 )
               else ...[
               SizedBox(
@@ -215,12 +218,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                 padding: EdgeInsets.all((isActive || isAdjacent) ? 2 : 0),
                                 // Outer fine ring (the "second outline")
                                 decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.only(
-                                    topLeft: Radius.circular(isActive ? 96 : 34),
-                                    topRight: Radius.circular(isActive ? 96 : 34),
-                                    bottomLeft: const Radius.circular(20),
-                                    bottomRight: const Radius.circular(20),
-                                  ),
+                                  borderRadius:
+                                      BorderRadius.circular(isActive ? 30 : 26),
                                   border: (isActive || isAdjacent)
                                       ? Border.all(color: t.faint, width: 1)
                                       : null,
@@ -231,12 +230,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                   clipBehavior: Clip.antiAlias,
                                   decoration: BoxDecoration(
                                     color: t.tint(0.3),
-                                    borderRadius: BorderRadius.only(
-                                      topLeft: Radius.circular(isActive ? 92 : 30),
-                                      topRight: Radius.circular(isActive ? 92 : 30),
-                                      bottomLeft: const Radius.circular(16),
-                                      bottomRight: const Radius.circular(16),
-                                    ),
+                                    borderRadius:
+                                        BorderRadius.circular(isActive ? 28 : 24),
                                     border: (isActive || isAdjacent)
                                         ? Border.all(color: t.ac, width: 1)
                                         : null,
@@ -347,7 +342,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                               child: Text(currentHeading,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
-                                  style: noorSerif(textCol, size: 28, height: 1.0)),
+                                  style: noorSerif(textCol, size: 22, height: 1.0)),
                             ),
                             const SizedBox(width: 10),
                             const NoorDivider(width: 36),

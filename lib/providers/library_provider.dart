@@ -56,7 +56,12 @@ final isLikedProvider = Provider.family<bool, String>(
     (ref, id) => ref.watch(likedProvider).any((s) => s.videoId == id));
 
 class LikedNotifier extends StateNotifier<List<Song>> {
-  LikedNotifier() : super([]) { _load(); }
+  LikedNotifier() : super([]) {
+    loaded = _load();
+  }
+
+  /// Completes when the saved list has been read from the device.
+  late final Future<void> loaded;
 
   Future<void> _load() async {
     final p = await SharedPreferences.getInstance();
@@ -121,7 +126,11 @@ final playlistProvider =
         (ref) => PlaylistNotifier());
 
 class PlaylistNotifier extends StateNotifier<List<Playlist>> {
-  PlaylistNotifier() : super([]) { _load(); }
+  PlaylistNotifier() : super([]) {
+    loaded = _load();
+  }
+
+  late final Future<void> loaded;
 
   Future<void> _load() async {
     final p = await SharedPreferences.getInstance();
@@ -195,7 +204,11 @@ final historyProvider =
     StateNotifierProvider<HistoryNotifier, List<Song>>((ref) => HistoryNotifier());
 
 class HistoryNotifier extends StateNotifier<List<Song>> {
-  HistoryNotifier() : super([]) { _load(); }
+  HistoryNotifier() : super([]) {
+    loaded = _load();
+  }
+
+  late final Future<void> loaded;
 
   Future<void> _load() async {
     final p = await SharedPreferences.getInstance();
@@ -223,3 +236,15 @@ class HistoryNotifier extends StateNotifier<List<Song>> {
     await p.remove(_kHistory);
   }
 }
+
+
+/// True once liked songs, playlists and history have been read from the
+/// device. Until then Home must not claim "nothing here yet".
+final libraryReadyProvider = FutureProvider<bool>((ref) async {
+  await Future.wait([
+    ref.read(likedProvider.notifier).loaded,
+    ref.read(playlistProvider.notifier).loaded,
+    ref.read(historyProvider.notifier).loaded,
+  ]);
+  return true;
+});

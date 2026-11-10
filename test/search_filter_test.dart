@@ -227,8 +227,8 @@ void main() {
 
     testWidgets('the queue handed to the player is the filtered list', (t) async {
       await open(t, results: sample);
-      await t.tap(find.text('Play').first);
-      await t.pump();
+      await t.tap(find.text('Real Song (Official Audio)'));
+      await t.pump(const Duration(milliseconds: 400)); // a tap waits out a possible double tap
       expect(player.queues.single.map((s) => s.title),
           ['Real Song (Official Audio)', 'Real Song - Topic']);
     });

@@ -3,12 +3,10 @@ import 'noor_disc.dart';
 import 'noor_palette.dart';
 import 'noor_song_tile.dart';
 
-/// One song as an "album": the cover with half a record peeking out from
-/// behind it, the title and channel in the middle and a Play button.
-///
-/// * a heart sits on the top-right edge of the border (tap, or double-tap the
-///   tile, to like / unlike);
-/// * an official upload gets a small badge centred on the top border.
+/// One song as an "album": a record on the left, half tucked under the cover
+/// on its right, then the title and channel. Tap plays; double-tap (or the
+/// heart) likes. A heart sits on the top-right edge of the border and an
+/// official upload gets a badge centred on the top border.
 class NoorAlbumTile extends StatelessWidget {
   const NoorAlbumTile({
     super.key,
@@ -39,102 +37,112 @@ class NoorAlbumTile extends StatelessWidget {
   /// The current song is actually playing audio right now.
   final bool playing;
 
-  static const double _cover = 84;
-  static const double _disc = 78;
-  static const double _top = 12; // where the border starts
-  static const double _pillHeight = 30;
-  // left padding 10 + cover block + gap 12
-  static const double _pillLeft = 10 + _cover + _disc * 0.5 - 2 + 12;
+  static const double _cover = 62;
+  static const double _disc = 58;
+  static const double _overlap = 28; // how much of the record hides under the cover
+  static const double _top = 10; // where the border starts
 
   @override
   Widget build(BuildContext context) {
     final t = NoorTheme.of(context);
-    final label = loading ? 'Loading' : (selected && playing ? 'Pause' : 'Play');
 
-    // The Play button is a sibling of the tile's gesture area (not inside it),
-    // so a tap on it is instant instead of waiting for a possible double tap.
-    final playButton = GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onPlay,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        decoration: BoxDecoration(
-          color: selected && !loading ? t.ac : null,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: t.ac, width: 1),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (loading)
-              SizedBox(
-                  width: 12,
-                  height: 12,
-                  child: CircularProgressIndicator(
-                      strokeWidth: 1.6, color: t.ac))
-            else
-              Icon(
-                  selected && playing
-                      ? Icons.pause_rounded
-                      : Icons.play_arrow_rounded,
-                  size: 16,
-                  color: selected ? t.onAc : t.ac),
-            const SizedBox(width: 4),
-            Text(label,
-                style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: selected && !loading ? t.onAc : t.ac)),
-          ],
-        ),
+    final art = SizedBox(
+      width: _disc + _cover - _overlap,
+      height: _cover,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          // The record: darkened and cropped tighter than the cover, so it
+          // reads as vinyl and not as a second copy of the picture.
+          Positioned(
+            left: 0,
+            top: (_cover - _disc) / 2,
+            child: NoorDisc(url: thumbnailUrl, size: _disc, dim: 0.5, zoom: 2.2),
+          ),
+          // The cover sits on top and casts a soft shadow onto the record.
+          Positioned(
+            left: _disc - _overlap,
+            top: 0,
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(14),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(t.isDark ? 0.6 : 0.38),
+                    blurRadius: 7,
+                    offset: const Offset(-3, 1),
+                  ),
+                ],
+              ),
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: t.ac, width: 1),
+                    ),
+                    child: NoorArt(url: thumbnailUrl, size: _cover, radius: 13),
+                  ),
+                  if (loading)
+                    Container(
+                      width: _cover,
+                      height: _cover,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(14),
+                        color: t.ac.withOpacity(0.45),
+                      ),
+                      child: Center(
+                        child: SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: t.bg),
+                        ),
+                      ),
+                    )
+                  else if (selected && playing)
+                    Positioned(
+                      right: 3,
+                      bottom: 3,
+                      child: Container(
+                        width: 18,
+                        height: 18,
+                        decoration:
+                            BoxDecoration(shape: BoxShape.circle, color: t.ac),
+                        child: Icon(Icons.equalizer_rounded,
+                            size: 12, color: t.bg),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
 
     final frame = Container(
       decoration: BoxDecoration(
         color: selected ? t.wash : null,
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(36),
         border: Border.all(color: selected ? t.ac : t.soft, width: 1),
       ),
-      padding: const EdgeInsets.fromLTRB(10, 14, 12, 10),
+      padding: const EdgeInsets.fromLTRB(10, 8, 18, 8),
       child: Row(
         children: [
-          SizedBox(
-            width: _cover + _disc * 0.5 - 2,
-            height: _cover,
-            child: Stack(
-              clipBehavior: Clip.none,
-              children: [
-                Positioned(
-                  left: _cover - _disc * 0.5,
-                  top: (_cover - _disc) / 2,
-                  child: NoorDisc(url: thumbnailUrl, size: _disc),
-                ),
-                Positioned(
-                  left: 0,
-                  top: 0,
-                  child: Container(
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: t.ac, width: 1),
-                    ),
-                    child: NoorArt(url: thumbnailUrl, size: _cover, radius: 15),
-                  ),
-                ),
-              ],
-            ),
-          ),
+          art,
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Text(title,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                        fontSize: 15,
+                        fontSize: 14,
                         height: 1.15,
                         fontWeight: FontWeight.w700,
                         color: t.ac)),
@@ -143,8 +151,6 @@ class NoorAlbumTile extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: noorSubtitleStyle(context)),
-                const SizedBox(height: 9),
-                const SizedBox(height: _pillHeight),
               ],
             ),
           ),
@@ -166,7 +172,6 @@ class NoorAlbumTile extends StatelessWidget {
               child: frame,
             ),
           ),
-          Positioned(left: _pillLeft, bottom: 10, child: playButton),
           if (isOfficial)
             Positioned(
               top: _top - 9,
@@ -175,8 +180,8 @@ class NoorAlbumTile extends StatelessWidget {
               child: Center(child: _OfficialBadge(t: t)),
             ),
           Positioned(
-            top: _top - 14,
-            right: 18,
+            top: _top - 13,
+            right: 22,
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
               onTap: onToggleLike,
@@ -184,8 +189,8 @@ class NoorAlbumTile extends StatelessWidget {
                 button: true,
                 label: liked ? 'Unlike' : 'Like',
                 child: Container(
-                  width: 28,
-                  height: 28,
+                  width: 26,
+                  height: 26,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     color: t.bg,
@@ -195,7 +200,7 @@ class NoorAlbumTile extends StatelessWidget {
                       liked
                           ? Icons.favorite_rounded
                           : Icons.favorite_border_rounded,
-                      size: 15,
+                      size: 14,
                       color: liked ? t.ac : t.mute),
                 ),
               ),

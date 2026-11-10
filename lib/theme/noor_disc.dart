@@ -11,11 +11,20 @@ class NoorDisc extends StatelessWidget {
     required this.url,
     required this.size,
     this.shadow = true,
+    this.dim = 0.0,
+    this.zoom = 1.35,
   });
 
   final String url;
   final double size;
   final bool shadow;
+
+  /// 0..1: how much to darken the artwork so the record looks like vinyl
+  /// and not a copy of the cover.
+  final double dim;
+
+  /// How far the artwork is scaled up (a tighter crop of the picture).
+  final double zoom;
 
   @override
   Widget build(BuildContext context) {
@@ -35,13 +44,14 @@ class NoorDisc extends StatelessWidget {
           children: [
             if (url.isNotEmpty)
               Transform.scale(
-                scale: 1.35,
+                scale: zoom,
                 child: CachedNetworkImage(
                   imageUrl: url,
                   fit: BoxFit.cover,
                   errorWidget: (_, __, ___) => const SizedBox(),
                 ),
               ),
+            if (dim > 0) ColoredBox(color: Colors.black.withOpacity(dim)),
             // Grooves + a soft dark rim, drawn over the artwork.
             CustomPaint(painter: _GroovePainter(t.bg)),
             Center(

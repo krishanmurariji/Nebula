@@ -9,6 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'app.dart';
+import 'theme/noor_palette.dart';
 import 'services/app_log.dart';
 import 'services/audio_handler.dart';
 
@@ -112,11 +113,9 @@ class _BootstrapState extends State<_Bootstrap> {
             action: FilledButton(onPressed: _retry, child: const Text('Try again')),
           );
         }
-        return const _MessageApp(
-          icon: Icons.graphic_eq_rounded,
-          title: 'Noor',
-          message: 'Starting…',
-        );
+        // Nothing to show while the audio service starts: a plain surface in
+        // the same colour as the launch screen, so Home simply appears.
+        return const ColoredBox(color: NoorColors.ivory);
       },
     );
   }

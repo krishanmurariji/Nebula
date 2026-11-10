@@ -257,8 +257,8 @@ class NoorAppIcon extends StatelessWidget {
   }
 }
 
-/// Shown when there is nothing to list: a big faded app icon, the small Noor
-/// lettering in the middle and a message under it.
+/// Shown when there is nothing to list: a big faded app icon with a message
+/// over its lower part.
 class NoorEmptyState extends StatelessWidget {
   const NoorEmptyState({super.key, required this.message, this.hint});
   final String message;
@@ -280,8 +280,6 @@ class NoorEmptyState extends StatelessWidget {
           Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const NoorWordmark(height: 30),
-              const SizedBox(height: 22),
               Text(message,
                   textAlign: TextAlign.center,
                   style: noorSerif(t.ac, size: 24, height: 1.1)),
