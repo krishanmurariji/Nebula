@@ -4,10 +4,11 @@ import 'noor_palette.dart';
 import 'noor_song_tile.dart';
 
 /// One song as an "album": a record on the left, half tucked under the cover
-/// on its right, then the title and channel. Tap plays; double-tap (or the
-/// heart) likes. A heart sits on the top-right edge of the border and an
-/// official upload gets a badge centred on the top border.
-class NoorAlbumTile extends StatelessWidget {
+/// on its right, then the title and channel. Tap plays; double-tap likes or
+/// unlikes and shows a heart animation (a white heart turns red when liked,
+/// a red heart turns white when unliked). Pass [isOfficial] to show the
+/// OFFICIAL badge centred on the top border.
+class NoorAlbumTile extends StatefulWidget {
   const NoorAlbumTile({
     super.key,
     required this.thumbnailUrl,
@@ -37,18 +38,79 @@ class NoorAlbumTile extends StatelessWidget {
   /// The current song is actually playing audio right now.
   final bool playing;
 
+  @override
+  State<NoorAlbumTile> createState() => _NoorAlbumTileState();
+
   static const double _cover = 62;
   static const double _disc = 58;
   static const double _overlap = 28; // how much of the record hides under the cover
   static const double _top = 10; // where the border starts
+
+}
+
+const Color _likeRed = Color(0xFFE5393F);
+
+class _NoorAlbumTileState extends State<NoorAlbumTile>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _heart = AnimationController(
+      vsync: this, duration: const Duration(milliseconds: 1000));
+  bool _becomingLiked = true;
+
+  @override
+  void dispose() {
+    _heart.dispose();
+    super.dispose();
+  }
+
+  void _doubleTap() {
+    _becomingLiked = !widget.liked;
+    _heart.forward(from: 0);
+    widget.onToggleLike?.call();
+  }
+
+  /// The big heart that pops over the tile after a double tap.
+  Widget _heartBurst() {
+    return Positioned.fill(
+      child: IgnorePointer(
+        child: AnimatedBuilder(
+          animation: _heart,
+          builder: (context, _) {
+            final v = _heart.value;
+            if (v == 0 || v == 1) return const SizedBox.shrink();
+            final start = _becomingLiked ? Colors.white : _likeRed;
+            final end = _becomingLiked ? _likeRed : Colors.white;
+            final color = Color.lerp(
+                start, end, Curves.easeInOut.transform(((v - 0.28) / 0.3).clamp(0.0, 1.0)))!;
+            final scale = 0.35 +
+                0.85 * Curves.easeOutBack.transform((v / 0.3).clamp(0.0, 1.0));
+            final opacity = v < 0.72 ? 1.0 : (1 - (v - 0.72) / 0.28).clamp(0.0, 1.0);
+            return Center(
+              child: Opacity(
+                opacity: opacity,
+                child: Transform.scale(
+                  scale: scale,
+                  child: Icon(Icons.favorite_rounded,
+                      size: 52,
+                      color: color,
+                      shadows: const [
+                        Shadow(color: Color(0x55000000), blurRadius: 10),
+                      ]),
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     final t = NoorTheme.of(context);
 
     final art = SizedBox(
-      width: _disc + _cover - _overlap,
-      height: _cover,
+      width: NoorAlbumTile._disc + NoorAlbumTile._cover - NoorAlbumTile._overlap,
+      height: NoorAlbumTile._cover,
       child: Stack(
         clipBehavior: Clip.none,
         children: [
@@ -56,12 +118,12 @@ class NoorAlbumTile extends StatelessWidget {
           // reads as vinyl and not as a second copy of the picture.
           Positioned(
             left: 0,
-            top: (_cover - _disc) / 2,
-            child: NoorDisc(url: thumbnailUrl, size: _disc, dim: 0.5, zoom: 2.2),
+            top: (NoorAlbumTile._cover - NoorAlbumTile._disc) / 2,
+            child: NoorDisc(url: widget.thumbnailUrl, size: NoorAlbumTile._disc, dim: 0.5, zoom: 2.2),
           ),
           // The cover sits on top and casts a soft shadow onto the record.
           Positioned(
-            left: _disc - _overlap,
+            left: NoorAlbumTile._disc - NoorAlbumTile._overlap,
             top: 0,
             child: Container(
               decoration: BoxDecoration(
@@ -82,12 +144,12 @@ class NoorAlbumTile extends StatelessWidget {
                       borderRadius: BorderRadius.circular(14),
                       border: Border.all(color: t.ac, width: 1),
                     ),
-                    child: NoorArt(url: thumbnailUrl, size: _cover, radius: 13),
+                    child: NoorArt(url: widget.thumbnailUrl, size: NoorAlbumTile._cover, radius: 13),
                   ),
-                  if (loading)
+                  if (widget.loading)
                     Container(
-                      width: _cover,
-                      height: _cover,
+                      width: NoorAlbumTile._cover,
+                      height: NoorAlbumTile._cover,
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(14),
                         color: t.ac.withOpacity(0.45),
@@ -101,7 +163,7 @@ class NoorAlbumTile extends StatelessWidget {
                         ),
                       ),
                     )
-                  else if (selected && playing)
+                  else if (widget.selected && widget.playing)
                     Positioned(
                       right: 3,
                       bottom: 3,
@@ -124,9 +186,9 @@ class NoorAlbumTile extends StatelessWidget {
 
     final frame = Container(
       decoration: BoxDecoration(
-        color: selected ? t.wash : null,
+        color: widget.selected ? t.wash : null,
         borderRadius: BorderRadius.circular(36),
-        border: Border.all(color: selected ? t.ac : t.soft, width: 1),
+        border: Border.all(color: widget.selected ? t.ac : t.soft, width: 1),
       ),
       padding: const EdgeInsets.fromLTRB(10, 8, 18, 8),
       child: Row(
@@ -138,7 +200,7 @@ class NoorAlbumTile extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text(title,
+                Text(widget.title,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
@@ -147,7 +209,7 @@ class NoorAlbumTile extends StatelessWidget {
                         fontWeight: FontWeight.w700,
                         color: t.ac)),
                 const SizedBox(height: 3),
-                Text(channel,
+                Text(widget.channel,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: noorSubtitleStyle(context)),
@@ -164,48 +226,22 @@ class NoorAlbumTile extends StatelessWidget {
         clipBehavior: Clip.none,
         children: [
           Padding(
-            padding: const EdgeInsets.only(top: _top),
+            padding: EdgeInsets.only(top: widget.isOfficial ? NoorAlbumTile._top : 2),
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
-              onTap: onPlay,
-              onDoubleTap: onToggleLike,
+              onTap: widget.onPlay,
+              onDoubleTap: widget.onToggleLike == null ? null : _doubleTap,
               child: frame,
             ),
           ),
-          if (isOfficial)
+          if (widget.isOfficial)
             Positioned(
-              top: _top - 9,
+              top: NoorAlbumTile._top - 9,
               left: 0,
               right: 0,
               child: Center(child: _OfficialBadge(t: t)),
             ),
-          Positioned(
-            top: _top - 13,
-            right: 22,
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: onToggleLike,
-              child: Semantics(
-                button: true,
-                label: liked ? 'Unlike' : 'Like',
-                child: Container(
-                  width: 26,
-                  height: 26,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: t.bg,
-                    border: Border.all(color: liked ? t.ac : t.soft, width: 1),
-                  ),
-                  child: Icon(
-                      liked
-                          ? Icons.favorite_rounded
-                          : Icons.favorite_border_rounded,
-                      size: 14,
-                      color: liked ? t.ac : t.mute),
-                ),
-              ),
-            ),
-          ),
+          _heartBurst(),
         ],
       ),
     );

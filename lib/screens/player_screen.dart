@@ -1,10 +1,11 @@
 import 'dart:async';
 import 'dart:math';
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:flutter_volume_controller/flutter_volume_controller.dart'; 
+import 'package:flutter_volume_controller/flutter_volume_controller.dart';
 import '../models/song.dart';
 import '../providers/player_provider.dart';
 import '../providers/library_provider.dart';
@@ -34,9 +35,9 @@ class _SlideUpRoute extends PageRouteBuilder {
                 curve: Curves.easeOutCubic,
                 reverseCurve: Curves.easeInCubic);
             return SlideTransition(
-              position: Tween<Offset>(
-                      begin: const Offset(0, 1), end: Offset.zero)
-                  .animate(curved),
+              position:
+                  Tween<Offset>(begin: const Offset(0, 1), end: Offset.zero)
+                      .animate(curved),
               child: child,
             );
           },
@@ -88,14 +89,14 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
   @override
   void initState() {
     super.initState();
-    _rotationCtrl = AnimationController(
-        vsync: this, duration: const Duration(seconds: 15));
+    _rotationCtrl =
+        AnimationController(vsync: this, duration: const Duration(seconds: 15));
     _heartCtrl = AnimationController(
         vsync: this, duration: const Duration(milliseconds: 300));
-    _heartScale = Tween<double>(begin: 0.5, end: 1.3).animate(
-        CurvedAnimation(parent: _heartCtrl, curve: Curves.elasticOut));
-    _heartOpacity = Tween<double>(begin: 0.0, end: 1.0).animate(
-        CurvedAnimation(parent: _heartCtrl, curve: Curves.easeOut));
+    _heartScale = Tween<double>(begin: 0.5, end: 1.3)
+        .animate(CurvedAnimation(parent: _heartCtrl, curve: Curves.elasticOut));
+    _heartOpacity = Tween<double>(begin: 0.0, end: 1.0)
+        .animate(CurvedAnimation(parent: _heartCtrl, curve: Curves.easeOut));
     _playPauseCtrl = AnimationController(
         vsync: this, duration: const Duration(milliseconds: 200));
     _playPauseScale = Tween<double>(begin: 0.5, end: 1.3).animate(
@@ -129,7 +130,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
     _scrimOpacity = Tween<double>(begin: 0.0, end: 0.55).animate(
         CurvedAnimation(parent: _listPanelCtrl, curve: Curves.easeOut));
 
-    FlutterVolumeController.updateShowSystemUI(false); 
+    FlutterVolumeController.updateShowSystemUI(false);
 
     FlutterVolumeController.addListener((volume) {
       if (mounted) {
@@ -178,8 +179,8 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
     if (!mounted) return;
     setState(() => _panelState = _PanelState.naming);
     _namePanelCtrl.forward(from: 0);
-    Future.delayed(const Duration(milliseconds: 200),
-        () => _nameFocus.requestFocus());
+    Future.delayed(
+        const Duration(milliseconds: 200), () => _nameFocus.requestFocus());
   }
 
   Future<void> _cancelNaming() async {
@@ -227,8 +228,8 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
     ref.read(playerProvider.notifier).togglePlay();
     _playPauseCtrl.forward(from: 0.0).then((_) {
       if (mounted) {
-        Future.delayed(const Duration(milliseconds: 400),
-            () => _playPauseCtrl.reverse());
+        Future.delayed(
+            const Duration(milliseconds: 400), () => _playPauseCtrl.reverse());
       }
     });
   }
@@ -238,8 +239,8 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
     ref.read(likedProvider.notifier).toggle(song);
     _heartCtrl.forward(from: 0.0).then((_) {
       if (mounted) {
-        Future.delayed(const Duration(milliseconds: 600),
-            () => _heartCtrl.reverse());
+        Future.delayed(
+            const Duration(milliseconds: 600), () => _heartCtrl.reverse());
       }
     });
   }
@@ -296,15 +297,15 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
         : ref.watch(songDetailsProvider(song.videoId));
 
     final playing = ps.status == NebulaPlayerStatus.playing;
-    
+
     // UPDATED LOADING LOGIC: include pending state
     final loading = ps.status == NebulaPlayerStatus.loading ||
         (ps.pendingSong != null &&
             ps.status != NebulaPlayerStatus.playing &&
             ps.status != NebulaPlayerStatus.paused);
-            
-    final progress =
-        ref.watch(playbackProgressProvider).valueOrNull ?? PlaybackProgress.zero;
+
+    final progress = ref.watch(playbackProgressProvider).valueOrNull ??
+        PlaybackProgress.zero;
     final prog = progress.fraction;
 
     final isDark = ref.watch(themeProvider) == ThemeMode.dark;
@@ -325,7 +326,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
     }
 
     final bool isNeedleOnRecord = playing && !loading;
-    final double diskSize = h * 0.315; 
+    final double diskSize = h * 0.315;
     final double volumeRingSize = diskSize + 56.0;
     final double needleWidth = 110.0;
     final double needleHeight = h * 0.26 + 28;
@@ -363,60 +364,63 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
                       child: LayoutBuilder(builder: (context, box) {
                         // The ring needs 112 px more than the record; shrink the
                         // record on short screens instead of letting it overflow.
-                        final disc = max(120.0, min(diskSize, box.maxHeight - 112));
+                        final disc =
+                            max(120.0, min(diskSize, box.maxHeight - 112));
                         final ring = disc + 112;
                         return Center(
-                        child: Stack(
-                          alignment: Alignment.center,
-                          children: [
-                            _VolumeRing(
-                              size: ring,
-                              volume: _volume,
-                              isDark: isDark,
-                              onChanged: _setVolume,
-                            ),
-
-                            GestureDetector(
-                              onTap: song != null && !loading
-                                  ? () => _handleTap(song, playing)
-                                  : null,
-                              onDoubleTap: song != null && !loading
-                                  ? () => _handleDoubleTap(song, liked)
-                                  : null,
-                              child: Stack(
-                                alignment: Alignment.center,
-                                children: [
-                                  RotationTransition(
-                                    turns: _rotationCtrl,
-                                    child: _buildVinylRecord(
-                                        disc, bg, song, isDark),
-                                  ),
-                                  if (loading)
-                                    Container(
-                                      width: disc,
-                                      height: disc,
-                                      decoration: BoxDecoration(
-                                        shape: BoxShape.circle,
-                                        color: NoorTheme.byMode(isDark).ac.withOpacity(0.45),
-                                      ),
-                                      child: Center(
-                                        child: SizedBox(
-                                          width: 44,
-                                          height: 44,
-                                          child: CircularProgressIndicator(
-                                            color: NoorTheme.byMode(isDark).bg,
-                                            strokeWidth: 3,
+                          child: Stack(
+                            alignment: Alignment.center,
+                            children: [
+                              _VolumeRing(
+                                size: ring,
+                                volume: _volume,
+                                isDark: isDark,
+                                onChanged: _setVolume,
+                              ),
+                              GestureDetector(
+                                onTap: song != null && !loading
+                                    ? () => _handleTap(song, playing)
+                                    : null,
+                                onDoubleTap: song != null && !loading
+                                    ? () => _handleDoubleTap(song, liked)
+                                    : null,
+                                child: Stack(
+                                  alignment: Alignment.center,
+                                  children: [
+                                    RotationTransition(
+                                      turns: _rotationCtrl,
+                                      child: _buildVinylRecord(
+                                          disc, bg, song, isDark),
+                                    ),
+                                    if (loading)
+                                      Container(
+                                        width: disc,
+                                        height: disc,
+                                        decoration: BoxDecoration(
+                                          shape: BoxShape.circle,
+                                          color: NoorTheme.byMode(isDark)
+                                              .ac
+                                              .withOpacity(0.45),
+                                        ),
+                                        child: Center(
+                                          child: SizedBox(
+                                            width: 44,
+                                            height: 44,
+                                            child: CircularProgressIndicator(
+                                              color:
+                                                  NoorTheme.byMode(isDark).bg,
+                                              strokeWidth: 3,
+                                            ),
                                           ),
                                         ),
                                       ),
-                                    ),
-                                  _buildOverlayAnimations(),
-                                ],
+                                    _buildOverlayAnimations(),
+                                  ],
+                                ),
                               ),
-                            ),
-                          ],
-                        ),
-                      );
+                            ],
+                          ),
+                        );
                       }),
                     ),
                   ),
@@ -434,18 +438,16 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
                           onSeek: (pct) {
                             final total = progress.duration.inSeconds;
                             if (total > 0) {
-                              ref.read(playerProvider.notifier).seek(Duration(
-                                  seconds: (pct * total).round()));
+                              ref.read(playerProvider.notifier).seek(
+                                  Duration(seconds: (pct * total).round()));
                             }
                           },
                         ),
                         const SizedBox(height: 10),
                         Padding(
-                          padding:
-                              const EdgeInsets.symmetric(horizontal: 28),
+                          padding: const EdgeInsets.symmetric(horizontal: 28),
                           child: Row(
-                            mainAxisAlignment:
-                                MainAxisAlignment.spaceBetween,
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               Text(_fmt(progress.position),
                                   style: TextStyle(
@@ -461,8 +463,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
                           ),
                         ),
                         const SizedBox(height: 20),
-                        _buildTransportRow(
-                            textCol, bg, isDark, song, mutedCol),
+                        _buildTransportRow(textCol, bg, isDark, song, mutedCol),
                         const SizedBox(height: 16),
                         _buildUpNextDragHandle(mutedCol),
                       ],
@@ -492,15 +493,18 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
             Positioned(
               top: topPad - 14,
               right: 20,
-              child: AnimatedRotation(
-                turns: isNeedleOnRecord ? 0.0 : 0.18,
-                duration: const Duration(milliseconds: 500),
-                curve: Curves.easeOutBack,
-                alignment: FractionalOffset(
-                    (needleWidth - 28.0) / needleWidth,
-                    _kPivotY / needleHeight),
-                child:
-                    _buildNeedleRight(isDark, needleWidth, needleHeight),
+              child: IgnorePointer(
+                child: AnimatedRotation(
+                  turns: isNeedleOnRecord
+                      ? 0.0
+                      : -0.065, // parked beside the record
+                  duration: const Duration(milliseconds: 500),
+                  curve: Curves.easeOutBack,
+                  alignment: FractionalOffset(
+                      (needleWidth - 28.0) / needleWidth,
+                      _kPivotY / needleHeight),
+                  child: _buildNeedleRight(isDark, needleWidth, needleHeight),
+                ),
               ),
             ),
 
@@ -543,7 +547,9 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
                       onTapPlaylist: (pl) async {
                         if (song != null) {
                           HapticFeedback.selectionClick();
-                          await ref.read(playlistProvider.notifier).addSong(pl.id, song);
+                          await ref
+                              .read(playlistProvider.notifier)
+                              .addSong(pl.id, song);
                           _closeList();
                           if (mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -604,8 +610,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
                           color: Colors.white,
                           size: 80,
                           shadows: const [
-                            Shadow(
-                                color: Colors.black45, blurRadius: 20)
+                            Shadow(color: Colors.black45, blurRadius: 20)
                           ])))),
           AnimatedBuilder(
               animation: _playPauseCtrl,
@@ -620,8 +625,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
                           color: Colors.white,
                           size: 80,
                           shadows: const [
-                            Shadow(
-                                color: Colors.black45, blurRadius: 20)
+                            Shadow(color: Colors.black45, blurRadius: 20)
                           ])))),
         ],
       );
@@ -630,9 +634,8 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
       Color textCol, Color mutedCol) {
     final d = details.valueOrNull;
     final meta = d?.metaLine ?? '';
-    final channel = (d?.channel.isNotEmpty ?? false)
-        ? d!.channel
-        : (song?.artist ?? '');
+    final channel =
+        (d?.channel.isNotEmpty ?? false) ? d!.channel : (song?.artist ?? '');
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24),
       child: Column(children: [
@@ -676,18 +679,30 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
     );
   }
 
+  /// The song details drop down from the top (like the search filters).
   void _openInfo(Song song) {
     HapticFeedback.selectionClick();
-    showModalBottomSheet<void>(
+    showGeneralDialog<void>(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => _SongInfoSheet(song: song),
+      barrierDismissible: true,
+      barrierLabel: 'Close details',
+      barrierColor: NoorTheme.of(context).ac.withOpacity(0.35),
+      transitionDuration: const Duration(milliseconds: 340),
+      pageBuilder: (_, __, ___) => Align(
+        alignment: Alignment.topCenter,
+        child: Material(
+            color: Colors.transparent, child: _SongInfoSheet(song: song)),
+      ),
+      transitionBuilder: (_, anim, __, child) => SlideTransition(
+        position: Tween<Offset>(begin: const Offset(0, -1), end: Offset.zero)
+            .animate(CurvedAnimation(parent: anim, curve: Curves.easeOutCubic)),
+        child: child,
+      ),
     );
   }
 
-  Widget _buildTransportRow(Color textCol, Color bg, bool isDark,
-      Song? song, Color mutedCol) {
+  Widget _buildTransportRow(
+      Color textCol, Color bg, bool isDark, Song? song, Color mutedCol) {
     final accentCol = NoorTheme.byMode(isDark).ac;
     final IconData modeIcon;
     final String modeLabel;
@@ -778,8 +793,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
                 borderRadius: BorderRadius.circular(2)))
       ]));
 
-  Widget _buildVinylRecord(
-      double size, Color bg, Song? song, bool isDark) {
+  Widget _buildVinylRecord(double size, Color bg, Song? song, bool isDark) {
     final t = NoorTheme.byMode(isDark);
     return Container(
       padding: const EdgeInsets.all(6),
@@ -931,16 +945,21 @@ class _AddToPlaylistPanel extends ConsumerWidget {
                 itemCount: playlists.length,
                 itemBuilder: (_, i) {
                   final pl = playlists[i];
-                  final hasIt = song != null && ref.read(playlistProvider.notifier).contains(pl.id, song!.videoId);
+                  final hasIt = song != null &&
+                      ref
+                          .read(playlistProvider.notifier)
+                          .contains(pl.id, song!.videoId);
                   return GestureDetector(
                     onTap: hasIt ? null : () => onTapPlaylist(pl),
                     child: Container(
                       margin: const EdgeInsets.symmetric(vertical: 6),
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 12),
                       decoration: BoxDecoration(
                         color: bg,
                         borderRadius: BorderRadius.circular(18),
-                        border: Border.all(color: NoorTheme.byMode(isDark).soft, width: 1),
+                        border: Border.all(
+                            color: NoorTheme.byMode(isDark).soft, width: 1),
                       ),
                       child: Row(
                         children: [
@@ -950,9 +969,12 @@ class _AddToPlaylistPanel extends ConsumerWidget {
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
                               color: accentCol.withOpacity(0.12),
-                              border: Border.all(color: NoorTheme.byMode(isDark).soft, width: 1),
+                              border: Border.all(
+                                  color: NoorTheme.byMode(isDark).soft,
+                                  width: 1),
                             ),
-                            child: Icon(Icons.queue_music_rounded, color: accentCol, size: 22),
+                            child: Icon(Icons.queue_music_rounded,
+                                color: accentCol, size: 22),
                           ),
                           const SizedBox(width: 14),
                           Expanded(
@@ -967,12 +989,14 @@ class _AddToPlaylistPanel extends ConsumerWidget {
                                         fontWeight: FontWeight.w700,
                                         fontSize: 15)),
                                 Text('${pl.songs.length} songs',
-                                    style: TextStyle(color: mutedCol, fontSize: 12)),
+                                    style: TextStyle(
+                                        color: mutedCol, fontSize: 12)),
                               ],
                             ),
                           ),
                           if (hasIt)
-                            Icon(Icons.check_circle_rounded, color: accentCol, size: 28),
+                            Icon(Icons.check_circle_rounded,
+                                color: accentCol, size: 28),
                         ],
                       ),
                     ),
@@ -1018,7 +1042,8 @@ class _NamingPanel extends StatelessWidget {
     return Container(
       width: w,
       height: h,
-      padding: EdgeInsets.only(top: topPad + 16, bottom: 32, left: 20, right: 20),
+      padding:
+          EdgeInsets.only(top: topPad + 16, bottom: 32, left: 20, right: 20),
       decoration: BoxDecoration(
         color: cardBg,
         borderRadius: const BorderRadius.only(
@@ -1077,21 +1102,26 @@ class _NamingPanel extends StatelessWidget {
             decoration: BoxDecoration(
               color: NoorTheme.byMode(isDark).bg,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: NoorTheme.byMode(isDark).soft, width: 1),
+              border:
+                  Border.all(color: NoorTheme.byMode(isDark).soft, width: 1),
             ),
             child: TextField(
               controller: controller,
               focusNode: focusNode,
-              style: TextStyle(color: textCol, fontWeight: FontWeight.w700, fontSize: 16),
+              style: TextStyle(
+                  color: textCol, fontWeight: FontWeight.w700, fontSize: 16),
               cursorColor: accentCol,
               textInputAction: TextInputAction.done,
               onSubmitted: (_) => onConfirm(),
               decoration: InputDecoration(
                 hintText: 'Playlist name…',
-                hintStyle: TextStyle(color: mutedCol.withOpacity(0.5), fontSize: 15),
+                hintStyle:
+                    TextStyle(color: mutedCol.withOpacity(0.5), fontSize: 15),
                 border: InputBorder.none,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
-                suffixIcon: Icon(Icons.edit_rounded, color: accentCol.withOpacity(0.5), size: 18),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+                suffixIcon: Icon(Icons.edit_rounded,
+                    color: accentCol.withOpacity(0.5), size: 18),
               ),
             ),
           ),
@@ -1103,7 +1133,8 @@ class _NamingPanel extends StatelessWidget {
               decoration: BoxDecoration(
                 color: accentCol,
                 borderRadius: BorderRadius.circular(18),
-                border: Border.all(color: NoorTheme.byMode(isDark).soft, width: 1),
+                border:
+                    Border.all(color: NoorTheme.byMode(isDark).soft, width: 1),
               ),
               child: const Center(
                 child: Text(
@@ -1181,8 +1212,8 @@ class _VolumeRingState extends State<_VolumeRing> {
   bool _dragging = false;
 
   void _touch(Offset local) {
-    widget.onChanged(volumeFromRingPoint(
-        local, Offset(widget.size / 2, widget.size / 2)));
+    widget.onChanged(
+        volumeFromRingPoint(local, Offset(widget.size / 2, widget.size / 2)));
   }
 
   @override
@@ -1220,8 +1251,8 @@ class _VolumeRingState extends State<_VolumeRing> {
                   duration: const Duration(milliseconds: 150),
                   opacity: _dragging ? 1 : 0,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 3),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
                     decoration: BoxDecoration(
                       color: t.ac,
                       borderRadius: BorderRadius.circular(12),
@@ -1248,8 +1279,8 @@ class _VolumeArcPainter extends CustomPainter {
 
   _VolumeArcPainter({required this.volume, required this.isDark});
 
-  void _drawMaterialIcon(Canvas canvas, Offset offset, IconData icon,
-      Color color, double size) {
+  void _drawMaterialIcon(
+      Canvas canvas, Offset offset, IconData icon, Color color, double size) {
     final textPainter = TextPainter(
       textDirection: TextDirection.ltr,
       text: TextSpan(
@@ -1356,8 +1387,8 @@ class _Waveform extends StatefulWidget {
 
 class _WaveformState extends State<_Waveform>
     with SingleTickerProviderStateMixin {
-  late final AnimationController _anim =
-      AnimationController(vsync: this, duration: const Duration(milliseconds: 1800));
+  late final AnimationController _anim = AnimationController(
+      vsync: this, duration: const Duration(milliseconds: 1800));
 
   @override
   void initState() {
@@ -1393,7 +1424,8 @@ class _WaveformState extends State<_Waveform>
         builder: (context, box) => GestureDetector(
           behavior: HitTestBehavior.opaque,
           onTapDown: (d) => _seek(d.localPosition.dx, box.maxWidth),
-          onHorizontalDragUpdate: (d) => _seek(d.localPosition.dx, box.maxWidth),
+          onHorizontalDragUpdate: (d) =>
+              _seek(d.localPosition.dx, box.maxWidth),
           child: SizedBox(
             height: 64,
             width: double.infinity,
@@ -1434,7 +1466,8 @@ class _WavePainter extends CustomPainter {
   static const int barCount = 38;
   // Fixed, uneven heights (0.25 .. 1.0) so the shape is the same every time.
   static final List<double> _base = List<double>.generate(barCount, (i) {
-    final env = (1.0 - ((i / (barCount - 1)) - 0.5).abs() * 1.3).clamp(0.3, 1.0);
+    final env =
+        (1.0 - ((i / (barCount - 1)) - 0.5).abs() * 1.3).clamp(0.3, 1.0);
     return (0.25 + 0.75 * Random(i * 7 + 3).nextDouble()) * env;
   });
 
@@ -1479,79 +1512,195 @@ class _TonearmPainter extends CustomPainter {
   final Color ac;
   final Color bg;
 
+  // A brushed-metal look made only from the two theme colours.
+  Color get _dark => Color.lerp(ac, Colors.black, 0.55)!;
+  Color get _mid => ac;
+  Color get _light => Color.lerp(ac, bg, 0.72)!;
+
+  /// A straight bar from [a] to [b] shaded across its width like a cylinder.
+  void _bar(Canvas canvas, Offset a, Offset b, double width) {
+    final d = (b - a) / (b - a).distance;
+    final n = Offset(-d.dy, d.dx);
+    final h = width / 2;
+    final path = Path()
+      ..moveTo(a.dx + n.dx * h, a.dy + n.dy * h)
+      ..lineTo(b.dx + n.dx * h, b.dy + n.dy * h)
+      ..lineTo(b.dx - n.dx * h, b.dy - n.dy * h)
+      ..lineTo(a.dx - n.dx * h, a.dy - n.dy * h)
+      ..close();
+    final mid = (a + b) / 2;
+    canvas.drawPath(
+        path,
+        Paint()
+          ..shader = ui.Gradient.linear(
+            mid + n * h,
+            mid - n * h,
+            [_dark, _mid, _light, _mid, _dark],
+            const [0.0, 0.25, 0.42, 0.7, 1.0],
+          ));
+  }
+
   @override
   void paint(Canvas canvas, Size size) {
     final pivot = Offset(size.width - 28, _kPivotY);
-    final tip = Offset(24, size.height - 14);
-    // The tube runs straight from the pivot to the "elbow"; the headshell
-    // continues at a slight angle to the stylus tip.
-    final elbow = Offset(tip.dx + 30, tip.dy - 46);
-    final dark = Color.lerp(ac, Colors.black, 0.45)!;
-    final light = Color.lerp(ac, bg, 0.6)!;
+    final tip = Offset(26, size.height - 16);
+    final elbow = Offset(tip.dx + 30, tip.dy - 58);
+    final d = (elbow - pivot) / (elbow - pivot).distance;
+    final n = Offset(-d.dy, d.dx);
+    final hd = (tip - elbow) / (tip - elbow).distance;
+    final hn = Offset(-hd.dy, hd.dx);
 
-    Paint stroke(Color c, double w) => Paint()
-      ..color = c
-      ..strokeWidth = w
+    // 1) Shadow of the whole arm falling on the record.
+    final shadow = Paint()
+      ..color = Colors.black.withOpacity(0.22)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5)
       ..strokeCap = StrokeCap.round
       ..style = PaintingStyle.stroke;
-
-    // Counterweight behind the pivot (on the opposite side of the arm).
-    final dir = (elbow - pivot) / (elbow - pivot).distance;
-    final back = pivot - dir * 30;
-    canvas.drawLine(pivot, back, stroke(dark, 9));
-    final cw = RRect.fromRectAndRadius(
-        Rect.fromCenter(center: back - dir * 8, width: 18, height: 22),
-        const Radius.circular(5));
     canvas.save();
-    canvas.translate(cw.center.dx, cw.center.dy);
-    canvas.rotate(atan2(dir.dy, dir.dx) + pi / 2);
-    canvas.translate(-cw.center.dx, -cw.center.dy);
-    canvas.drawRRect(cw, Paint()..color = dark);
-    for (final dy in [-5.0, 0.0, 5.0]) {
-      canvas.drawLine(Offset(cw.left + 2, cw.center.dy + dy),
-          Offset(cw.right - 2, cw.center.dy + dy), stroke(light.withOpacity(0.5), 1));
+    canvas.translate(7, 11);
+    canvas.drawLine(pivot, elbow, shadow..strokeWidth = 7);
+    canvas.drawLine(elbow, tip, shadow..strokeWidth = 15);
+    canvas.restore();
+
+    // 2) Counterweight behind the pivot: a rod and a ridged cylinder.
+    final rodEnd = pivot - d * 26;
+    _bar(canvas, pivot, rodEnd, 7);
+    final cwA = rodEnd;
+    final cwB = rodEnd - d * 30;
+    _bar(canvas, cwA, cwB, 21);
+    for (var i = 1; i <= 4; i++) {
+      final c = cwA - d * (i * 6.0);
+      canvas.drawLine(
+          c + n * 10,
+          c - n * 10,
+          Paint()
+            ..color = Colors.black.withOpacity(0.28)
+            ..strokeWidth = 1);
     }
-    canvas.restore();
+    // end caps
+    canvas.drawLine(
+        cwB + n * 10.5,
+        cwB - n * 10.5,
+        Paint()
+          ..color = _dark
+          ..strokeWidth = 2
+          ..strokeCap = StrokeCap.round);
 
-    // Arm tube: a body, a lit edge and a thin shadow line.
-    canvas.drawLine(pivot, elbow, stroke(ac, 6));
-    canvas.drawLine(pivot + const Offset(-1.6, 0), elbow + const Offset(-1.6, 0),
-        stroke(light.withOpacity(0.55), 1.3));
-    canvas.drawLine(pivot + const Offset(2, 0), elbow + const Offset(2, 0),
-        stroke(dark.withOpacity(0.5), 1));
+    // 3) The tube from the pivot to the bend.
+    _bar(canvas, pivot, elbow, 8);
+    // bright line along the lit edge
+    canvas.drawLine(
+        pivot - n * 2.2,
+        elbow - n * 2.2,
+        Paint()
+          ..color = Colors.white.withOpacity(0.35)
+          ..strokeWidth = 1.2
+          ..strokeCap = StrokeCap.round);
 
-    // Headshell: slightly angled rounded plate with a finger lift.
-    final hs = (tip - elbow);
-    final hl = hs.distance;
-    final hd = hs / hl;
-    final ang = atan2(hd.dy, hd.dx);
-    canvas.save();
-    canvas.translate(elbow.dx, elbow.dy);
-    canvas.rotate(ang - pi / 2);
-    final plate = RRect.fromRectAndRadius(
-        Rect.fromLTWH(-8, -4, 16, hl - 6), const Radius.circular(4));
-    canvas.drawRRect(plate, Paint()..color = ac);
-    canvas.drawRRect(plate, stroke(dark, 1));
-    // finger lift (a small hook on the side)
+    // 4) Headshell: a flat plate continuing at an angle, with a finger lift.
+    final hl = (tip - elbow).distance;
+    final plateA = elbow - hd * 4;
+    final plateB = tip - hd * 14;
+    _bar(canvas, plateA, plateB, 17);
+    canvas.drawLine(
+        plateA + hn * 8.5,
+        plateB + hn * 8.5,
+        Paint()
+          ..color = _dark
+          ..strokeWidth = 1);
+    canvas.drawLine(
+        plateA - hn * 8.5,
+        plateB - hn * 8.5,
+        Paint()
+          ..color = _dark
+          ..strokeWidth = 1);
+    // finger lift: a small hook on the side of the plate
+    final hookStart = elbow + hd * (hl * 0.32) + hn * 8.5;
     final hook = Path()
-      ..moveTo(8, hl * 0.22)
-      ..quadraticBezierTo(17, hl * 0.2, 15, hl * 0.42);
-    canvas.drawPath(hook, stroke(ac, 2.2));
-    // cartridge under the plate
+      ..moveTo(hookStart.dx, hookStart.dy)
+      ..quadraticBezierTo(
+          hookStart.dx + hn.dx * 12 + hd.dx * 2,
+          hookStart.dy + hn.dy * 12 + hd.dy * 2,
+          hookStart.dx + hn.dx * 9 + hd.dx * 12,
+          hookStart.dy + hn.dy * 9 + hd.dy * 12);
+    canvas.drawPath(
+        hook,
+        Paint()
+          ..color = _mid
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2.4
+          ..strokeCap = StrokeCap.round);
+    // elbow collar
+    canvas.drawCircle(elbow, 7, Paint()..color = _dark);
+    canvas.drawCircle(elbow, 5, Paint()..color = _mid);
+    canvas.drawCircle(elbow - n * 1.5, 1.8, Paint()..color = _light);
+
+    // 5) Cartridge and stylus at the end of the headshell.
+    canvas.save();
+    canvas.translate(tip.dx, tip.dy);
+    canvas.rotate(atan2(hd.dy, hd.dx) - pi / 2);
     final cart = RRect.fromRectAndRadius(
-        Rect.fromLTWH(-6, hl - 12, 12, 13), const Radius.circular(2));
-    canvas.drawRRect(cart, Paint()..color = dark);
-    // stylus
-    canvas.drawLine(Offset(0, hl), Offset(0, hl + 5), stroke(bg, 1.6));
+        Rect.fromLTWH(-7, -22, 14, 17), const Radius.circular(3));
+    canvas.drawRRect(cart, Paint()..color = _dark);
+    canvas.drawRRect(
+        RRect.fromRectAndRadius(
+            Rect.fromLTWH(-5, -20, 10, 5), const Radius.circular(2)),
+        Paint()..color = _light.withOpacity(0.6));
+    canvas.drawLine(
+        const Offset(0, -5),
+        const Offset(0, 2),
+        Paint()
+          ..color = bg
+          ..strokeWidth = 1.6
+          ..strokeCap = StrokeCap.round);
+    canvas.drawCircle(const Offset(0, 3), 1.6, Paint()..color = bg);
     canvas.restore();
 
-    // Pivot base: outer ring, inner ring and the bearing cap.
-    canvas.drawCircle(pivot, 26, Paint()..color = bg);
-    canvas.drawCircle(pivot, 26, stroke(ac, 1.4));
-    canvas.drawCircle(pivot, 19, stroke(ac.withOpacity(0.45), 1));
-    canvas.drawCircle(pivot, 11, Paint()..color = ac);
-    canvas.drawCircle(pivot, 11, stroke(dark, 1));
-    canvas.drawCircle(pivot, 4, Paint()..color = bg);
+    // 6) The pivot base on top: rings, a domed boss and a screw.
+    canvas.drawCircle(
+        pivot, 31, Paint()..color = Colors.black.withOpacity(0.10));
+    canvas.drawCircle(
+        pivot,
+        29,
+        Paint()
+          ..shader = ui.Gradient.radial(
+              pivot - const Offset(6, 6), 40, [bg, Color.lerp(bg, ac, 0.22)!]));
+    canvas.drawCircle(
+        pivot,
+        29,
+        Paint()
+          ..color = ac
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.5);
+    canvas.drawCircle(
+        pivot,
+        22,
+        Paint()
+          ..color = ac.withOpacity(0.45)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1);
+    canvas.drawCircle(
+        pivot,
+        15,
+        Paint()
+          ..shader = ui.Gradient.radial(pivot - const Offset(5, 5), 22,
+              [_light, _mid, _dark], const [0.0, 0.55, 1.0]));
+    canvas.drawCircle(
+        pivot,
+        15,
+        Paint()
+          ..color = _dark
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1);
+    canvas.drawCircle(pivot - const Offset(4, 4), 3,
+        Paint()..color = Colors.white.withOpacity(0.4));
+    canvas.drawCircle(pivot, 3, Paint()..color = bg);
+    canvas.drawLine(
+        pivot - const Offset(2, 0),
+        pivot + const Offset(2, 0),
+        Paint()
+          ..color = _dark
+          ..strokeWidth = 0.8);
   }
 
   @override
@@ -1658,116 +1807,137 @@ class _SongInfoSheet extends ConsumerWidget {
     }
 
     return Container(
-      constraints: BoxConstraints(maxHeight: h * 0.78),
+      width: double.infinity,
+      constraints: BoxConstraints(maxHeight: h * 0.80),
       decoration: BoxDecoration(
         color: t.bg,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(28)),
         border: Border.all(color: t.soft, width: 1),
       ),
       padding: EdgeInsets.fromLTRB(
-          20, 12, 20, 20 + MediaQuery.of(context).padding.bottom),
+          20, MediaQuery.of(context).padding.top + 16, 20, 8),
       child: ListView(
         shrinkWrap: true,
         padding: EdgeInsets.zero,
         children: [
-            Center(
-              child: Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                      color: t.soft, borderRadius: BorderRadius.circular(2))),
+          Text(song.title, style: noorSerif(t.ac, size: 28, height: 1.05)),
+          const SizedBox(height: 12),
+          if (details.isLoading)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 24),
+              child: Center(
+                  child:
+                      CircularProgressIndicator(color: t.ac, strokeWidth: 2)),
+            )
+          else if (d == null) ...[
+            row('Channel', song.artist),
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                  'More details could not be loaded right now (no connection or YouTube is busy).',
+                  style: TextStyle(color: t.mute, fontSize: 13)),
             ),
-            const SizedBox(height: 16),
-            Text(song.title, style: noorSerif(t.ac, size: 28, height: 1.05)),
-            const SizedBox(height: 12),
-            if (details.isLoading)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 24),
-                child: Center(
-                    child: CircularProgressIndicator(
-                        color: t.ac, strokeWidth: 2)),
-              )
-            else if (d == null) ...[
-              row('Channel', song.artist),
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: Text(
-                    'More details could not be loaded right now (no connection or YouTube is busy).',
-                    style: TextStyle(color: t.mute, fontSize: 13)),
-              ),
-            ] else ...[
-              row('Channel', d.channel),
-              row('Published', d.published == null ? null : SongDetails.monthYear(d.published!)),
-              row('Views', d.views == null ? null : SongDetails.compactCount(d.views!)),
-              row('Likes', d.likes == null ? null : SongDetails.compactCount(d.likes!)),
-              row('Length', (d.duration == null || d.duration == Duration.zero) ? null : SongDetails.clock(d.duration!)),
-              if (d.hasMusicTags) ...[
-                const SizedBox(height: 6),
-                Divider(color: t.faint, height: 1),
-                const SizedBox(height: 6),
-                row('Song', d.songName),
-                row('Artist', d.artistName),
-                row('Album', d.albumName),
-              ],
-              if (d.keywords.isNotEmpty) ...[
-                const SizedBox(height: 10),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    for (final k in d.keywords.take(10))
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: t.soft, width: 1),
-                        ),
-                        child: Text(k,
-                            style: TextStyle(color: t.mute, fontSize: 12)),
-                      ),
-                  ],
-                ),
-              ],
-              if (d.description.trim().isNotEmpty) ...[
-                const SizedBox(height: 16),
-                Text('ABOUT',
-                    style: TextStyle(
-                        color: t.mute,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 2)),
-                const SizedBox(height: 6),
-                SelectableText(d.description.trim(),
-                    maxLines: 14,
-                    style: TextStyle(color: t.ac, fontSize: 13, height: 1.4)),
-              ],
+          ] else ...[
+            row('Channel', d.channel),
+            row(
+                'Published',
+                d.published == null
+                    ? null
+                    : SongDetails.monthYear(d.published!)),
+            row('Views',
+                d.views == null ? null : SongDetails.compactCount(d.views!)),
+            row('Likes',
+                d.likes == null ? null : SongDetails.compactCount(d.likes!)),
+            row(
+                'Length',
+                (d.duration == null || d.duration == Duration.zero)
+                    ? null
+                    : SongDetails.clock(d.duration!)),
+            if (d.hasMusicTags) ...[
+              const SizedBox(height: 6),
+              Divider(color: t.faint, height: 1),
+              const SizedBox(height: 6),
+              row('Song', d.songName),
+              row('Artist', d.artistName),
+              row('Album', d.albumName),
             ],
-            const SizedBox(height: 16),
-            Center(
-              child: GestureDetector(
-                onTap: () => launchUrl(
-                    Uri.parse('https://www.youtube.com/watch?v=${song.videoId}'),
-                    mode: LaunchMode.externalApplication),
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 22, vertical: 10),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(22),
-                    border: Border.all(color: t.ac, width: 1),
-                  ),
-                  child: Row(mainAxisSize: MainAxisSize.min, children: [
-                    Icon(Icons.open_in_new_rounded, size: 16, color: t.ac),
-                    const SizedBox(width: 8),
-                    Text('Open on YouTube',
-                        style: TextStyle(
-                            color: t.ac,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 13)),
-                  ]),
+            if (d.keywords.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final k in d.keywords.take(10))
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: t.soft, width: 1),
+                      ),
+                      child: Text(k,
+                          style: TextStyle(color: t.mute, fontSize: 12)),
+                    ),
+                ],
+              ),
+            ],
+            if (d.description.trim().isNotEmpty) ...[
+              const SizedBox(height: 16),
+              Text('ABOUT',
+                  style: TextStyle(
+                      color: t.mute,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 2)),
+              const SizedBox(height: 6),
+              SelectableText(d.description.trim(),
+                  maxLines: 14,
+                  style: TextStyle(color: t.ac, fontSize: 13, height: 1.4)),
+            ],
+          ],
+          const SizedBox(height: 16),
+          Center(
+            child: GestureDetector(
+              onTap: () => launchUrl(
+                  Uri.parse('https://www.youtube.com/watch?v=${song.videoId}'),
+                  mode: LaunchMode.externalApplication),
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 22, vertical: 10),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(22),
+                  border: Border.all(color: t.ac, width: 1),
                 ),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  Icon(Icons.open_in_new_rounded, size: 16, color: t.ac),
+                  const SizedBox(width: 8),
+                  Text('Open on YouTube',
+                      style: TextStyle(
+                          color: t.ac,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 13)),
+                ]),
               ),
             ),
+          ),
+          // Grab handle at the bottom edge: tap or swipe up to close.
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => Navigator.of(context).pop(),
+            onVerticalDragEnd: (d) {
+              if ((d.primaryVelocity ?? 0) < -150) Navigator.of(context).pop();
+            },
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              child: Center(
+                child: Container(
+                    width: 44,
+                    height: 4,
+                    decoration: BoxDecoration(
+                        color: t.soft, borderRadius: BorderRadius.circular(2))),
+              ),
+            ),
+          ),
         ],
       ),
     );

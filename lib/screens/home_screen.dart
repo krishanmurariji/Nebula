@@ -414,7 +414,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                 thumbnailUrl: song.thumbnailUrl,
                                 title: song.title,
                                 channel: song.artist,
-                                isOfficial: song.isOfficial,
                                 liked: likedSongs.any((l) => l.videoId == song.videoId),
                                 selected: isTargetSong,
                                 loading: isLoading,

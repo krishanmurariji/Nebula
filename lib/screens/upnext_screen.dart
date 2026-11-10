@@ -7,7 +7,7 @@ import '../providers/player_provider.dart';
 import '../providers/library_provider.dart';
 import '../providers/theme_provider.dart';
 import '../theme/noor_palette.dart';
-import '../theme/noor_song_tile.dart';
+import '../theme/noor_album_tile.dart';
 import '../theme/noor_widgets.dart';
 
 class UpNextScreen extends ConsumerWidget {
@@ -73,10 +73,22 @@ class UpNextScreen extends ConsumerWidget {
                           children: [
                             Icon(Icons.queue_music_rounded, color: accentCol, size: 20),
                             const SizedBox(width: 8),
-                            Text('Up Next', style: noorSerif(textCol, size: 22, height: 1.0)),
+                            Flexible(
+                              child: Text('Up Next',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: noorSerif(textCol, size: 22, height: 1.0)),
+                            ),
                             const SizedBox(width: 8),
-                            Text('•  hold & drag', style: TextStyle(
-                                fontSize: 12, fontWeight: FontWeight.w600, color: mutedCol)),
+                            Flexible(
+                              child: Text('•  hold & drag',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      color: mutedCol)),
+                            ),
                           ],
                         ),
                       ),
@@ -120,9 +132,7 @@ class UpNextScreen extends ConsumerWidget {
                             },
                             itemBuilder: (_, i) {
                               final song = queue[i];
-                              final isPlaying = ps.song?.videoId == song.videoId &&
-                                  (ps.status == NebulaPlayerStatus.playing || ps.status == NebulaPlayerStatus.loading);
-                              
+                              final isCurrent = ps.song?.videoId == song.videoId;
                               final isLiked = likedSongs.any((s) => s.videoId == song.videoId);
 
                               return ReorderableDelayedDragStartListener(
@@ -137,10 +147,10 @@ class UpNextScreen extends ConsumerWidget {
                                     // ── ALIGNED ICON TO LEFT WITH LEFT PADDING ──
                                     alignment: Alignment.centerLeft,
                                     padding: const EdgeInsets.only(left: 28),
-                                    margin: const EdgeInsets.symmetric(horizontal: 22, vertical: 10),
+                                    margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                                     decoration: BoxDecoration(
                                       color: t.ac,
-                                      borderRadius: BorderRadius.circular(22)
+                                      borderRadius: BorderRadius.circular(36)
                                     ),
                                     child: Icon(Icons.delete_outline_rounded, color: t.bg, size: 26),
                                   ),
@@ -148,12 +158,19 @@ class UpNextScreen extends ConsumerWidget {
                                     HapticFeedback.mediumImpact();
                                     ref.read(playerProvider.notifier).removeFromQueue(i);
                                   },
-                                  child: _CapsuleSongTile(
-                                    song: song,
-                                    isPlaying: isPlaying,
-                                    isLiked: isLiked,
-                                    isDark: isDark,
-                                    onTap: () {
+                                  child: NoorAlbumTile(
+                                    thumbnailUrl: song.thumbnailUrl,
+                                    title: song.title,
+                                    channel: song.artist,
+                                    liked: isLiked,
+                                    selected: isCurrent,
+                                    loading: isCurrent && ps.status == NebulaPlayerStatus.loading,
+                                    playing: isCurrent && ps.status == NebulaPlayerStatus.playing,
+                                    onToggleLike: () {
+                                      HapticFeedback.mediumImpact();
+                                      ref.read(likedProvider.notifier).toggle(song);
+                                    },
+                                    onPlay: () {
                                       HapticFeedback.lightImpact();
                                       ref.read(playerProvider.notifier).playSong(song, queue: queue);
                                       Navigator.pop(context);
@@ -169,55 +186,6 @@ class UpNextScreen extends ConsumerWidget {
             ),
           ),
         ),
-      ),
-    );
-  }
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// CUSTOM CAPSULE TILE (Matches MiniPlayer Design)
-// ═══════════════════════════════════════════════════════════════════════════════
-class _CapsuleSongTile extends StatelessWidget {
-  final Song song;
-  final bool isPlaying;
-  final bool isLiked;
-  final bool isDark;
-  final VoidCallback onTap;
-
-  const _CapsuleSongTile({
-    required this.song,
-    required this.isPlaying,
-    required this.isLiked,
-    required this.isDark,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final t = NoorTheme.byMode(isDark);
-    return NoorSongTile(
-      thumbnailUrl: song.thumbnailUrl,
-      title: song.title,
-      subtitle: Text(song.artist,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: noorSubtitleStyle(context)),
-      selected: isPlaying,
-      onTap: onTap,
-      extras: [
-        if (isLiked)
-          Padding(
-            padding: const EdgeInsets.only(right: 10),
-            child: Icon(Icons.favorite_rounded, color: t.ac, size: 17),
-          ),
-      ],
-      trailing: NoorRoundButton(
-        size: 38,
-        filled: isPlaying,
-        muted: !isPlaying,
-        child: Icon(
-            isPlaying ? Icons.equalizer_rounded : Icons.drag_indicator_rounded,
-            size: 20),
       ),
     );
   }

@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -225,12 +226,25 @@ void main() {
       expect(find.text('No official upload found for this search'), findsNothing);
     });
 
-    testWidgets('the queue handed to the player is the filtered list', (t) async {
+    testWidgets('up next after a search is what was played recently, not the results', (t) async {
+      final recent = [
+        {'videoId': 'recentAxxxx', 'title': 'Played Before 1', 'artist': 'x', 'thumbnailUrl': ''},
+        {'videoId': 'recentBxxxx', 'title': 'Played Before 2', 'artist': 'x', 'thumbnailUrl': ''},
+      ];
+      SharedPreferences.setMockInitialValues({'nebula_history': jsonEncode(recent)});
       await open(t, results: sample);
+      await t.pump(const Duration(milliseconds: 100)); // the saved history loads
       await t.tap(find.text('Real Song (Official Audio)'));
       await t.pump(const Duration(milliseconds: 400)); // a tap waits out a possible double tap
       expect(player.queues.single.map((s) => s.title),
-          ['Real Song (Official Audio)', 'Real Song - Topic']);
+          ['Real Song (Official Audio)', 'Played Before 1', 'Played Before 2']);
+    });
+
+    testWidgets('with no history the queue is just the chosen song', (t) async {
+      await open(t, results: sample);
+      await t.tap(find.text('Real Song (Official Audio)'));
+      await t.pump(const Duration(milliseconds: 400));
+      expect(player.queues.single.map((s) => s.title), ['Real Song (Official Audio)']);
     });
 
     testWidgets('double-tapping a song likes it, again unlikes it', (t) async {

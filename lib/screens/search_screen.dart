@@ -61,6 +61,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     final player = ref.watch(playerProvider);
     final isDark = ref.watch(themeProvider) == ThemeMode.dark;
     final likedSongs = ref.watch(likedSongsProvider);
+    ref.watch(historyProvider); // keep it loaded: it becomes the queue when you play a result
     final t = NoorTheme.byMode(isDark);
 
     return Scaffold(
@@ -283,8 +284,14 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                   ref.read(likedProvider.notifier).toggle(s);
                 },
                 onPlay: () {
-                  // Next/Previous stay within what is on screen.
-                  ref.read(playerProvider.notifier).playSong(s, queue: visible);
+                  // "Up next" is what you played recently, not the search results.
+                  final recent = ref
+                      .read(historyProvider)
+                      .where((h) => h.videoId != s.videoId)
+                      .toList();
+                  ref
+                      .read(playerProvider.notifier)
+                      .playSong(s, queue: [s, ...recent]);
                   ref.read(historyProvider.notifier).add(s);
                   Navigator.push(context,
                       MaterialPageRoute(builder: (_) => const PlayerScreen()));
