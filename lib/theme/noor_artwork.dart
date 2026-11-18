@@ -19,9 +19,23 @@ class NoorArtwork extends StatelessWidget {
   final String url;
   final BoxFit fit;
 
+  /// Tests and the README screenshot tool can supply pictures without the
+  /// network. Returns null to fall back to the normal loading.
+  @visibleForTesting
+  static ImageProvider? Function(String url)? debugImageFor;
+
   @override
   Widget build(BuildContext context) {
     if (url.isEmpty) return const SizedBox.expand();
+    final local = debugImageFor?.call(url);
+    if (local != null) {
+      return Image(
+          image: local,
+          fit: fit,
+          width: double.infinity,
+          height: double.infinity,
+          filterQuality: FilterQuality.high);
+    }
     final id = youtubeIdOf(url);
     final fallback =
         _image(url, letterboxed: id != null && !url.contains('maxres'));
