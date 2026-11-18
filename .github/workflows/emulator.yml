@@ -59,6 +59,7 @@ jobs:
           # permissions as soon as the second run has installed the app.
           script: |
             adb logcat -c || true
+            mkdir -p build
             python3 -c "import wave;w=wave.open('build/tone.wav','wb');w.setnchannels(1);w.setsampwidth(2);w.setframerate(8000);w.writeframes(bytes(16000*40));w.close()" || true
             adb push build/tone.wav "/sdcard/Music/Noor Test Tone.wav" || true
             adb shell content call --method scan_volume --uri content://media --arg external_primary || true
