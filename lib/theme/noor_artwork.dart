@@ -1,5 +1,7 @@
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import '../providers/local_music_provider.dart';
 
 final _ytId = RegExp(r'/vi(?:_webp)?/([A-Za-z0-9_-]{11})/');
 
@@ -27,6 +29,7 @@ class NoorArtwork extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (url.isEmpty) return const SizedBox.expand();
+    if (url.startsWith('localart://')) return _PhoneArt(url: url, fit: fit);
     final local = debugImageFor?.call(url);
     if (local != null) {
       return Image(
@@ -63,4 +66,25 @@ class NoorArtwork extends StatelessWidget {
         ? ClipRect(child: Transform.scale(scale: 4 / 3, child: img))
         : img;
   }
+}
+
+/// Album art of a song stored on the phone, read through MainActivity.
+class _PhoneArt extends StatelessWidget {
+  const _PhoneArt({required this.url, required this.fit});
+  final String url;
+  final BoxFit fit;
+
+  @override
+  Widget build(BuildContext context) => FutureBuilder<Uint8List?>(
+        future: localArtwork(url),
+        builder: (context, snap) {
+          final bytes = snap.data;
+          if (bytes == null || bytes.isEmpty) return const SizedBox.expand();
+          return Image.memory(bytes,
+              fit: fit,
+              width: double.infinity,
+              height: double.infinity,
+              gaplessPlayback: true);
+        },
+      );
 }

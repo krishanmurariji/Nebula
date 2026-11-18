@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/song.dart';
+import 'local_music_provider.dart';
 
 /// Decodes a saved JSON list defensively: a corrupt file yields an empty list
 /// (and is reported via [onCorrupt] so it can be backed up), and one bad entry
@@ -289,15 +290,19 @@ final libraryReadyProvider = FutureProvider<bool>((ref) async {
 /// audio handler's disk cache; the default says no (tests, start-up).
 final isOnDeviceProvider = Provider<bool Function(String videoId)>((ref) => (_) => false);
 
-/// My Music: every song we know about (history, favorites, playlists) whose
-/// audio is fully saved on this device, so it plays offline.
+/// My Music: the music files on the phone (read from Android's media
+/// library once access is given), then every song Noor has fully saved for
+/// offline listening (from history, favorites and playlists).
 final myMusicProvider = Provider<List<Song>>((ref) {
   final onDevice = ref.watch(isOnDeviceProvider);
   final seen = <String>{};
   final out = <Song>[];
+  for (final s in ref.watch(localMusicProvider).songs) {
+    if (seen.add(s.videoId)) out.add(s);
+  }
   void take(Iterable<Song> l) {
     for (final s in l) {
-      if (seen.add(s.videoId) && onDevice(s.videoId)) out.add(s);
+      if (seen.add(s.videoId) && !s.isLocal && onDevice(s.videoId)) out.add(s);
     }
   }
 

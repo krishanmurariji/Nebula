@@ -12,6 +12,7 @@ import '../theme/noor_watermark.dart';
 import '../widgets/search_filter_bar.dart';
 import '../widgets/song_row.dart';
 import 'settings_screen.dart';
+import '../theme/noor_search_button.dart';
 
 /// What sits under the search bar on Home: the Best match / Official only
 /// chips, a centred label between two thin lines, then the results as song
@@ -210,6 +211,103 @@ class _SettingsButton extends StatelessWidget {
           ),
           child: Icon(Icons.settings_outlined, size: 19, color: t.ac),
         ),
+      ),
+    );
+  }
+}
+
+/// Search as a page of its own, opened from the player's Search button, so
+/// back (or Cancel) returns to the player rather than to Home.
+class SearchPage extends ConsumerStatefulWidget {
+  const SearchPage({super.key});
+
+  @override
+  ConsumerState<SearchPage> createState() => _SearchPageState();
+}
+
+class _SearchPageState extends ConsumerState<SearchPage> {
+  final _query = TextEditingController();
+  final _focus = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    Future.delayed(const Duration(milliseconds: 300), () {
+      if (mounted) _focus.requestFocus();
+    });
+  }
+
+  @override
+  void dispose() {
+    _query.dispose();
+    _focus.dispose();
+    super.dispose();
+  }
+
+  void _run() {
+    final q = _query.text.trim();
+    if (q.isEmpty) return;
+    ref.read(searchProvider.notifier).search(q);
+    _focus.unfocus();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = NoorTheme.of(context);
+    return Scaffold(
+      backgroundColor: t.bg,
+      resizeToAvoidBottomInset: false,
+      body: Column(
+        children: [
+          SizedBox(height: MediaQuery.paddingOf(context).top + 14),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 14, 0),
+            child: SizedBox(
+              height: 44,
+              child: Row(children: [
+                const NoorWordmark(height: 30),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Container(
+                    height: 40,
+                    alignment: Alignment.centerLeft,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: t.ac, width: 0.8),
+                    ),
+                    child: TextField(
+                      controller: _query,
+                      focusNode: _focus,
+                      onSubmitted: (_) => _run(),
+                      textInputAction: TextInputAction.search,
+                      textAlignVertical: TextAlignVertical.center,
+                      cursorColor: t.ac,
+                      style: TextStyle(
+                          color: t.ac,
+                          fontSize: 14,
+                          height: 1.2,
+                          fontWeight: FontWeight.w600),
+                      decoration: InputDecoration(
+                        isCollapsed: true,
+                        hintText: 'Songs, artists…',
+                        hintStyle:
+                            TextStyle(color: t.mute, fontSize: 14, height: 1.2),
+                        border: InputBorder.none,
+                        contentPadding:
+                            const EdgeInsets.symmetric(horizontal: 16),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                NoorSearchButton(
+                    open: true, onTap: () => Navigator.of(context).maybePop()),
+              ]),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Expanded(child: SearchPanel(onRetry: _run)),
+        ],
       ),
     );
   }

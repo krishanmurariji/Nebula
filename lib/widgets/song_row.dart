@@ -491,6 +491,7 @@ class _NoorSongRowState extends ConsumerState<NoorSongRow>
   Widget _actions(NoorTheme t, bool liked) {
     final inHistory =
         ref.watch(historyProvider).any((s) => s.videoId == widget.song.videoId);
+    ref.watch(playlistProvider); // the playlist button shows whether it is in one
     final naming = _stage == _Stage.naming;
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
@@ -540,7 +541,8 @@ class _NoorSongRowState extends ConsumerState<NoorSongRow>
                 duration: const Duration(milliseconds: 340),
                 curve: Curves.easeOutCubic,
                 decoration: BoxDecoration(
-                  color: naming || _thumbsUp ? t.bg : t.ac,
+                  // Filled when the song is in a playlist, outlined when not.
+                  color: naming || _thumbsUp || !_inPlaylist ? t.bg : t.ac,
                   borderRadius: BorderRadius.circular(kNoorCardRadius),
                   border: Border.all(color: t.ac, width: naming ? 1 : 0.8),
                 ),
@@ -559,6 +561,10 @@ class _NoorSongRowState extends ConsumerState<NoorSongRow>
         child: IgnorePointer(ignoring: !visible, child: child),
       );
 
+  bool get _inPlaylist => ref
+      .read(playlistProvider)
+      .any((p) => p.songs.any((s) => s.videoId == widget.song.videoId));
+
   Widget _centreButton(NoorTheme t) => Semantics(
         container: true,
         button: true,
@@ -576,7 +582,7 @@ class _NoorSongRowState extends ConsumerState<NoorSongRow>
                     ? Icons.thumb_up_alt_rounded
                     : Icons.playlist_add_rounded,
                 key: ValueKey(_thumbsUp),
-                color: _thumbsUp ? t.ac : t.bg,
+                color: _thumbsUp || !_inPlaylist ? t.ac : t.bg,
                 size: 22,
               ),
             ),

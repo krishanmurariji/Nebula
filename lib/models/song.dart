@@ -5,13 +5,21 @@ class Song {
   final String thumbnailUrl;
   final bool isOfficial;
 
+  /// For a song stored on the phone: its `content://` address in Android's
+  /// media library. Null for YouTube songs.
+  final String? localUri;
+
   const Song({
     required this.videoId,
     required this.title,
     required this.artist,
     required this.thumbnailUrl,
     this.isOfficial = false,
+    this.localUri,
   });
+
+  /// A song file on the phone (played directly, never from YouTube).
+  bool get isLocal => localUri != null;
 
   static bool detectOfficial(String title, String channel) {
     final t = title.toLowerCase();
@@ -25,6 +33,7 @@ class Song {
   Map<String, dynamic> toMap() => {
     'videoId': videoId, 'title': title, 'artist': artist,
     'thumbnailUrl': thumbnailUrl, 'isOfficial': isOfficial,
+    if (localUri != null) 'localUri': localUri,
   };
 
   /// Tolerant on purpose: this reads data saved by older versions and
@@ -37,6 +46,11 @@ class Song {
       artist:       str(m['artist'], ''),
       thumbnailUrl: str(m['thumbnailUrl'], ''),
       isOfficial:   m['isOfficial'] is bool ? m['isOfficial'] as bool : false,
+      // Only Android media-library addresses are accepted for phone files.
+      localUri: m['localUri'] is String &&
+              (m['localUri'] as String).startsWith('content://media/')
+          ? m['localUri'] as String
+          : null,
     );
   }
 

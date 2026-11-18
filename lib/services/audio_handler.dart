@@ -295,8 +295,9 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
       id: song.videoId,
       title: song.title,
       artist: song.artist,
-      artUri:
-          song.thumbnailUrl.isNotEmpty ? Uri.tryParse(song.thumbnailUrl) : null,
+      artUri: song.thumbnailUrl.startsWith('http')
+          ? Uri.tryParse(song.thumbnailUrl)
+          : null,
     ));
 
     _runner.submit(_LoadRequest(song, tok, resumeAt, attempt));
@@ -320,6 +321,21 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
         nlog('[N] stop() before load ignored: $e');
       }
       if (!live()) return;
+
+      // A music file on the phone: play it straight from Android's media
+      // library. It never touches YouTube, the resolver or the disk cache.
+      if (song.isLocal) {
+        await _player.setAudioSource(AudioSource.uri(Uri.parse(song.localUri!)),
+            initialPosition: req.resumeAt);
+        if (!live()) return;
+        unawaited(_player.play().catchError((Object e) {
+          if (live()) _onPlayerError(e);
+        }));
+        _consecutiveFailures = 0;
+        nlog('[N] ✓ started (phone file): ${song.title}');
+        _scheduleNextPrefetch(req.tok);
+        return;
+      }
 
       await _ensureCache();
       if (!live()) return;
@@ -363,6 +379,9 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
           e is ResolveFailure ? e.kind : classifyPlaybackError(e);
       nlog('[N] load failed ($kind): $e\n$st');
       if (kind == FailureKind.cancelled) kind = FailureKind.transient;
+      // A phone file that will not play (deleted, unreadable) will not fix
+      // itself, and the network has nothing to do with it: skip it.
+      if (song.isLocal) kind = FailureKind.permanent;
       if (usedDiskCache) unawaited(_cache?.remove(song.videoId)); // maybe corrupt
       unawaited(_handleLoadFailure(req, kind));
     }
@@ -532,6 +551,7 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
   void _scheduleNextPrefetch(int ptok) {
     if (_queue.length < 2) return;
     final next = _queue[(_idx + 1) % _queue.length];
+    if (next.isLocal) return; // already on the phone
     final cache = _cache;
     if (cache == null || cache.contains(next.videoId)) return;
     if (_resolver.globalCooldownSeconds > 0) return; // do not add load
@@ -698,7 +718,7 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
               title: s.title,
               artist: s.artist,
               artUri:
-                  s.thumbnailUrl.isNotEmpty ? Uri.tryParse(s.thumbnailUrl) : null,
+                  s.thumbnailUrl.startsWith('http') ? Uri.tryParse(s.thumbnailUrl) : null,
             ))
         .toList());
     _queueChanged.add(null);

@@ -15,8 +15,7 @@ import '../theme/noor_search_button.dart';
 import '../theme/noor_song_card.dart';
 import '../theme/noor_turntable.dart';
 import '../theme/noor_widgets.dart';
-import 'home_screen.dart';
-import 'main_shell.dart';
+import 'search_screen.dart';
 import 'upnext_screen.dart';
 
 // ── Panel visibility state ────────────────────────────────────────────────────
@@ -198,11 +197,11 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
     } catch (_) {/* no handler in tests */}
   }
 
+  /// Search opens on top of the player, so back comes back here.
   void _goSearch() {
     HapticFeedback.selectionClick();
-    ref.read(shellTabProvider.notifier).state = kHomePage;
-    ref.read(homeSearchRequestProvider.notifier).state++;
-    Navigator.of(context).popUntil((r) => r.isFirst);
+    Navigator.of(context)
+        .push(MaterialPageRoute(builder: (_) => const SearchPage()));
   }
 
   void _openUpNext() => Navigator.of(context).push(_SlideUpRoute());
@@ -1222,7 +1221,10 @@ class _SongInfoSheet extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final t = NoorTheme.of(context);
-    final details = ref.watch(songDetailsProvider(song.videoId));
+    // A phone file has no YouTube page to read details from.
+    final details = song.isLocal
+        ? const AsyncValue<SongDetails?>.data(null)
+        : ref.watch(songDetailsProvider(song.videoId));
     final d = details.valueOrNull;
     final h = MediaQuery.of(context).size.height;
 
@@ -1275,7 +1277,10 @@ class _SongInfoSheet extends ConsumerWidget {
                   child:
                       CircularProgressIndicator(color: t.ac, strokeWidth: 2)),
             )
-          else if (d == null) ...[
+          else if (song.isLocal) ...[
+            row('Artist', song.artist),
+            row('Where', 'Stored on this phone'),
+          ] else if (d == null) ...[
             row('Channel', song.artist),
             Padding(
               padding: const EdgeInsets.only(top: 8),
@@ -1347,29 +1352,30 @@ class _SongInfoSheet extends ConsumerWidget {
             spacing: 10,
             runSpacing: 10,
             children: [
-              GestureDetector(
-                onTap: () => launchUrl(
-                    Uri.parse(
-                        'https://www.youtube.com/watch?v=${song.videoId}'),
-                    mode: LaunchMode.externalApplication),
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 22, vertical: 10),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(22),
-                    border: Border.all(color: t.ac, width: 1),
+              if (!song.isLocal)
+                GestureDetector(
+                  onTap: () => launchUrl(
+                      Uri.parse(
+                          'https://www.youtube.com/watch?v=${song.videoId}'),
+                      mode: LaunchMode.externalApplication),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 22, vertical: 10),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(22),
+                      border: Border.all(color: t.ac, width: 1),
+                    ),
+                    child: Row(mainAxisSize: MainAxisSize.min, children: [
+                      Icon(Icons.open_in_new_rounded, size: 16, color: t.ac),
+                      const SizedBox(width: 8),
+                      Text('Open on YouTube',
+                          style: TextStyle(
+                              color: t.ac,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 13)),
+                    ]),
                   ),
-                  child: Row(mainAxisSize: MainAxisSize.min, children: [
-                    Icon(Icons.open_in_new_rounded, size: 16, color: t.ac),
-                    const SizedBox(width: 8),
-                    Text('Open on YouTube',
-                        style: TextStyle(
-                            color: t.ac,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 13)),
-                  ]),
                 ),
-              ),
               if (onAddToPlaylist != null)
                 GestureDetector(
                   onTap: () {

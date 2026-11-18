@@ -5,8 +5,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/song.dart';
 import '../providers/player_provider.dart';
 import '../providers/library_provider.dart';
+import '../providers/last_played_provider.dart';
+import '../providers/local_music_provider.dart';
 import '../providers/theme_provider.dart';
 import 'mini_player.dart';
+import 'player_screen.dart';
 import 'search_screen.dart';
 import '../providers/search_provider.dart';
 import '../theme/noor_palette.dart';
@@ -109,6 +112,47 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     setState(() => _selectedId = id);
   }
 
+  bool _pullFired = false;
+
+  /// My Music can also list the phone's own music once access is given.
+  bool get _needsPhoneAccess {
+    final a = ref.watch(localMusicProvider).access;
+    return a != LocalAccess.granted && a != LocalAccess.unsupported;
+  }
+
+  /// Swipe on the (non-scrolling) top of Home: down opens search, up opens
+  /// the player when a song is playing.
+  void _onTopVerticalSwipe(DragEndDetails d) {
+    final v = d.primaryVelocity ?? 0;
+    if (v > 300) {
+      _openSearch();
+    } else if (v < -300) {
+      _openPlayer();
+    }
+  }
+
+  void _openPlayer() {
+    if (ref.read(playerProvider).displaySong == null) return;
+    HapticFeedback.selectionClick();
+    Navigator.of(context)
+        .push(MaterialPageRoute(builder: (_) => const PlayerScreen()));
+  }
+
+  /// Pulling the song list down past its top opens search.
+  bool _onListScroll(ScrollNotification n) {
+    if (n is ScrollUpdateNotification &&
+        n.dragDetails != null &&
+        n.metrics.pixels < -80 &&
+        !_pullFired &&
+        !_searching) {
+      _pullFired = true;
+      _openSearch();
+    } else if (n is ScrollEndNotification) {
+      _pullFired = false;
+    }
+    return false;
+  }
+
   /// Long press on a playlist card: offer to delete the playlist.
   Future<void> _confirmDeletePlaylist(HomeCategory c) async {
     if (!ref.read(playlistProvider).any((p) => p.id == c.id)) return;
@@ -153,7 +197,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     }
   }
 
-
   @override
   Widget build(BuildContext context) {
     ref.listen<int>(homeSearchRequestProvider, (_, __) {
@@ -183,6 +226,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       if (libraryReady) _selectedId = cats[index].id;
     }
     final current = cats[index];
+    final askPhone = current.id == 'music' && _needsPhoneAccess;
 
     final visible = 1 + (index > 0 ? 1 : 0) + (index < cats.length - 1 ? 1 : 0);
     final activeWidth =
@@ -228,55 +272,71 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   Expanded(child: SearchPanel(onRetry: _runSearch))
                 else ...[
                   // ── Slider ────────────────────────────────────────────────
-                  SizedBox(
-                    height: 168,
-                    child: GestureDetector(
-                      onHorizontalDragEnd: (d) {
-                        final v = d.primaryVelocity ?? 0;
-                        if (v < -200) {
-                          if (index < cats.length - 1) {
-                        _select(cats[index + 1].id);
-                      }
-                        } else if (v > 200) {
-                          if (index > 0) {
-                            _select(cats[index - 1].id);
-                          } else {
-                            _openSearch(); // before the first card
-                          }
-                        }
-                      },
-                      child: ListView.builder(
-                        scrollDirection: Axis.horizontal,
-                        physics: const NeverScrollableScrollPhysics(),
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        itemCount: cats.length,
-                        itemBuilder: (context, i) {
-                          final active = i == index;
-                          final adjacent = (i - index).abs() == 1;
-                          return GestureDetector(
-                            onTap: () => _select(cats[i].id),
-                            onLongPress: () => _confirmDeletePlaylist(cats[i]),
-                            child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 500),
-                              curve: Curves.easeOutCubic,
-                              width: active ? activeWidth : (adjacent ? 48 : 0),
-                              margin: EdgeInsets.symmetric(
-                                  horizontal: (active || adjacent) ? 6 : 0,
-                                  vertical: 8),
-                              child: (active || adjacent)
-                                  ? _CategoryCard(
-                                      icon: _iconFor(cats[i].id),
-                                      artUrl: _artFor(cats[i]),
-                                      active: active)
-                                  : const SizedBox.shrink(),
+                  // The top of Home does not scroll, so it takes the vertical
+                  // swipes: down opens search, up opens the player.
+                  GestureDetector(
+                    behavior: HitTestBehavior.translucent,
+                    onVerticalDragEnd: _onTopVerticalSwipe,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        SizedBox(
+                          height: 168,
+                          child: GestureDetector(
+                            onHorizontalDragEnd: (d) {
+                              final v = d.primaryVelocity ?? 0;
+                              if (v < -200) {
+                                if (index < cats.length - 1) {
+                                  _select(cats[index + 1].id);
+                                }
+                              } else if (v > 200) {
+                                if (index > 0) {
+                                  _select(cats[index - 1].id);
+                                } else {
+                                  _openSearch(); // before the first card
+                                }
+                              }
+                            },
+                            child: ListView.builder(
+                              scrollDirection: Axis.horizontal,
+                              physics: const NeverScrollableScrollPhysics(),
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 12),
+                              itemCount: cats.length,
+                              itemBuilder: (context, i) {
+                                final active = i == index;
+                                final adjacent = (i - index).abs() == 1;
+                                return GestureDetector(
+                                  onTap: () => _select(cats[i].id),
+                                  onLongPress: () =>
+                                      _confirmDeletePlaylist(cats[i]),
+                                  child: AnimatedContainer(
+                                    duration: const Duration(milliseconds: 500),
+                                    curve: Curves.easeOutCubic,
+                                    width: active
+                                        ? activeWidth
+                                        : (adjacent ? 48 : 0),
+                                    margin: EdgeInsets.symmetric(
+                                        horizontal:
+                                            (active || adjacent) ? 6 : 0,
+                                        vertical: 8),
+                                    child: (active || adjacent)
+                                        ? _CategoryCard(
+                                            icon: _iconFor(cats[i].id),
+                                            artUrl: _artFor(cats[i]),
+                                            active: active)
+                                        : const SizedBox.shrink(),
+                                  ),
+                                );
+                              },
                             ),
-                          );
-                        },
-                      ),
+                          ),
+                        ),
+                        NoorLinedLabel(current.title),
+                        const SizedBox(height: 8),
+                      ],
                     ),
                   ),
-                  NoorLinedLabel(current.title),
-                  const SizedBox(height: 8),
 
                   // ── Songs (ring-wipe reveal when the card changes) ─────────
                   Expanded(
@@ -302,50 +362,72 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         child: !libraryReady
                             ? const SizedBox.expand()
                             : current.songs.isEmpty
-                                ? const _EmptyList()
-                                : ListView.builder(
-                                    // Room for the keyboard, so a card being
-                                    // named can scroll above it.
-                                    padding: EdgeInsets.fromLTRB(
-                                        0,
-                                        4,
-                                        0,
-                                        120 +
-                                            MediaQuery.viewInsetsOf(context)
-                                                .bottom),
-                                    physics: const BouncingScrollPhysics(),
-                                    itemCount: current.songs.length,
-                                    itemBuilder: (context, i) {
-                                      final song = current.songs[i];
-                                      final targetId =
-                                          ps.pendingSong?.videoId ??
-                                              ps.song?.videoId;
-                                      final isCurrent =
-                                          song.videoId == targetId;
-                                      final loading = isCurrent &&
-                                          (ps.status ==
-                                                  NebulaPlayerStatus.loading ||
-                                              (ps.pendingSong != null &&
-                                                  ps.status !=
-                                                      NebulaPlayerStatus
-                                                          .playing &&
-                                                  ps.status !=
-                                                      NebulaPlayerStatus
-                                                          .paused));
-                                      return NoorSongRow(
-                                        key: ValueKey(
-                                            '${current.id}_${song.videoId}'),
-                                        song: song,
-                                        current: isCurrent,
-                                        playing: isCurrent &&
-                                            ps.status ==
-                                                NebulaPlayerStatus.playing,
-                                        loading: loading,
-                                        onTap: () => _play(song, current.songs),
-                                        onPlayPause: () =>
-                                            _play(song, current.songs),
-                                      );
-                                    },
+                                ? GestureDetector(
+                                    behavior: HitTestBehavior.translucent,
+                                    onVerticalDragEnd: _onTopVerticalSwipe,
+                                    child: current.id == 'music' &&
+                                            _needsPhoneAccess
+                                        ? const _PhoneAccess()
+                                        : const _EmptyList(),
+                                  )
+                                : NotificationListener<ScrollNotification>(
+                                    onNotification: _onListScroll,
+                                    child: ListView.builder(
+                                      // Room for the keyboard, so a card being
+                                      // named can scroll above it.
+                                      padding: EdgeInsets.fromLTRB(
+                                          0,
+                                          4,
+                                          0,
+                                          120 +
+                                              MediaQuery.viewInsetsOf(context)
+                                                  .bottom),
+                                      // Always pullable, even when the list is short.
+                                      physics:
+                                          const AlwaysScrollableScrollPhysics(
+                                              parent: BouncingScrollPhysics()),
+                                      itemCount: current.songs.length +
+                                          (askPhone ? 1 : 0),
+                                      itemBuilder: (context, i) {
+                                        if (askPhone) {
+                                          if (i == 0) {
+                                            return const _PhoneAccessPill();
+                                          }
+                                          i -= 1;
+                                        }
+                                        final song = current.songs[i];
+                                        final targetId =
+                                            ps.pendingSong?.videoId ??
+                                                ps.song?.videoId;
+                                        final isCurrent =
+                                            song.videoId == targetId;
+                                        final loading = isCurrent &&
+                                            (ps.status ==
+                                                    NebulaPlayerStatus
+                                                        .loading ||
+                                                (ps.pendingSong != null &&
+                                                    ps.status !=
+                                                        NebulaPlayerStatus
+                                                            .playing &&
+                                                    ps.status !=
+                                                        NebulaPlayerStatus
+                                                            .paused));
+                                        return NoorSongRow(
+                                          key: ValueKey(
+                                              '${current.id}_${song.videoId}'),
+                                          song: song,
+                                          current: isCurrent,
+                                          playing: isCurrent &&
+                                              ps.status ==
+                                                  NebulaPlayerStatus.playing,
+                                          loading: loading,
+                                          onTap: () =>
+                                              _play(song, current.songs),
+                                          onPlayPause: () =>
+                                              _play(song, current.songs),
+                                        );
+                                      },
+                                    ),
                                   ),
                       ),
                     ),
@@ -353,6 +435,31 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 ],
               ],
             ),
+            // A soft fade under the bottom card, so it reads as floating
+            // above the list.
+            if (ps.displaySong != null || ref.watch(lastPlayedProvider) != null)
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                height: 150,
+                child: IgnorePointer(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          t.bg.withOpacity(0),
+                          t.bg.withOpacity(0.92),
+                          t.bg
+                        ],
+                        stops: const [0, 0.55, 1],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
             const Positioned(left: 0, right: 0, bottom: 0, child: MiniPlayer()),
           ],
         ),
@@ -493,6 +600,100 @@ class _EmptyList extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// My Music with nothing in it yet and no access to the phone's music: the
+/// faded girl, a short line, and the button that asks for access.
+class _PhoneAccess extends ConsumerWidget {
+  const _PhoneAccess();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final t = NoorTheme.of(context);
+    final blocked = ref.watch(localMusicProvider).access == LocalAccess.blocked;
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        const NoorGirlWatermark(),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(32, 0, 32, 90),
+          child: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.library_music_outlined, size: 40, color: t.ac),
+                const SizedBox(height: 12),
+                Text('Play the music on this phone',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                        color: t.ac,
+                        fontSize: 17,
+                        fontWeight: FontWeight.w600)),
+                const SizedBox(height: 6),
+                Text(
+                    blocked
+                        ? 'Access was turned off. Allow "Music and audio" for Noor in settings.'
+                        : 'Noor needs your permission to see your music files.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: t.mute, fontSize: 13)),
+                const SizedBox(height: 18),
+                const _PhoneAccessPill(big: true),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// The thin-bordered button that asks for access to the phone's music (or
+/// opens the app's settings once Android no longer shows the question).
+class _PhoneAccessPill extends ConsumerWidget {
+  const _PhoneAccessPill({this.big = false});
+  final bool big;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final t = NoorTheme.of(context);
+    final blocked = ref.watch(localMusicProvider).access == LocalAccess.blocked;
+    final label = blocked
+        ? 'Open settings'
+        : (big ? 'Allow access' : 'Show music from this phone');
+    return Padding(
+      padding: big ? EdgeInsets.zero : const EdgeInsets.fromLTRB(14, 2, 14, 8),
+      child: Center(
+        child: Semantics(
+          container: true,
+          button: true,
+          label: label,
+          excludeSemantics: true,
+          child: GestureDetector(
+            onTap: () {
+              HapticFeedback.selectionClick();
+              ref.read(localMusicProvider.notifier).requestAccess();
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 9),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(kNoorCardRadius),
+                border: Border.all(color: t.ac, width: 0.8),
+              ),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                Icon(Icons.library_music_outlined, size: 16, color: t.ac),
+                const SizedBox(width: 8),
+                Text(label,
+                    style: TextStyle(
+                        color: t.ac,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600)),
+              ]),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

@@ -6,6 +6,10 @@
     <uses-permission android:name="android.permission.WAKE_LOCK"/>
     <!-- Android 13+: needed for the media notification / lock-screen controls. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <!-- My Music: read the phone's own music files -->
+    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO"/>
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32"/>
 
     <queries>
         <intent>
