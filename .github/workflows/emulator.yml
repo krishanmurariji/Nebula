@@ -65,7 +65,8 @@ jobs:
             adb shell content call --method scan_volume --uri content://media --arg external_primary || true
             timeout 900 flutter drive --driver=test_driver/integration_test.dart --target=integration_test/online_test.dart -d emulator-5554
             adb shell cmd connectivity airplane-mode enable
-            (for i in $(seq 1 300); do adb shell pm grant com.nebula.nebula_music_player android.permission.READ_MEDIA_AUDIO 2>/dev/null && adb shell pm grant com.nebula.nebula_music_player android.permission.POST_NOTIFICATIONS 2>/dev/null && echo "granted after ${i}s" && adb shell dumpsys package com.nebula.nebula_music_player | grep -i 'READ_MEDIA_AUDIO' && break; sleep 1; done) &
+            adb uninstall com.nebula.nebula_music_player || true
+            (for i in $(seq 1 300); do adb shell pm grant com.nebula.nebula_music_player android.permission.READ_MEDIA_AUDIO 2>/dev/null && adb shell pm grant com.nebula.nebula_music_player android.permission.POST_NOTIFICATIONS 2>/dev/null && echo "granted after ${i}s" && break; sleep 1; done) &
             timeout 600 flutter drive --driver=test_driver/integration_test.dart --target=integration_test/offline_test.dart -d emulator-5554
             adb shell cmd connectivity airplane-mode disable
             adb logcat -d > build/logcat.txt || true

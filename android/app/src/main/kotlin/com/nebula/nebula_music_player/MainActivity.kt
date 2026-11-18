@@ -7,7 +7,7 @@ import android.os.Handler
 import android.os.Looper
 import android.provider.MediaStore
 import android.util.Size
-import io.flutter.embedding.android.FlutterActivity
+import com.ryanheise.audioservice.AudioServiceActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import java.io.ByteArrayOutputStream
@@ -19,8 +19,12 @@ import java.util.concurrent.Executors
  *  - art:  a small JPEG of a song's album art, or null
  * Both run off the main thread. Reading needs READ_MEDIA_AUDIO (Android 13+)
  * or READ_EXTERNAL_STORAGE (older), asked for from Flutter.
+ *
+ * Extends AudioServiceActivity so background playback keeps sharing the
+ * same Flutter engine; the manifest must launch this class, not the
+ * plugin's activity, or the channel above never exists.
  */
-class MainActivity : FlutterActivity() {
+class MainActivity : AudioServiceActivity() {
     private val io = Executors.newSingleThreadExecutor()
     private val main = Handler(Looper.getMainLooper())
 
