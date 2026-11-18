@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/song.dart';
+import '../providers/connection_provider.dart';
 import '../providers/last_played_provider.dart';
 import '../providers/library_provider.dart';
 import '../providers/player_provider.dart';
@@ -238,6 +239,17 @@ class _NoorSongRowState extends ConsumerState<NoorSongRow>
     _close();
   }
 
+  void _needsInternet() {
+    HapticFeedback.selectionClick();
+    final m = ScaffoldMessenger.maybeOf(context);
+    m?.hideCurrentSnackBar();
+    m?.showSnackBar(const SnackBar(
+        content:
+            Text("You're offline. This song isn't saved on the phone yet."),
+        behavior: SnackBarBehavior.floating,
+        duration: Duration(seconds: 2)));
+  }
+
   // ── Radial menu ───────────────────────────────────────────────────────────
 
   Future<void> _openMenu() async {
@@ -402,6 +414,12 @@ class _NoorSongRowState extends ConsumerState<NoorSongRow>
     });
     final t = NoorTheme.of(context);
     final liked = ref.watch(isLikedProvider(widget.song.videoId));
+    // Offline, a song that is neither on the phone nor saved by Noor cannot
+    // play: it is faded and a tap explains why instead of trying.
+    final needsNet = ref.watch(connectionProvider) == Connection.offline &&
+        !widget.song.isLocal &&
+        !widget.current &&
+        !ref.watch(isOnDeviceProvider)(widget.song.videoId);
 
     final keyboard = MediaQuery.viewInsetsOf(context).bottom;
     if (_stage == _Stage.naming && keyboard != _lastKeyboard) {
@@ -477,20 +495,26 @@ class _NoorSongRowState extends ConsumerState<NoorSongRow>
                     ..onEnd = _dragEnd,
                 ),
             },
-            child: NoorSongCard(
-              thumbnailUrl: widget.song.thumbnailUrl,
-              title: widget.song.title,
-              artist: widget.artist ?? widget.song.artist,
-              badge: widget.badge,
-              liked: liked,
-              current: widget.current,
-              playing: widget.playing,
-              loading: widget.loading,
-              // While the actions show, a tap on the card puts it back.
-              onTap: _stage == _Stage.closed ? widget.onTap : _back,
-              onPlayPause: widget.onPlayPause,
-              onToggleLike: _stage == _Stage.closed ? _toggleLike : null,
-              onLongPress: _stage == _Stage.closed ? _open : null,
+            child: AnimatedOpacity(
+              opacity: needsNet ? 0.45 : 1,
+              duration: const Duration(milliseconds: 250),
+              child: NoorSongCard(
+                thumbnailUrl: widget.song.thumbnailUrl,
+                title: widget.song.title,
+                artist: widget.artist ?? widget.song.artist,
+                badge: widget.badge,
+                liked: liked,
+                current: widget.current,
+                playing: widget.playing,
+                loading: widget.loading,
+                // While the actions show, a tap on the card puts it back.
+                onTap: _stage != _Stage.closed
+                    ? _back
+                    : (needsNet ? _needsInternet : widget.onTap),
+                onPlayPause: needsNet ? _needsInternet : widget.onPlayPause,
+                onToggleLike: _stage == _Stage.closed ? _toggleLike : null,
+                onLongPress: _stage == _Stage.closed ? _open : null,
+              ),
             ),
           ),
         );
@@ -504,7 +528,8 @@ class _NoorSongRowState extends ConsumerState<NoorSongRow>
   Widget _actions(NoorTheme t, bool liked) {
     final inHistory =
         ref.watch(historyProvider).any((s) => s.videoId == widget.song.videoId);
-    ref.watch(playlistProvider); // the playlist button shows whether it is in one
+    ref.watch(
+        playlistProvider); // the playlist button shows whether it is in one
     final naming = _stage == _Stage.naming;
     return GestureDetector(
       behavior: HitTestBehavior.opaque,

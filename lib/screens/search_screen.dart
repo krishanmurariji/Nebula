@@ -11,6 +11,7 @@ import '../theme/noor_widgets.dart';
 import '../theme/noor_watermark.dart';
 import '../widgets/search_filter_bar.dart';
 import '../widgets/song_row.dart';
+import '../widgets/offline_pill.dart';
 import 'settings_screen.dart';
 import 'mini_player.dart';
 import '../theme/noor_search_button.dart';
@@ -36,6 +37,7 @@ class SearchPanel extends ConsumerWidget {
       SearchStatus.idle => 'Search',
       SearchStatus.loading => 'Searching…',
       SearchStatus.error => 'Search',
+      SearchStatus.offline => 'On this phone',
       SearchStatus.loaded => switch (filter) {
           SearchFilter.officialOnly => 'Official uploads',
           SearchFilter.bestMatch => 'Top Results',
@@ -43,20 +45,29 @@ class SearchPanel extends ConsumerWidget {
         },
     };
 
+    final offline = search.status == SearchStatus.offline;
     return Column(
       children: [
-        SearchFilterBar(
-          filter: filter,
-          onChanged: (f) {
-            HapticFeedback.selectionClick();
-            ref.read(searchFilterProvider.notifier).set(f);
-          },
-          totalCount: search.results.length,
-          allCount: search.all.isEmpty ? null : search.all.length,
-          officialCount: official,
-          isDark: t.isDark,
-          trailing: const _SettingsButton(),
-        ),
+        if (offline)
+          const Align(
+              alignment: Alignment.centerRight,
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(0, 2, 14, 6),
+                child: _SettingsButton(),
+              ))
+        else
+          SearchFilterBar(
+            filter: filter,
+            onChanged: (f) {
+              HapticFeedback.selectionClick();
+              ref.read(searchFilterProvider.notifier).set(f);
+            },
+            totalCount: search.results.length,
+            allCount: search.all.isEmpty ? null : search.all.length,
+            officialCount: official,
+            isDark: t.isDark,
+            trailing: const _SettingsButton(),
+          ),
         const SizedBox(height: 6),
         NoorLinedLabel(label),
         const SizedBox(height: 6),
@@ -80,6 +91,8 @@ class SearchPanel extends ConsumerWidget {
   Widget _body(BuildContext context, WidgetRef ref, NoorTheme t,
       SearchState search, SearchFilter filter) {
     switch (search.status) {
+      case SearchStatus.offline:
+        return _OfflineResults(query: search.query);
       case SearchStatus.idle:
         return const NoorGirlWatermark();
       case SearchStatus.loading:
@@ -310,6 +323,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
               ]),
             ),
           ),
+          const NoorOfflinePill(),
           const SizedBox(height: 8),
           Expanded(
             child: Stack(children: [
@@ -326,6 +340,107 @@ class _SearchPageState extends ConsumerState<SearchPage> {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Searching without internet: say so, then show the songs on the phone (its
+/// own music and the songs Noor saved) that match the words typed.
+class _OfflineResults extends ConsumerWidget {
+  const _OfflineResults({required this.query});
+  final String query;
+
+  /// Every song that can play right now without internet.
+  static List<Song> playableOffline(WidgetRef ref) {
+    final onDevice = ref.watch(isOnDeviceProvider);
+    final seen = <String>{};
+    final out = <Song>[];
+    void take(Iterable<Song> l) {
+      for (final s in l) {
+        if ((s.isLocal || onDevice(s.videoId)) && seen.add(s.videoId))
+          out.add(s);
+      }
+    }
+
+    take(ref.watch(myMusicProvider));
+    take(ref.watch(likedSongsProvider));
+    take(ref.watch(historyProvider));
+    for (final p in ref.watch(playlistProvider)) {
+      take(p.songs);
+    }
+    return out;
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final t = NoorTheme.of(context);
+    final ps = ref.watch(playerProvider);
+    final words =
+        query.toLowerCase().split(RegExp(r'\s+')).where((w) => w.isNotEmpty);
+    final matches = playableOffline(ref).where((s) {
+      final hay = '${s.title} ${s.artist}'.toLowerCase();
+      return words.every(hay.contains);
+    }).toList();
+
+    final banner = Padding(
+      padding: const EdgeInsets.fromLTRB(20, 4, 20, 10),
+      child: Row(children: [
+        Icon(Icons.wifi_off_rounded, size: 20, color: t.ac),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+              "You're offline. Showing songs on this phone that match "
+              '"$query".',
+              style: TextStyle(color: t.ac, fontSize: 13, height: 1.3)),
+        ),
+      ]),
+    );
+
+    if (matches.isEmpty) {
+      return Column(children: [
+        banner,
+        Expanded(
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(32, 0, 32, 110),
+              child: Text(
+                  'No saved song matches. Search YouTube again when you are back online.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: t.mute, fontSize: 13)),
+            ),
+          ),
+        ),
+      ]);
+    }
+    return ListView.builder(
+      padding: EdgeInsets.only(
+          bottom: 120 + MediaQuery.viewInsetsOf(context).bottom),
+      physics: const BouncingScrollPhysics(),
+      itemCount: matches.length + 1,
+      itemBuilder: (context, i) {
+        if (i == 0) return banner;
+        final s = matches[i - 1];
+        final isCurrent =
+            (ps.pendingSong?.videoId ?? ps.song?.videoId) == s.videoId;
+        void play() {
+          HapticFeedback.lightImpact();
+          if (ps.song?.videoId == s.videoId) {
+            ref.read(playerProvider.notifier).togglePlay();
+          } else {
+            ref.read(playerProvider.notifier).playSong(s, queue: matches);
+          }
+        }
+
+        return NoorSongRow(
+          key: ValueKey('offline_${s.videoId}'),
+          song: s,
+          current: isCurrent,
+          playing: isCurrent && ps.status == NebulaPlayerStatus.playing,
+          loading: isCurrent && ps.status == NebulaPlayerStatus.loading,
+          onTap: play,
+          onPlayPause: play,
+        );
+      },
     );
   }
 }

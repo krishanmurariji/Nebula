@@ -156,6 +156,11 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
 
   /// Fired whenever the queue or its index is changed by the handler itself.
   final StreamController<void> _queueChanged = StreamController.broadcast();
+
+  /// true when playback found the network gone, false when a song came
+  /// over the network again. Feeds the app's offline indicator.
+  final StreamController<bool> _offline = StreamController.broadcast();
+  Stream<bool> get offlineChanges => _offline.stream;
   Stream<void> get queueChanges => _queueChanged.stream;
 
   NebulaAudioHandler() {
@@ -363,6 +368,7 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
       }));
 
       _consecutiveFailures = 0;
+      if (!usedDiskCache) _offline.add(false); // it came over the network
       nlog('[N] ✓ started: ${song.title}');
       _scheduleNextPrefetch(req.tok);
     } on AcquireSuperseded {
@@ -510,6 +516,7 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
   /// No network. Keep the music going from downloaded songs if any exist in
   /// the queue; otherwise wait quietly and resume this song when we are back.
   void _handleOffline(Song song, int tok, {Duration? resumeAt}) {
+    _offline.add(true);
     final cache = _cache;
     if (cache != null && _queue.length > 1) {
       for (var step = 1; step < _queue.length; step++) {
@@ -533,6 +540,7 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
       final back = await _net.waitUntilOnline(isCancelled: () => _tok != tok);
       if (!back || _tok != tok) return;
       nlog('[N] back online → resuming "${song.title}"');
+      _offline.add(false);
       _resetFailureCounters();
       _requestLoad(song, resumeAt: resumeAt);
     }());

@@ -18,6 +18,7 @@ import '../theme/noor_song_card.dart';
 import '../theme/ripple_ring_clipper.dart';
 import '../theme/noor_widgets.dart';
 import '../widgets/song_row.dart';
+import '../widgets/offline_pill.dart';
 import '../theme/noor_watermark.dart';
 import '../theme/noor_search_button.dart';
 
@@ -267,6 +268,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     ),
                   ),
                 ),
+                const NoorOfflinePill(),
                 const SizedBox(height: 8),
                 if (_searching)
                   Expanded(child: SearchPanel(onRetry: _runSearch))

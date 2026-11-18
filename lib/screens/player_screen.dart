@@ -16,6 +16,7 @@ import '../theme/noor_song_card.dart';
 import '../theme/noor_turntable.dart';
 import '../theme/noor_widgets.dart';
 import 'search_screen.dart';
+import '../widgets/offline_pill.dart';
 import 'upnext_screen.dart';
 
 // ── Panel visibility state ────────────────────────────────────────────────────
@@ -362,6 +363,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
                       ]),
                     ),
                   ),
+                  const NoorOfflinePill(),
                   Expanded(
                     child: LayoutBuilder(builder: (context, box) {
                       final size = min(box.maxWidth - 48, box.maxHeight - 24)

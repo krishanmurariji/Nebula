@@ -1,10 +1,13 @@
+import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'connection_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/song.dart';
 import '../services/youtube_search_service.dart';
 import '../widgets/search_filter_bar.dart';
 
-enum SearchStatus { idle, loading, loaded, error }
+/// offline: no usable internet; the panel searches the songs on the phone.
+enum SearchStatus { idle, loading, loaded, error, offline }
 
 class SearchState {
   /// Best match first (Noor's ranking).
@@ -53,19 +56,36 @@ class SearchNotifier extends StateNotifier<SearchState> {
     final query = sanitizeQuery(rawQuery);
     final mine = ++_seq;
     if (query.isEmpty) { state = const SearchState(); return; }
+    final net = _ref.read(connectionProvider.notifier);
+    if (net.isOffline) {
+      // No point asking YouTube: search what is on the phone instead.
+      state = SearchState(status: SearchStatus.offline, query: query);
+      unawaited(net.recheck());
+      return;
+    }
     state = state.copyWith(status: SearchStatus.loading, query: query, error: null);
     try {
       final r = await _ref.read(searchServiceProvider).searchAll(query);
       if (!mounted || mine != _seq) return;
+      net.reportSuccess();
       state = state.copyWith(
           status: SearchStatus.loaded, results: r.ranked, all: r.all);
     } catch (e) {
       if (!mounted || mine != _seq) return;
-      state = state.copyWith(
-          status: SearchStatus.error,
-          error: e is SearchException
-              ? e.message
-              : 'Search failed. Check your connection and try again.');
+      final message = e is SearchException
+          ? e.message
+          : 'Search failed. Check your connection and try again.';
+      // Rate limiting means YouTube answered: we are online. Anything else
+      // may be a dead or weak connection: check before saying so.
+      if (!message.contains('limiting')) {
+        await net.recheck();
+        if (!mounted || mine != _seq) return;
+        if (net.isOffline) {
+          state = SearchState(status: SearchStatus.offline, query: query);
+          return;
+        }
+      }
+      state = state.copyWith(status: SearchStatus.error, error: message);
     }
   }
 

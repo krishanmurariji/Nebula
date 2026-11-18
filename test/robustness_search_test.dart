@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nebula_music_player/models/song.dart';
+import 'package:nebula_music_player/providers/connection_provider.dart';
 import 'package:nebula_music_player/providers/search_provider.dart';
 import 'package:nebula_music_player/services/youtube_search_service.dart';
 
@@ -29,7 +30,11 @@ void main() {
 
   setUp(() {
     fake = FakeSearch();
-    c = ProviderContainer(overrides: [searchServiceProvider.overrideWithValue(fake)]);
+    c = ProviderContainer(overrides: [
+      searchServiceProvider.overrideWithValue(fake),
+      connectionProvider.overrideWith(
+          (ref) => ConnectionNotifier(check: () async => true, start: false)),
+    ]);
     addTearDown(c.dispose);
   });
 
