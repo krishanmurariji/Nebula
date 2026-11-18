@@ -140,9 +140,20 @@ jobs:
             echo "SHA-256: \`$(cut -d' ' -f1 nebula.apk.sha256)\`"
           } > notes.md
           # Replace the previous rolling release so the download URL never changes.
+          # With "immutable releases" turned on in the repository settings,
+          # dev-latest cannot be replaced; then this build gets its own
+          # pre-release (dev-<build number>) so the APK is still published.
           gh release delete dev-latest --cleanup-tag --yes || true
-          gh release create dev-latest nebula.apk nebula.apk.sha256 \
+          if ! gh release create dev-latest nebula.apk nebula.apk.sha256 \
             --prerelease \
             --target "$GITHUB_SHA" \
             --title "Nebula dev build #${{ steps.ver.outputs.number }} (${SHORT})" \
-            --notes-file notes.md
+            --notes-file notes.md; then
+            TAG="dev-${{ steps.ver.outputs.number }}"
+            echo "::warning::dev-latest cannot be replaced (immutable releases are on). Publishing this build as $TAG instead."
+            gh release create "$TAG" nebula.apk nebula.apk.sha256 \
+              --prerelease \
+              --target "$GITHUB_SHA" \
+              --title "Nebula dev build #${{ steps.ver.outputs.number }} (${SHORT})" \
+              --notes-file notes.md
+          fi
