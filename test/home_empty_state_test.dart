@@ -23,14 +23,14 @@ Future<void> openHome(WidgetTester t, Map<String, Object> prefs) async {
 const _song = {'videoId': 'abcdefghijk', 'title': 'Saved Song', 'artist': 'Someone', 'thumbnailUrl': ''};
 
 void main() {
-  const first = "Let's play your first song";
+  const first = 'No song available';
 
-  testWidgets('new install: the three cards and the first-song message, no bottom card', (t) async {
+  testWidgets('new install: the three cards and "No song available", no bottom card', (t) async {
     await openHome(t, {});
     expect(find.text(first), findsNothing); // not before the library is read
     await t.pump(const Duration(milliseconds: 100));
     expect(find.text(first), findsOneWidget);
-    expect(find.text('Tap Search above to find one'), findsOneWidget);
+    expect(find.byIcon(Icons.music_off_rounded), findsOneWidget);
     // Only the open card's name, under the slider; the cards show icons.
     expect(find.text('My Favorites'), findsOneWidget);
     expect(find.text('My History'), findsNothing);

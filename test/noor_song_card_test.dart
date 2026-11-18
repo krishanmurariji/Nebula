@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -90,33 +91,49 @@ void main() {
   });
 
   group('Up next', () {
-    testWidgets('lists the queue with the same cards as Home', (t) async {
+    Future<void> open(WidgetTester t, NebulaPlayerState ps) async {
       t.view.physicalSize = const Size(411, 915);
       t.view.devicePixelRatio = 1.0;
       addTearDown(t.view.reset);
-      final queue = [song('a', 'First'), song('b', 'Second'), song('c', 'Third')];
       await t.pumpWidget(ProviderScope(
-        overrides: [
-          playerProvider.overrideWith((ref) => _Player(NebulaPlayerState(
-              song: queue.first, status: NebulaPlayerStatus.paused, queue: queue))),
-        ],
+        overrides: [playerProvider.overrideWith((ref) => _Player(ps))],
         child: const MaterialApp(home: UpNextScreen()),
       ));
       await t.pump(const Duration(milliseconds: 100));
+    }
+
+    testWidgets('a liked song: My Favorites, with the same cards as Home', (t) async {
+      final songs = [song('a', 'First'), song('b', 'Second'), song('c', 'Third')];
+      SharedPreferences.setMockInitialValues({
+        'nebula_liked': jsonEncode(songs.map((s) => s.toMap()).toList()),
+      });
+      await open(t, NebulaPlayerState(song: songs[1], status: NebulaPlayerStatus.paused));
+      expect(find.text('My Favorites'), findsOneWidget);
       expect(find.byType(NoorSongCard), findsNWidgets(3));
-      expect(find.text('Second'), findsOneWidget);
     });
 
-    testWidgets('an empty queue says so', (t) async {
-      t.view.physicalSize = const Size(411, 915);
-      t.view.devicePixelRatio = 1.0;
-      addTearDown(t.view.reset);
-      await t.pumpWidget(ProviderScope(
-        overrides: [playerProvider.overrideWith((ref) => _Player(const NebulaPlayerState()))],
-        child: const MaterialApp(home: UpNextScreen()),
-      ));
-      await t.pump(const Duration(milliseconds: 100));
-      expect(find.text('Queue is empty'), findsOneWidget);
+    testWidgets('a song in a playlist: the playlist, under its name', (t) async {
+      final songs = [song('a', 'First'), song('b', 'Second')];
+      SharedPreferences.setMockInitialValues({
+        'nebula_liked': jsonEncode([songs[0].toMap()]),
+        'nebula_playlists': jsonEncode([
+          {'id': 'p1', 'name': 'Road Trip', 'songs': songs.map((s) => s.toMap()).toList()}
+        ]),
+      });
+      await open(t, NebulaPlayerState(song: songs[0], status: NebulaPlayerStatus.paused));
+      expect(find.text('Road Trip'), findsOneWidget);
+      expect(find.byType(NoorSongCard), findsNWidgets(2));
+    });
+
+    testWidgets('nothing played before: just the playing song, as My History', (t) async {
+      await open(t, NebulaPlayerState(song: song('a', 'Only'), status: NebulaPlayerStatus.paused));
+      expect(find.text('My History'), findsOneWidget);
+      expect(find.byType(NoorSongCard), findsOneWidget);
+    });
+
+    testWidgets('no song at all says so', (t) async {
+      await open(t, const NebulaPlayerState());
+      expect(find.text('No song available'), findsOneWidget);
     });
   });
 }

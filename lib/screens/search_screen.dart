@@ -8,6 +8,7 @@ import '../providers/search_provider.dart';
 import '../theme/noor_palette.dart';
 import '../theme/noor_song_card.dart';
 import '../theme/noor_widgets.dart';
+import '../theme/noor_watermark.dart';
 import '../widgets/search_filter_bar.dart';
 
 /// What sits under the search bar on Home: the Best match / Official only
@@ -75,7 +76,7 @@ class SearchPanel extends ConsumerWidget {
       SearchState search, SearchFilter filter) {
     switch (search.status) {
       case SearchStatus.idle:
-        return const _Watermark();
+        return const NoorGirlWatermark();
       case SearchStatus.loading:
         return Center(
             child: CircularProgressIndicator(color: t.ac, strokeWidth: 1.6));
@@ -183,21 +184,3 @@ class _Results extends ConsumerWidget {
   }
 }
 
-/// The Noor mark, large and faded, shown before the first search.
-class _Watermark extends StatelessWidget {
-  const _Watermark();
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 10, 24, 110),
-      child: Center(
-        child: Opacity(
-          opacity: 0.16,
-          child: Image.asset('assets/images/noor_girl.png',
-              fit: BoxFit.contain, semanticLabel: 'Noor'),
-        ),
-      ),
-    );
-  }
-}

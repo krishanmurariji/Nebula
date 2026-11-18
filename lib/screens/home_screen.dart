@@ -15,6 +15,12 @@ import '../theme/noor_artwork.dart';
 import '../theme/noor_song_card.dart';
 import '../theme/ripple_ring_clipper.dart';
 import '../theme/noor_widgets.dart';
+import '../theme/noor_watermark.dart';
+import '../theme/noor_search_button.dart';
+
+/// Bumped by other pages (e.g. the player's Search button) to open search
+/// on Home.
+final homeSearchRequestProvider = StateProvider<int>((ref) => 0);
 
 /// One card of the Home slider.
 class HomeCategory {
@@ -123,6 +129,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<int>(homeSearchRequestProvider, (_, __) {
+      if (!_searching) _openSearch();
+    });
     final playlists = ref.watch(playlistProvider);
     final history = ref.watch(historyProvider);
     final liked = ref.watch(likedSongsProvider);
@@ -147,7 +156,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       if (libraryReady) _selectedId = cats[index].id;
     }
     final current = cats[index];
-    final everythingEmpty = cats.every((c) => c.songs.isEmpty) && libraryReady;
 
     final visible = 1 + (index > 0 ? 1 : 0) + (index < cats.length - 1 ? 1 : 0);
     final activeWidth =
@@ -178,7 +186,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         const SizedBox(width: 12),
                         Expanded(child: _searchField(t)),
                         const SizedBox(width: 8),
-                        _SearchToggle(
+                        NoorSearchButton(
                             open: _searching,
                             onTap: _searching ? _closeSearch : _openSearch),
                       ],
@@ -265,9 +273,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         child: !libraryReady
                             ? const SizedBox.expand()
                             : current.songs.isEmpty
-                                ? _EmptyList(
-                                    category: current.id,
-                                    firstRun: everythingEmpty)
+                                ? const _EmptyList()
                                 : ListView.builder(
                                     padding:
                                         const EdgeInsets.fromLTRB(0, 4, 0, 120),
@@ -373,55 +379,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       );
 }
 
-/// The "Search" button at the top right; while searching it becomes a
-/// round close button.
-class _SearchToggle extends StatelessWidget {
-  const _SearchToggle({required this.open, required this.onTap});
-  final bool open;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = NoorTheme.of(context);
-    return Semantics(
-      button: true,
-      label: open ? 'Close search' : 'Search',
-      excludeSemantics: true,
-      child: GestureDetector(
-        onTap: onTap,
-        behavior: HitTestBehavior.opaque,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 260),
-          curve: Curves.easeOutCubic,
-          height: 40,
-          width: open ? 40 : 84,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: t.ac, width: 0.8),
-          ),
-          child: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 200),
-            child: open
-                ? Icon(Icons.close_rounded,
-                    key: const ValueKey('x'), color: t.ac, size: 20)
-                : Text('Search',
-                    key: const ValueKey('s'),
-                    maxLines: 1,
-                    softWrap: false,
-                    overflow: TextOverflow.clip,
-                    style: TextStyle(
-                        color: t.ac,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: 0.3)),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 /// A slider card: one song's artwork filling a rounded card with a thin
 /// accent border, and the card's icon in a small ring in the middle.
 /// (The name is shown under the slider, between two thin lines.)
@@ -472,57 +429,35 @@ class _CategoryCard extends StatelessWidget {
   }
 }
 
-/// Shown in the list area when the open card has no songs.
+/// Shown in the list area when the open card has no songs: a "no song"
+/// icon and one line of text over the faded Noor girl.
 class _EmptyList extends StatelessWidget {
-  const _EmptyList({required this.category, required this.firstRun});
-  final String category;
-  final bool firstRun;
+  const _EmptyList();
 
   @override
   Widget build(BuildContext context) {
     final t = NoorTheme.of(context);
-    final (IconData icon, String title, String hint) = firstRun
-        ? (
-            Icons.queue_music_rounded,
-            "Let's play your first song",
-            'Tap Search above to find one'
-          )
-        : switch (category) {
-            'fav' => (
-                Icons.favorite_border_rounded,
-                'No favorites yet',
-                'Double-tap any song to add it here'
-              ),
-            'hist' => (
-                Icons.history_rounded,
-                'Nothing played yet',
-                'Tap Search above to find a song'
-              ),
-            _ => (
-                Icons.download_done_rounded,
-                'No songs on this device yet',
-                'Songs you play are saved here to play offline'
-              ),
-          };
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 90),
-      child: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 40, color: t.ac),
-            const SizedBox(height: 14),
-            Text(title,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                    color: t.ac, fontSize: 17, fontWeight: FontWeight.w600)),
-            const SizedBox(height: 6),
-            Text(hint,
-                textAlign: TextAlign.center,
-                style: TextStyle(color: t.mute, fontSize: 13)),
-          ],
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        const NoorGirlWatermark(),
+        Padding(
+          padding: const EdgeInsets.only(bottom: 90),
+          child: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.music_off_rounded, size: 40, color: t.ac),
+                const SizedBox(height: 12),
+                Text('No song available',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                        color: t.ac, fontSize: 17, fontWeight: FontWeight.w600)),
+              ],
+            ),
+          ),
         ),
-      ),
+      ],
     );
   }
 }

@@ -41,3 +41,20 @@ Song neighbourOf(
   final n = list.length;
   return list[((i + step) % n + n) % n];
 }
+
+/// The name of the list [contextListFor] picks: the playlist's name,
+/// "My Favorites", or "My History" (also when the song is alone).
+String contextTitleFor(
+  Song song, {
+  required List<Playlist> playlists,
+  required List<Song> liked,
+  required List<Song> history,
+}) {
+  bool has(List<Song> l) => l.any((s) => s.videoId == song.videoId);
+  for (final p in playlists) {
+    if (has(p.songs)) return p.name;
+  }
+  if (has(liked)) return 'My Favorites';
+  if (has(history)) return 'My History';
+  return 'My History';
+}
