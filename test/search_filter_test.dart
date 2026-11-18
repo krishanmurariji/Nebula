@@ -176,20 +176,14 @@ void main() {
           searchProvider.overrideWith((ref) => StubSearch(
               ref, SearchState(results: results, status: SearchStatus.loaded, query: 'q'))),
         ],
-        child: const MaterialApp(home: SearchScreen()),
+        child: MaterialApp(home: Scaffold(body: SearchPanel(onRetry: () {}))),
       ));
       await t.pump(const Duration(milliseconds: 100));
     }
 
     Future<void> chooseFilter(WidgetTester t, String option) async {
-      await t.tap(find.byIcon(Icons.tune_rounded));
-      await t.pump(); // the route appears
-      await t.pump(const Duration(milliseconds: 500)); // it slides down
       await t.tap(find.text(option));
-      await t.pump(const Duration(milliseconds: 100));
-      await t.tap(find.text('Apply'));
-      await t.pump(); // it starts closing
-      await t.pump(const Duration(milliseconds: 500));
+      await t.pump(const Duration(milliseconds: 300));
     }
 
     testWidgets('official only is the default: fan uploads are hidden', (t) async {
@@ -207,7 +201,7 @@ void main() {
       expect(find.textContaining('·  Official'), findsNWidgets(2));
     });
 
-    testWidgets('the filter pop-up switches to Best match and remembers it', (t) async {
+    testWidgets('the Best match chip switches the list and remembers it', (t) async {
       await open(t, results: sample);
       await chooseFilter(t, 'Best match');
       expect(find.text('Fan upload (Lyrics)'), findsOneWidget);
@@ -249,7 +243,7 @@ void main() {
 
     testWidgets('double-tapping a song likes it, again unlikes it', (t) async {
       await open(t, results: sample);
-      final container = ProviderScope.containerOf(t.element(find.byType(SearchScreen)));
+      final container = ProviderScope.containerOf(t.element(find.byType(SearchPanel)));
       final tile = find.text('Real Song (Official Audio)');
       await t.tap(tile);
       await t.pump(const Duration(milliseconds: 40));
@@ -264,9 +258,17 @@ void main() {
       expect(container.read(likedProvider), isEmpty);
     });
 
-    testWidgets('nothing searched yet: the empty page invites a search', (t) async {
+    testWidgets('a search with no results says so', (t) async {
       await open(t, results: const []);
       expect(find.text('No results found'), findsOneWidget);
+    });
+
+    testWidgets('tapping a result plays it without leaving the page', (t) async {
+      await open(t, results: sample);
+      await t.tap(find.text('Real Song (Official Audio)'));
+      await t.pump(const Duration(milliseconds: 400));
+      expect(player.queues, hasLength(1));
+      expect(find.byType(SearchPanel), findsOneWidget);
     });
   });
 }

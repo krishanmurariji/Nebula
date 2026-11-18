@@ -213,3 +213,51 @@ class _NoorSongCardState extends State<NoorSongCard>
     );
   }
 }
+
+/// A centred label with a thin line running out to each side:
+/// `────── My Favorites ──────`.
+class NoorLinedLabel extends StatelessWidget {
+  const NoorLinedLabel(this.text, {super.key});
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = NoorTheme.of(context);
+    Widget line(Alignment fadeFrom) => Expanded(
+          child: Container(
+            height: 0.8,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: fadeFrom,
+                end: -fadeFrom,
+                colors: [t.ac.withOpacity(0.0), t.ac.withOpacity(0.7)],
+              ),
+            ),
+          ),
+        );
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Row(
+        children: [
+          line(Alignment.centerLeft),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 250),
+              child: Text(text,
+                  key: ValueKey(text),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                      color: t.ac,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.5)),
+            ),
+          ),
+          line(Alignment.centerRight),
+        ],
+      ),
+    );
+  }
+}

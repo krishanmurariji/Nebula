@@ -1,5 +1,5 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'noor_artwork.dart';
 import 'noor_palette.dart';
 
 /// A vinyl record whose whole face is the song's artwork, with fine grooves
@@ -12,7 +12,7 @@ class NoorDisc extends StatelessWidget {
     required this.size,
     this.shadow = true,
     this.dim = 0.0,
-    this.zoom = 1.35,
+    this.zoom = 1.0,
   });
 
   final String url;
@@ -45,11 +45,7 @@ class NoorDisc extends StatelessWidget {
             if (url.isNotEmpty)
               Transform.scale(
                 scale: zoom,
-                child: CachedNetworkImage(
-                  imageUrl: url,
-                  fit: BoxFit.cover,
-                  errorWidget: (_, __, ___) => const SizedBox(),
-                ),
+                child: NoorArtwork(url: url),
               ),
             if (dim > 0) ColoredBox(color: Colors.black.withOpacity(dim)),
             // Grooves + a soft dark rim, drawn over the artwork.

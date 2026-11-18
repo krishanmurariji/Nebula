@@ -32,17 +32,10 @@ class SearchFilterBar extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 2, 20, 6),
       child: Wrap(
+        alignment: WrapAlignment.center,
         spacing: 10,
         runSpacing: 8,
         children: [
-          _FilterChipButton(
-            label: 'Best match',
-            count: totalCount,
-            icon: Icons.auto_awesome_rounded,
-            selected: filter == SearchFilter.bestMatch,
-            isDark: isDark,
-            onTap: () => onChanged(SearchFilter.bestMatch),
-          ),
           _FilterChipButton(
             label: 'Official only',
             count: officialCount,
@@ -50,6 +43,14 @@ class SearchFilterBar extends StatelessWidget {
             selected: filter == SearchFilter.officialOnly,
             isDark: isDark,
             onTap: () => onChanged(SearchFilter.officialOnly),
+          ),
+          _FilterChipButton(
+            label: 'Best match',
+            count: totalCount,
+            icon: Icons.auto_awesome_rounded,
+            selected: filter == SearchFilter.bestMatch,
+            isDark: isDark,
+            onTap: () => onChanged(SearchFilter.bestMatch),
           ),
         ],
       ),
@@ -77,7 +78,7 @@ class _FilterChipButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = NoorTheme.byMode(isDark);
-    final fg = selected ? t.onAc : t.mute;
+    final fg = selected ? t.onAc : t.ac;
 
     return Semantics(
       button: true,
@@ -97,7 +98,7 @@ class _FilterChipButton extends StatelessWidget {
           decoration: BoxDecoration(
             color: selected ? t.ac : null,
             borderRadius: BorderRadius.circular(22),
-            border: Border.all(color: selected ? t.ac : t.soft, width: 1),
+            border: Border.all(color: t.ac, width: 0.8),
           ),
           // Shrinks to fit instead of overflowing on very narrow screens or
           // with huge system text.

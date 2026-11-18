@@ -8,13 +8,12 @@ import '../providers/theme_provider.dart';
 import '../theme/noor_palette.dart';
 
 import 'home_screen.dart';
-import 'search_screen.dart';
 import 'library_screen.dart';
 import 'settings_screen.dart';
 
-/// Pages, left to right: Search, Home, Library, Settings. The app opens on
-/// Home, so sliding right from Home reaches Search.
-const kSearchPage = 0, kHomePage = 1, kLibraryPage = 2, kSettingsPage = 3;
+/// Pages, left to right: Home, Library, Settings. Search lives inside Home
+/// (the search icon at the top right).
+const kHomePage = 0, kLibraryPage = 1, kSettingsPage = 2;
 
 final shellTabProvider = StateProvider<int>((ref) => kHomePage);
 
@@ -100,8 +99,7 @@ class _MainShellState extends ConsumerState<MainShell> {
           onPageChanged: _onPageChanged,
           physics: const BouncingScrollPhysics(),
           children: [
-            const SearchScreen(),
-            const HomeScreen(),
+              const HomeScreen(),
             const LibraryScreen(),
             SettingsScreen(onNavigate: goTo),
           ],

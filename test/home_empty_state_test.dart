@@ -30,10 +30,11 @@ void main() {
     expect(find.text(first), findsNothing); // not before the library is read
     await t.pump(const Duration(milliseconds: 100));
     expect(find.text(first), findsOneWidget);
-    expect(find.text('Slide right to search for one'), findsOneWidget);
+    expect(find.text('Tap search above to find one'), findsOneWidget);
+    // Only the open card's name, under the slider; the cards show icons.
     expect(find.text('My Favorites'), findsOneWidget);
-    expect(find.text('My History'), findsOneWidget);
-    expect(find.text('Search songs, artists…'), findsNothing);
+    expect(find.text('My History'), findsNothing);
+    expect(find.byIcon(Icons.history_rounded), findsOneWidget);
     expect(find.text('Saved Song'), findsNothing);
     expect(find.descendant(of: find.byType(MiniPlayer), matching: find.byType(Text)), findsNothing);
     expect(t.takeException(), isNull);
@@ -65,12 +66,42 @@ void main() {
     });
     await t.pump(const Duration(milliseconds: 1500));
     expect(find.widgetWithText(NoorSongCard, 'Loved Song'), findsOneWidget);
-    await t.tapAt(t.getCenter(find.text('My History')) + const Offset(0, 50));
+    await t.tap(find.byIcon(Icons.history_rounded));
     for (var i = 0; i < 20; i++) {
       await t.pump(const Duration(milliseconds: 100));
     }
     expect(find.widgetWithText(NoorSongCard, 'Saved Song'), findsOneWidget);
     expect(find.widgetWithText(NoorSongCard, 'Loved Song'), findsNothing);
+  });
+
+  testWidgets('search opens from the icon, shows the watermark, and closes', (t) async {
+    await openHome(t, {});
+    await t.pump(const Duration(milliseconds: 100));
+    await t.tap(find.bySemanticsLabel('Search'));
+    for (var i = 0; i < 5; i++) {
+      await t.pump(const Duration(milliseconds: 100));
+    }
+    expect(find.byType(TextField), findsOneWidget);
+    expect(find.text('Official only'), findsOneWidget);
+    expect(find.text('Best match'), findsOneWidget);
+    expect(find.bySemanticsLabel('Noor'), findsWidgets); // the faded mark
+    expect(find.text(first), findsNothing);
+    await t.tap(find.bySemanticsLabel('Close search'));
+    await t.pump(const Duration(milliseconds: 400));
+    expect(find.byType(TextField), findsNothing);
+    expect(find.text(first), findsOneWidget);
+    expect(t.takeException(), isNull);
+  });
+
+  testWidgets('back closes search instead of leaving Home', (t) async {
+    await openHome(t, {});
+    await t.pump(const Duration(milliseconds: 100));
+    await t.tap(find.bySemanticsLabel('Search'));
+    await t.pump(const Duration(milliseconds: 400));
+    expect(find.byType(TextField), findsOneWidget);
+    await t.binding.handlePopRoute();
+    await t.pump(const Duration(milliseconds: 400));
+    expect(find.byType(TextField), findsNothing);
   });
 
   test('the three default cards always come first; empty playlists are left out', () {

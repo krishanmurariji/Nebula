@@ -1,5 +1,5 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'noor_artwork.dart';
 import 'noor_palette.dart';
 import 'noor_widgets.dart';
 
@@ -25,17 +25,7 @@ class NoorArt extends StatelessWidget {
         borderRadius: BorderRadius.circular(radius),
         child: url.isEmpty
             ? Icon(Icons.music_note_rounded, color: t.bg, size: size * 0.4)
-            : Transform.scale(
-                scale: 1.35,
-                child: CachedNetworkImage(
-                  imageUrl: url,
-                  fit: BoxFit.cover,
-                  width: double.infinity,
-                  height: double.infinity,
-                  errorWidget: (_, __, ___) => Icon(Icons.music_note_rounded,
-                      color: t.bg, size: size * 0.4),
-                ),
-              ),
+            : SizedBox.expand(child: NoorArtwork(url: url)),
       ),
     );
   }

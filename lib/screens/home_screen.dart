@@ -8,8 +8,10 @@ import '../providers/library_provider.dart';
 import '../providers/theme_provider.dart';
 import 'main_shell.dart';
 import 'mini_player.dart';
+import 'search_screen.dart';
+import '../providers/search_provider.dart';
 import '../theme/noor_palette.dart';
-import '../theme/noor_record.dart';
+import '../theme/noor_artwork.dart';
 import '../theme/noor_song_card.dart';
 import '../theme/ripple_ring_clipper.dart';
 import '../theme/noor_widgets.dart';
@@ -50,6 +52,51 @@ class HomeScreen extends ConsumerStatefulWidget {
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   String? _selectedId;
+
+  /// Picks which song's artwork fills each slider card; new every launch.
+  final int _artSeed = Random().nextInt(1 << 30);
+
+  bool _searching = false;
+  final _query = TextEditingController();
+  final _queryFocus = FocusNode();
+
+  @override
+  void dispose() {
+    _query.dispose();
+    _queryFocus.dispose();
+    super.dispose();
+  }
+
+  void _openSearch() {
+    HapticFeedback.selectionClick();
+    setState(() => _searching = true);
+    Future.delayed(const Duration(milliseconds: 280), () {
+      if (mounted && _searching) _queryFocus.requestFocus();
+    });
+  }
+
+  void _closeSearch() {
+    HapticFeedback.selectionClick();
+    _queryFocus.unfocus();
+    _query.clear();
+    ref.read(searchProvider.notifier).clear();
+    setState(() => _searching = false);
+  }
+
+  void _runSearch() {
+    final q = _query.text.trim();
+    if (q.isEmpty) return;
+    ref.read(searchProvider.notifier).search(q);
+    _queryFocus.unfocus();
+  }
+
+  String _artFor(HomeCategory c) {
+    if (c.songs.isEmpty) return '';
+    final withArt = c.songs.where((s) => s.thumbnailUrl.isNotEmpty).toList();
+    if (withArt.isEmpty) return '';
+    return withArt[(_artSeed + c.id.hashCode).abs() % withArt.length]
+        .thumbnailUrl;
+  }
 
   void _select(String id) {
     if (_selectedId == id) return;
@@ -106,216 +153,304 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final activeWidth =
         screenWidth - 24 - visible * 12.0 - (visible - 1) * 48.0 - 1;
 
-    return Scaffold(
-      backgroundColor: t.bg,
-      body: Stack(
-        children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SizedBox(height: topPad + 14),
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 20),
-                child: NoorWordmark(height: 30),
-              ),
-              const SizedBox(height: 6),
-
-              // ── Slider ────────────────────────────────────────────────
-              SizedBox(
-                height: 176,
-                child: GestureDetector(
-                  onHorizontalDragEnd: (d) {
-                    final v = d.primaryVelocity ?? 0;
-                    if (v < -200) {
-                      if (index < cats.length - 1) {
-                        _select(cats[index + 1].id);
-                      } else {
-                        _goToPage(2); // past the last card: Library
-                      }
-                    } else if (v > 200) {
-                      if (index > 0) {
-                        _select(cats[index - 1].id);
-                      } else {
-                        _goToPage(0); // before the first card: Search
-                      }
-                    }
-                  },
-                  child: ListView.builder(
-                    scrollDirection: Axis.horizontal,
-                    physics: const NeverScrollableScrollPhysics(),
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    itemCount: cats.length,
-                    itemBuilder: (context, i) {
-                      final active = i == index;
-                      final adjacent = (i - index).abs() == 1;
-                      return GestureDetector(
-                        onTap: () => _select(cats[i].id),
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 500),
-                          curve: Curves.easeOutCubic,
-                          width: active ? activeWidth : (adjacent ? 48 : 0),
-                          margin: EdgeInsets.symmetric(
-                              horizontal: (active || adjacent) ? 6 : 0,
-                              vertical: 12),
-                          child: (active || adjacent)
-                              ? _CategoryCard(
-                                  title: cats[i].title, active: active)
-                              : const SizedBox.shrink(),
-                        ),
-                      );
-                    },
+    return PopScope(
+      // Back (button or gesture) closes search first.
+      canPop: !_searching,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && _searching) _closeSearch();
+      },
+      child: Scaffold(
+        backgroundColor: t.bg,
+        resizeToAvoidBottomInset: false,
+        body: Stack(
+          children: [
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(height: topPad + 14),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 14, 0),
+                  child: SizedBox(
+                    height: 44,
+                    child: Row(
+                      children: [
+                        const NoorWordmark(height: 30),
+                        const SizedBox(width: 12),
+                        Expanded(child: _searchField(t)),
+                        const SizedBox(width: 8),
+                        _SearchToggle(
+                            open: _searching,
+                            onTap: _searching ? _closeSearch : _openSearch),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 4),
-
-              // ── Songs (ring-wipe reveal when the card changes) ─────────
-              Expanded(
-                child: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 1100),
-                  layoutBuilder: (cur, prev) => Stack(
-                    alignment: Alignment.topCenter,
-                    children: [...prev, if (cur != null) cur],
-                  ),
-                  transitionBuilder: (child, animation) {
-                    if (child.key != ValueKey(current.id)) return child;
-                    return AnimatedBuilder(
-                      animation: animation,
-                      builder: (context, _) => ClipPath(
-                        clipper: RippleRingClipper(animation.value),
-                        child: child,
+                const SizedBox(height: 8),
+                if (_searching)
+                  Expanded(child: SearchPanel(onRetry: _runSearch))
+                else ...[
+                  // ── Slider ────────────────────────────────────────────────
+                  SizedBox(
+                    height: 168,
+                    child: GestureDetector(
+                      onHorizontalDragEnd: (d) {
+                        final v = d.primaryVelocity ?? 0;
+                        if (v < -200) {
+                          if (index < cats.length - 1) {
+                            _select(cats[index + 1].id);
+                          } else {
+                            _goToPage(kLibraryPage); // past the last card
+                          }
+                        } else if (v > 200) {
+                          if (index > 0) {
+                            _select(cats[index - 1].id);
+                          } else {
+                            _openSearch(); // before the first card
+                          }
+                        }
+                      },
+                      child: ListView.builder(
+                        scrollDirection: Axis.horizontal,
+                        physics: const NeverScrollableScrollPhysics(),
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        itemCount: cats.length,
+                        itemBuilder: (context, i) {
+                          final active = i == index;
+                          final adjacent = (i - index).abs() == 1;
+                          return GestureDetector(
+                            onTap: () => _select(cats[i].id),
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 500),
+                              curve: Curves.easeOutCubic,
+                              width: active ? activeWidth : (adjacent ? 48 : 0),
+                              margin: EdgeInsets.symmetric(
+                                  horizontal: (active || adjacent) ? 6 : 0,
+                                  vertical: 8),
+                              child: (active || adjacent)
+                                  ? _CategoryCard(
+                                      icon: _iconFor(cats[i].id),
+                                      artUrl: _artFor(cats[i]),
+                                      active: active)
+                                  : const SizedBox.shrink(),
+                            ),
+                          );
+                        },
                       ),
-                    );
-                  },
-                  child: Container(
-                    key: ValueKey(current.id),
-                    color: t.bg,
-                    child: !libraryReady
-                        ? const SizedBox.expand()
-                        : current.songs.isEmpty
-                            ? _EmptyList(
-                                category: current.id, firstRun: everythingEmpty)
-                            : ListView.builder(
-                                padding:
-                                    const EdgeInsets.fromLTRB(0, 4, 0, 120),
-                                physics: const BouncingScrollPhysics(),
-                                itemCount: current.songs.length,
-                                itemBuilder: (context, i) {
-                                  final song = current.songs[i];
-                                  final targetId = ps.pendingSong?.videoId ??
-                                      ps.song?.videoId;
-                                  final isCurrent = song.videoId == targetId;
-                                  final loading = isCurrent &&
-                                      (ps.status ==
-                                              NebulaPlayerStatus.loading ||
-                                          (ps.pendingSong != null &&
-                                              ps.status !=
-                                                  NebulaPlayerStatus.playing &&
-                                              ps.status !=
-                                                  NebulaPlayerStatus.paused));
-                                  return NoorSongCard(
-                                    thumbnailUrl: song.thumbnailUrl,
-                                    title: song.title,
-                                    artist: song.artist,
-                                    liked: liked
-                                        .any((l) => l.videoId == song.videoId),
-                                    current: isCurrent,
-                                    playing: isCurrent &&
-                                        ps.status == NebulaPlayerStatus.playing,
-                                    loading: loading,
-                                    onTap: () => _play(song, current.songs),
-                                    onPlayPause: () =>
-                                        _play(song, current.songs),
-                                    onToggleLike: () => _toggleLike(song),
-                                  );
-                                },
-                              ),
+                    ),
                   ),
-                ),
-              ),
-            ],
+                  NoorLinedLabel(current.title),
+                  const SizedBox(height: 8),
+
+                  // ── Songs (ring-wipe reveal when the card changes) ─────────
+                  Expanded(
+                    child: AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 1100),
+                      layoutBuilder: (cur, prev) => Stack(
+                        alignment: Alignment.topCenter,
+                        children: [...prev, if (cur != null) cur],
+                      ),
+                      transitionBuilder: (child, animation) {
+                        if (child.key != ValueKey(current.id)) return child;
+                        return AnimatedBuilder(
+                          animation: animation,
+                          builder: (context, _) => ClipPath(
+                            clipper: RippleRingClipper(animation.value),
+                            child: child,
+                          ),
+                        );
+                      },
+                      child: Container(
+                        key: ValueKey(current.id),
+                        color: t.bg,
+                        child: !libraryReady
+                            ? const SizedBox.expand()
+                            : current.songs.isEmpty
+                                ? _EmptyList(
+                                    category: current.id,
+                                    firstRun: everythingEmpty)
+                                : ListView.builder(
+                                    padding:
+                                        const EdgeInsets.fromLTRB(0, 4, 0, 120),
+                                    physics: const BouncingScrollPhysics(),
+                                    itemCount: current.songs.length,
+                                    itemBuilder: (context, i) {
+                                      final song = current.songs[i];
+                                      final targetId =
+                                          ps.pendingSong?.videoId ??
+                                              ps.song?.videoId;
+                                      final isCurrent =
+                                          song.videoId == targetId;
+                                      final loading = isCurrent &&
+                                          (ps.status ==
+                                                  NebulaPlayerStatus.loading ||
+                                              (ps.pendingSong != null &&
+                                                  ps.status !=
+                                                      NebulaPlayerStatus
+                                                          .playing &&
+                                                  ps.status !=
+                                                      NebulaPlayerStatus
+                                                          .paused));
+                                      return NoorSongCard(
+                                        thumbnailUrl: song.thumbnailUrl,
+                                        title: song.title,
+                                        artist: song.artist,
+                                        liked: liked.any(
+                                            (l) => l.videoId == song.videoId),
+                                        current: isCurrent,
+                                        playing: isCurrent &&
+                                            ps.status ==
+                                                NebulaPlayerStatus.playing,
+                                        loading: loading,
+                                        onTap: () => _play(song, current.songs),
+                                        onPlayPause: () =>
+                                            _play(song, current.songs),
+                                        onToggleLike: () => _toggleLike(song),
+                                      );
+                                    },
+                                  ),
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+            const Positioned(left: 0, right: 0, bottom: 0, child: MiniPlayer()),
+          ],
+        ),
+      ),
+    );
+  }
+
+  IconData _iconFor(String id) => switch (id) {
+        'fav' => Icons.favorite_rounded,
+        'hist' => Icons.history_rounded,
+        'music' => Icons.download_done_rounded,
+        _ => Icons.queue_music_rounded,
+      };
+
+  /// The search input grows out from the search icon to fill the space
+  /// between "Noor" and the icon.
+  Widget _searchField(NoorTheme t) => LayoutBuilder(
+        builder: (context, box) => Align(
+          alignment: Alignment.centerRight,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 320),
+            curve: Curves.easeOutCubic,
+            width: _searching ? box.maxWidth : 0,
+            height: 40,
+            decoration: BoxDecoration(
+              color: t.bg,
+              borderRadius: BorderRadius.circular(20),
+              border: _searching ? Border.all(color: t.ac, width: 0.8) : null,
+            ),
+            child: _searching
+                ? TextField(
+                    controller: _query,
+                    focusNode: _queryFocus,
+                    onSubmitted: (_) => _runSearch(),
+                    textInputAction: TextInputAction.search,
+                    cursorColor: t.ac,
+                    style: TextStyle(
+                        color: t.ac, fontSize: 14, fontWeight: FontWeight.w600),
+                    decoration: InputDecoration(
+                      isDense: true,
+                      hintText: 'Songs, artists…',
+                      hintStyle: TextStyle(color: t.mute, fontSize: 14),
+                      border: InputBorder.none,
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 11),
+                    ),
+                  )
+                : null,
           ),
-          const Positioned(left: 0, right: 0, bottom: 0, child: MiniPlayer()),
-        ],
+        ),
+      );
+}
+
+/// The round search / close button at the top right.
+class _SearchToggle extends StatelessWidget {
+  const _SearchToggle({required this.open, required this.onTap});
+  final bool open;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = NoorTheme.of(context);
+    return Semantics(
+      button: true,
+      label: open ? 'Close search' : 'Search',
+      excludeSemantics: true,
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            border: Border.all(color: t.ac, width: 0.8),
+          ),
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 220),
+            transitionBuilder: (c, a) => RotationTransition(
+                turns: Tween(begin: 0.75, end: 1.0).animate(a),
+                child: FadeTransition(opacity: a, child: c)),
+            child: Icon(open ? Icons.close_rounded : Icons.search_rounded,
+                key: ValueKey(open), color: t.ac, size: 20),
+          ),
+        ),
       ),
     );
   }
 }
 
-/// A slider card: white with a thin accent border, a record in the middle
-/// and the name on a small pill. On a collapsed card the name stands upright
-/// in the middle; as the card opens it turns flat and slides to the bottom.
+/// A slider card: one song's artwork filling a rounded card with a thin
+/// accent border, and the card's icon in a small ring in the middle.
+/// (The name is shown under the slider, between two thin lines.)
 class _CategoryCard extends StatelessWidget {
-  const _CategoryCard({required this.title, required this.active});
-  final String title;
+  const _CategoryCard(
+      {required this.icon, required this.artUrl, required this.active});
+  final IconData icon;
+  final String artUrl;
   final bool active;
 
   @override
   Widget build(BuildContext context) {
     final t = NoorTheme.of(context);
-    return LayoutBuilder(builder: (context, box) {
-      final h = box.maxHeight;
-      final record = h * 0.64;
-      return Container(
-        clipBehavior: Clip.antiAlias,
-        decoration: BoxDecoration(
-          color: t.bg,
-          borderRadius: BorderRadius.circular(kNoorCardRadius),
-          border: Border.all(color: t.ac, width: 1),
-        ),
-        child: TweenAnimationBuilder<double>(
-          tween: Tween(end: active ? 1 : 0),
-          duration: const Duration(milliseconds: 520),
-          curve: Curves.easeOutCubic,
-          builder: (context, v, _) => Stack(
-            children: [
-              Positioned(
-                left: (box.maxWidth - record) / 2,
-                top: h * 0.07,
-                child: Opacity(
-                  opacity: 0.55 + 0.45 * v,
-                  child: NoorRecord(size: record),
-                ),
+    final hasArt = artUrl.isNotEmpty;
+    return Container(
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: t.bg,
+        borderRadius: BorderRadius.circular(kNoorCardRadius),
+        border: Border.all(color: t.ac, width: 1),
+      ),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          if (hasArt) NoorArtwork(url: artUrl),
+          if (hasArt)
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 400),
+              color: Colors.black.withOpacity(active ? 0.10 : 0.30),
+            ),
+          Center(
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 400),
+              curve: Curves.easeOutCubic,
+              width: active ? 48 : 34,
+              height: active ? 48 : 34,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: t.bg.withOpacity(hasArt ? 0.92 : 1),
+                border: Border.all(color: t.ac, width: 0.8),
               ),
-              Align(
-                alignment: Alignment.lerp(
-                    Alignment.center, const Alignment(0, 0.80), v)!,
-                child: Transform.rotate(
-                  angle: -pi / 2 * (1 - v),
-                  // A zero-size anchor lets Align place the label's centre;
-                  // the label itself may be wider than a collapsed card.
-                  child: SizedBox.shrink(
-                    child: OverflowBox(
-                      minWidth: 0,
-                      minHeight: 0,
-                      maxWidth: 400,
-                      maxHeight: 60,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: t.bg,
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: t.ac, width: 0.8),
-                        ),
-                        child: Text(title,
-                            maxLines: 1,
-                            softWrap: false,
-                            style: TextStyle(
-                                color: t.ac,
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                letterSpacing: 0.4)),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
+              child: Icon(icon, color: t.ac, size: active ? 22 : 16),
+            ),
           ),
-        ),
-      );
-    });
+        ],
+      ),
+    );
   }
 }
 
@@ -332,7 +467,7 @@ class _EmptyList extends StatelessWidget {
         ? (
             Icons.queue_music_rounded,
             "Let's play your first song",
-            'Slide right to search for one'
+            'Tap search above to find one'
           )
         : switch (category) {
             'fav' => (
@@ -343,7 +478,7 @@ class _EmptyList extends StatelessWidget {
             'hist' => (
                 Icons.history_rounded,
                 'Nothing played yet',
-                'Slide right to search for a song'
+                'Tap search above to find a song'
               ),
             _ => (
                 Icons.download_done_rounded,
@@ -370,9 +505,9 @@ class _EmptyList extends StatelessWidget {
                 Text(hint,
                     textAlign: TextAlign.center,
                     style: TextStyle(color: t.mute, fontSize: 13)),
-                if (hint.startsWith('Slide right')) ...[
+                if (hint.startsWith('Tap search')) ...[
                   const SizedBox(width: 6),
-                  Icon(Icons.east_rounded, size: 16, color: t.mute),
+                  Icon(Icons.search_rounded, size: 16, color: t.mute),
                 ],
               ],
             ),
