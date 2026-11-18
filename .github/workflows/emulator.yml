@@ -21,7 +21,7 @@ concurrency:
 jobs:
   emulator:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
 
@@ -56,11 +56,12 @@ jobs:
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           script: |
             adb logcat -c || true
-            flutter drive --driver=test_driver/integration_test.dart --target=integration_test/online_test.dart -d emulator-5554
+            timeout 900 flutter drive --driver=test_driver/integration_test.dart --target=integration_test/online_test.dart -d emulator-5554
             adb shell pm grant com.nebula.nebula_music_player android.permission.READ_MEDIA_AUDIO || true
             adb shell pm grant com.nebula.nebula_music_player android.permission.POST_NOTIFICATIONS || true
             adb shell cmd connectivity airplane-mode enable
-            flutter drive --driver=test_driver/integration_test.dart --target=integration_test/offline_test.dart -d emulator-5554
+            adb shell dumpsys package com.nebula.nebula_music_player | grep -i 'READ_MEDIA_AUDIO' || true
+            timeout 600 flutter drive --driver=test_driver/integration_test.dart --target=integration_test/offline_test.dart -d emulator-5554
             adb shell cmd connectivity airplane-mode disable
             adb logcat -d > build/logcat.txt || true
 

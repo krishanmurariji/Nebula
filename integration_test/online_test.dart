@@ -66,5 +66,5 @@ void main() {
             : 'playback: started');
     await shot(b, t, '04_after_play');
     expect(t.takeException(), isNull);
-  });
+  }, timeout: const Timeout(Duration(minutes: 5)));
 }

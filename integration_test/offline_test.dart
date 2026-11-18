@@ -37,7 +37,12 @@ void main() {
         reason: 'Could not reach the My Music card');
     {
       await t.tap(music.first);
-      await idle(t, const Duration(seconds: 2));
+      // The permission check is asynchronous: give it a few seconds.
+      final end = DateTime.now().add(const Duration(seconds: 10));
+      while (DateTime.now().isBefore(end) &&
+          find.bySemanticsLabel('Allow access').evaluate().isNotEmpty) {
+        await idle(t, const Duration(milliseconds: 500));
+      }
       expect(find.bySemanticsLabel('Allow access'), findsNothing,
           reason: 'Permission was granted but My Music still asks for it');
       await shot(b, t, '06_my_music');
@@ -56,5 +61,5 @@ void main() {
     await shot(b, t, '07_offline_search');
     report('offline: search explains and searches the phone');
     expect(t.takeException(), isNull);
-  });
+  }, timeout: const Timeout(Duration(minutes: 5)));
 }

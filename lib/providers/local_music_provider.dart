@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:permission_handler/permission_handler.dart';
 
@@ -22,9 +23,39 @@ const MethodChannel localMusicChannel = MethodChannel('noor/local_music');
 ///
 /// Nothing is asked at start-up: if access was already given the list is
 /// read quietly; otherwise My Music shows a button that calls [requestAccess].
-class LocalMusicNotifier extends StateNotifier<LocalMusicState> {
+class LocalMusicNotifier extends StateNotifier<LocalMusicState>
+    with WidgetsBindingObserver {
   LocalMusicNotifier({bool autoLoad = true}) : super(const LocalMusicState()) {
-    if (autoLoad) _init();
+    if (autoLoad) {
+      _init();
+      // Coming back to the app (for example from Android's settings, where
+      // access may just have been given): check again.
+      WidgetsBinding.instance.addObserver(this);
+      _observing = true;
+    }
+  }
+
+  bool _observing = false;
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState s) {
+    if (s == AppLifecycleState.resumed) checkAgain();
+  }
+
+  @override
+  void dispose() {
+    if (_observing) WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  /// Re-reads whether access was given (cheap); reads the library if so.
+  Future<void> checkAgain() async {
+    if (!_android || !mounted || state.access == LocalAccess.granted) return;
+    try {
+      if (await _granted()) await refresh();
+    } catch (e) {
+      nlog('[N] local music: status check failed: $e');
+    }
   }
 
   static bool get _android =>
@@ -43,8 +74,23 @@ class LocalMusicNotifier extends StateNotifier<LocalMusicState> {
   }
 
   /// READ_MEDIA_AUDIO on Android 13+, READ_EXTERNAL_STORAGE before that.
-  static Future<bool> _granted() async =>
-      await Permission.audio.isGranted || await Permission.storage.isGranted;
+  /// Each is asked separately so one failing check cannot hide the other.
+  static Future<bool> _granted() async {
+    Future<PermissionStatus?> status(Permission p) async {
+      try {
+        return await p.status;
+      } catch (_) {
+        return null;
+      }
+    }
+
+    final audio = await status(Permission.audio);
+    final storage = await status(Permission.storage);
+    nlog('[N] local music: access audio=${audio?.name} storage=${storage?.name}');
+    return (audio?.isGranted ?? false) ||
+        (audio?.isLimited ?? false) ||
+        (storage?.isGranted ?? false);
+  }
 
   /// Asks for access (once Android has blocked the prompt, opens the app's
   /// settings instead) and reads the library when given.

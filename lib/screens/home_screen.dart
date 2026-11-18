@@ -111,6 +111,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     if (_selectedId == id) return;
     HapticFeedback.selectionClick();
     setState(() => _selectedId = id);
+    // Access to the phone's music may have been given meanwhile.
+    if (id == 'music') ref.read(localMusicProvider.notifier).checkAgain();
   }
 
   bool _pullFired = false;
