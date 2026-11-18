@@ -22,7 +22,10 @@ import '../theme/noor_song_card.dart';
 ///   history; the same song again when there is no other);
 /// * double tap: like / unlike.
 class MiniPlayer extends ConsumerStatefulWidget {
-  const MiniPlayer({super.key});
+  const MiniPlayer({super.key, this.onOpen});
+
+  /// What a tap / swipe up does; opens the player by default.
+  final VoidCallback? onOpen;
 
   @override
   ConsumerState<MiniPlayer> createState() => _MiniPlayerState();
@@ -79,8 +82,10 @@ class _MiniPlayerState extends ConsumerState<MiniPlayer>
     _changing = false;
   }
 
-  void _openPlayer() => Navigator.push(
-      context, MaterialPageRoute(builder: (_) => const PlayerScreen()));
+  void _openPlayer() => widget.onOpen != null
+      ? widget.onOpen!()
+      : Navigator.push(
+          context, MaterialPageRoute(builder: (_) => const PlayerScreen()));
 
   List<Song> _context(Song s) => contextListFor(s,
       playlists: ref.read(playlistProvider),

@@ -90,6 +90,30 @@ void main() {
     });
   });
 
+  testWidgets('while loading: "Loading…" replaces the artist and a line runs along the card', (t) async {
+    await t.pumpWidget(host(NoorSongCard(
+        thumbnailUrl: '', title: 'A', artist: 'Artist', loading: true, current: true, onTap: () {})));
+    await t.pump(const Duration(milliseconds: 100));
+    expect(find.text('Loading…'), findsOneWidget);
+    expect(find.text('Artist'), findsNothing);
+    expect(find.byType(LinearProgressIndicator), findsOneWidget);
+    await t.pumpWidget(host(NoorSongCard(
+        thumbnailUrl: '', title: 'A', artist: 'Artist', onTap: () {})));
+    await t.pump(const Duration(milliseconds: 100));
+    expect(find.byType(LinearProgressIndicator), findsNothing);
+    expect(find.text('Artist'), findsOneWidget);
+  });
+
+  testWidgets('the card dips the moment it is touched', (t) async {
+    await t.pumpWidget(host(NoorSongCard(thumbnailUrl: '', title: 'A', artist: 'c', onTap: () {})));
+    final g = await t.startGesture(t.getCenter(find.text('A')));
+    await t.pump(const Duration(milliseconds: 150));
+    expect(t.widget<AnimatedScale>(find.byType(AnimatedScale)).scale, lessThan(1));
+    await g.up();
+    await t.pump(const Duration(milliseconds: 400));
+    expect(t.widget<AnimatedScale>(find.byType(AnimatedScale)).scale, 1);
+  });
+
   group('Up next', () {
     Future<void> open(WidgetTester t, NebulaPlayerState ps) async {
       t.view.physicalSize = const Size(411, 915);

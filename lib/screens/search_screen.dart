@@ -12,6 +12,7 @@ import '../theme/noor_watermark.dart';
 import '../widgets/search_filter_bar.dart';
 import '../widgets/song_row.dart';
 import 'settings_screen.dart';
+import 'mini_player.dart';
 import '../theme/noor_search_button.dart';
 
 /// What sits under the search bar on Home: the Best match / Official only
@@ -170,7 +171,11 @@ class _Results extends ConsumerWidget {
           badge: s.isOfficial ? 'Official' : null,
           current: isCurrent,
           playing: isCurrent && ps.status == NebulaPlayerStatus.playing,
-          loading: isCurrent && ps.status == NebulaPlayerStatus.loading,
+          loading: isCurrent &&
+              (ps.status == NebulaPlayerStatus.loading ||
+                  (ps.pendingSong != null &&
+                      ps.status != NebulaPlayerStatus.playing &&
+                      ps.status != NebulaPlayerStatus.paused)),
           onPlayPause: () => ps.song?.videoId == s.videoId
               ? ref.read(playerProvider.notifier).togglePlay()
               : play(s),
@@ -199,8 +204,8 @@ class _SettingsButton extends StatelessWidget {
         onTap: () {
           HapticFeedback.selectionClick();
           FocusScope.of(context).unfocus();
-          Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const SettingsScreen()));
+          Navigator.of(context)
+              .push(MaterialPageRoute(builder: (_) => const SettingsScreen()));
         },
         child: Container(
           width: 40,
@@ -306,7 +311,19 @@ class _SearchPageState extends ConsumerState<SearchPage> {
             ),
           ),
           const SizedBox(height: 8),
-          Expanded(child: SearchPanel(onRetry: _run)),
+          Expanded(
+            child: Stack(children: [
+              Positioned.fill(child: SearchPanel(onRetry: _run)),
+              // The bottom card shows "Loading…" and the song that plays.
+              // Tapping it goes back to the player (already open below).
+              Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  child: MiniPlayer(
+                      onOpen: () => Navigator.of(context).maybePop())),
+            ]),
+          ),
         ],
       ),
     );
