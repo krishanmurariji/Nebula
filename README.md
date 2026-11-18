@@ -192,7 +192,7 @@ Nebula/
 
 The newest build of the app, made by GitHub Actions:
 
-**[⬇ nebula.apk (dev-latest)](https://github.com/krishanmurariji/Nebula/releases/download/dev-latest/nebula.apk)**
+**[⬇ nebula.apk (newest build)](https://github.com/krishanmurariji/Nebula/releases/latest/download/nebula.apk)**
 
 Open the link on the phone and install. If Android says the signature does not match, uninstall the old Noor first (see [Troubleshooting](#-troubleshooting)). To be offered every new build automatically, add this repository to [Obtainium](https://github.com/ImranR98/Obtainium).
 
@@ -263,11 +263,11 @@ flowchart LR
   SIGN -- yes --> S1["Signed: installs<br/>over earlier builds"]
   SIGN -- no --> S2["Throwaway key:<br/>uninstall first"]
   S1 & S2 --> PUB{"Branch or tag?"}
-  PUB -- branch --> DEV["Rolling pre-release<br/>dev-latest"]
+  PUB -- branch --> DEV["Release build-N,<br/>marked latest"]
   PUB -- tag --> REL["Versioned release"]
 ```
 
-- Every push to `master` or a `claude/**` branch replaces the **dev-latest** pre-release, so the download link never changes.
+- Every push to `master` or a `claude/**` branch publishes a release `build-<number>` and marks it **latest**, so `releases/latest/download/nebula.apk` always gives the newest APK. This works with GitHub's *immutable releases* setting on, because no release tag is ever reused.
 - A tag such as `v1.2.0` publishes a permanent release, and refuses to publish without the signing key.
 - One-time signing setup, step by step: [`docs/RELEASING.md`](docs/RELEASING.md).
 

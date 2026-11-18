@@ -1,15 +1,17 @@
 # Building and releasing the Android app
 
 Every push to `master` or a `claude/**` branch builds a release APK in GitHub
-Actions and publishes it to a rolling pre-release called **dev-latest**.
-Pushing a tag like `v1.0.0` publishes a permanent, versioned release instead.
+Actions and publishes it as its own release, `build-<number>`, marked
+**latest**. Pushing a tag like `v1.0.0` publishes a versioned release (also
+marked latest). No release tag is ever reused, so this works with GitHub's
+*immutable releases* setting on.
 
 | What | Link (replace `OWNER/REPO`) |
 |---|---|
-| Newest build of any branch | `https://github.com/OWNER/REPO/releases/download/dev-latest/nebula.apk` |
-| Newest tagged release | `https://github.com/OWNER/REPO/releases/latest/download/nebula.apk` |
+| Newest build | `https://github.com/OWNER/REPO/releases/latest/download/nebula.apk` |
+| Every build | `https://github.com/OWNER/REPO/releases` |
 
-Open either link on the phone, download, install. Or install
+Open the link on the phone, download, install. Or install
 [Obtainium](https://github.com/ImranR98/Obtainium) and add the repo URL: it
 watches the releases and offers every new build as an update.
 

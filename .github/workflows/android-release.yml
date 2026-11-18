@@ -1,13 +1,12 @@
 name: Android APK
 
 # What triggers a build, and what it produces:
-#   push to master / claude/**  → rolling pre-release "dev-latest" (always the newest build)
+#   push to master / claude/**  → a release "build-<number>", marked latest
 #   push of a tag like v1.2.0   → a permanent, versioned GitHub Release
 #   manual "Run workflow"       → same as a branch push
 #
 # Stable download link for the phone / the future website:
-#   https://github.com/<owner>/<repo>/releases/download/dev-latest/nebula.apk   (newest build)
-#   https://github.com/<owner>/<repo>/releases/latest/download/nebula.apk       (newest tagged release)
+#   https://github.com/<owner>/<repo>/releases/latest/download/nebula.apk   (newest build)
 
 on:
   push:
@@ -121,7 +120,7 @@ jobs:
             --generate-notes \
             --verify-tag
 
-      - name: Publish rolling dev build (branches / manual)
+      - name: Publish build release (branches / manual)
         if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
         env:
           GH_TOKEN: ${{ github.token }}
@@ -139,21 +138,13 @@ jobs:
             echo
             echo "SHA-256: \`$(cut -d' ' -f1 nebula.apk.sha256)\`"
           } > notes.md
-          # Replace the previous rolling release so the download URL never changes.
-          # With "immutable releases" turned on in the repository settings,
-          # dev-latest cannot be replaced; then this build gets its own
-          # pre-release (dev-<build number>) so the APK is still published.
-          gh release delete dev-latest --cleanup-tag --yes || true
-          if ! gh release create dev-latest nebula.apk nebula.apk.sha256 \
-            --prerelease \
+          # Each build is its own release (build-<number>), marked "latest", so
+          #   https://github.com/<owner>/<repo>/releases/latest/download/nebula.apk
+          # always serves the newest APK. This works with "immutable releases"
+          # turned on (a release tag can never be reused, so none is).
+          TAG="build-${{ steps.ver.outputs.number }}"
+          gh release create "$TAG" nebula.apk nebula.apk.sha256 \
+            --latest \
             --target "$GITHUB_SHA" \
-            --title "Nebula dev build #${{ steps.ver.outputs.number }} (${SHORT})" \
-            --notes-file notes.md; then
-            TAG="dev-${{ steps.ver.outputs.number }}"
-            echo "::warning::dev-latest cannot be replaced (immutable releases are on). Publishing this build as $TAG instead."
-            gh release create "$TAG" nebula.apk nebula.apk.sha256 \
-              --prerelease \
-              --target "$GITHUB_SHA" \
-              --title "Nebula dev build #${{ steps.ver.outputs.number }} (${SHORT})" \
-              --notes-file notes.md
-          fi
+            --title "Noor build #${{ steps.ver.outputs.number }} (${SHORT})" \
+            --notes-file notes.md
