@@ -54,13 +54,17 @@ jobs:
           profile: pixel_6
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          # `flutter drive` uninstalls the app when it finishes, so a grant
+          # made between the two runs is lost. A background loop grants the
+          # permissions as soon as the second run has installed the app.
           script: |
             adb logcat -c || true
+            python3 -c "import wave;w=wave.open('build/tone.wav','wb');w.setnchannels(1);w.setsampwidth(2);w.setframerate(8000);w.writeframes(bytes(16000*40));w.close()" || true
+            adb push build/tone.wav "/sdcard/Music/Noor Test Tone.wav" || true
+            adb shell content call --method scan_volume --uri content://media --arg external_primary || true
             timeout 900 flutter drive --driver=test_driver/integration_test.dart --target=integration_test/online_test.dart -d emulator-5554
-            adb shell pm grant com.nebula.nebula_music_player android.permission.READ_MEDIA_AUDIO || true
-            adb shell pm grant com.nebula.nebula_music_player android.permission.POST_NOTIFICATIONS || true
             adb shell cmd connectivity airplane-mode enable
-            adb shell dumpsys package com.nebula.nebula_music_player | grep -i 'READ_MEDIA_AUDIO' || true
+            (for i in $(seq 1 300); do adb shell pm grant com.nebula.nebula_music_player android.permission.READ_MEDIA_AUDIO 2>/dev/null && adb shell pm grant com.nebula.nebula_music_player android.permission.POST_NOTIFICATIONS 2>/dev/null && echo "granted after ${i}s" && adb shell dumpsys package com.nebula.nebula_music_player | grep -i 'READ_MEDIA_AUDIO' && break; sleep 1; done) &
             timeout 600 flutter drive --driver=test_driver/integration_test.dart --target=integration_test/offline_test.dart -d emulator-5554
             adb shell cmd connectivity airplane-mode disable
             adb logcat -d > build/logcat.txt || true

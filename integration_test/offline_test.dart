@@ -35,18 +35,37 @@ void main() {
     final music = find.byIcon(Icons.download_done_rounded);
     expect(await waitFor(t, music, timeout: const Duration(seconds: 5)), isTrue,
         reason: 'Could not reach the My Music card');
-    {
-      await t.tap(music.first);
-      // The permission check is asynchronous: give it a few seconds.
-      final end = DateTime.now().add(const Duration(seconds: 10));
-      while (DateTime.now().isBefore(end) &&
-          find.bySemanticsLabel('Allow access').evaluate().isNotEmpty) {
-        await idle(t, const Duration(milliseconds: 500));
+    await t.tap(music.first);
+    // The workflow grants the permission right after install; the app
+    // checks again when My Music opens. Give it a few seconds.
+    Finder asks() => find.text('Allow access');
+    Finder pill() => find.text('Show music from this phone');
+    final end = DateTime.now().add(const Duration(seconds: 15));
+    var tries = 0;
+    while (DateTime.now().isBefore(end) &&
+        (asks().evaluate().isNotEmpty || pill().evaluate().isNotEmpty)) {
+      await idle(t, const Duration(milliseconds: 500));
+      // Opening My Music again makes the app check the permission again.
+      if (++tries % 4 == 0 && music.evaluate().isNotEmpty) {
+        await t.tap(music.first, warnIfMissed: false);
       }
-      expect(find.bySemanticsLabel('Allow access'), findsNothing,
-          reason: 'Permission was granted but My Music still asks for it');
-      await shot(b, t, '06_my_music');
-      report('my music: permission respected');
+    }
+    await shot(b, t, '06_my_music');
+    expect(asks(), findsNothing,
+        reason: 'Permission was granted but My Music still asks for it');
+    expect(pill(), findsNothing,
+        reason: 'Permission was granted but My Music still offers access');
+    report('my music: permission respected');
+    // A short tone is placed in the phone's Music folder by the workflow.
+    final tone = find.text('Noor Test Tone');
+    if (await waitFor(t, tone, timeout: const Duration(seconds: 10))) {
+      report('my music: phone song listed');
+      await t.tap(tone.first);
+      await idle(t, const Duration(seconds: 3));
+      await shot(b, t, '06b_phone_song_playing');
+      report('my music: phone song tapped offline');
+    } else {
+      report('my music: phone song NOT listed');
     }
 
     await t.tap(find.text('Search'));
