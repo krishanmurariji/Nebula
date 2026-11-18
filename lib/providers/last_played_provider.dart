@@ -11,8 +11,15 @@ const _kLastPlayed = 'noor_last_played';
 /// card can show it (paused) when the app opens again.
 class LastPlayedNotifier extends StateNotifier<Song?> {
   LastPlayedNotifier() : super(null) {
-    _load();
+    loaded = _load();
   }
+
+  /// Completes once the remembered song has been read from storage.
+  late final Future<void> loaded;
+
+  /// Set once [set] or [clear] has run: the value read from storage is then
+  /// older than what the user just did and must not replace it.
+  bool _changed = false;
 
   Future<void> _load() async {
     try {
@@ -22,13 +29,24 @@ class LastPlayedNotifier extends StateNotifier<Song?> {
       final m = json.decode(raw);
       if (m is Map) {
         final s = Song.fromMap(m);
-        if (s.videoId.isNotEmpty && state == null) state = s;
+        if (s.videoId.isNotEmpty && state == null && !_changed) state = s;
       }
     } catch (_) {/* nothing remembered */}
   }
 
+  /// Forgets the remembered song (it was deleted).
+  Future<void> clear() async {
+    _changed = true;
+    state = null;
+    try {
+      final p = await SharedPreferences.getInstance();
+      await p.remove(_kLastPlayed);
+    } catch (_) {}
+  }
+
   Future<void> set(Song song) async {
     if (state?.videoId == song.videoId) return;
+    _changed = true;
     state = song;
     try {
       final p = await SharedPreferences.getInstance();

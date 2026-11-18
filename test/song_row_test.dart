@@ -3,7 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nebula_music_player/models/song.dart';
+import 'package:nebula_music_player/providers/last_played_provider.dart';
 import 'package:nebula_music_player/providers/library_provider.dart';
+import 'package:nebula_music_player/providers/player_provider.dart';
 import 'package:nebula_music_player/widgets/song_row.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -23,14 +25,28 @@ Map<String, Object> playlists(int n, {List<Song> songsInFirst = const []}) => {
       ]),
     };
 
+class _Player extends StateNotifier<NebulaPlayerState> implements PlayerNotifier {
+  _Player([NebulaPlayerState s = const NebulaPlayerState()]) : super(s);
+  int cleared = 0;
+  @override
+  Future<void> stopAndClear() async {
+    cleared++;
+    state = const NebulaPlayerState();
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation i) => null;
+}
+
 Future<ProviderContainer> open(WidgetTester t, Map<String, Object> prefs,
-    {Widget Function(Widget row)? wrap}) async {
+    {Widget Function(Widget row)? wrap, _Player? player}) async {
   SharedPreferences.setMockInitialValues(prefs);
   t.view.physicalSize = const Size(411, 891);
   t.view.devicePixelRatio = 1.0;
   addTearDown(t.view.reset);
   final row = NoorSongRow(song: a, onTap: () {});
   await t.pumpWidget(ProviderScope(
+    overrides: [playerProvider.overrideWith((ref) => player ?? _Player())],
     child: MaterialApp(
       home: Scaffold(
         body: wrap != null
@@ -83,6 +99,7 @@ void main() {
     t.view.devicePixelRatio = 1.0;
     addTearDown(t.view.reset);
     await t.pumpWidget(ProviderScope(
+      overrides: [playerProvider.overrideWith((ref) => _Player())],
       child: MaterialApp(
         home: Scaffold(
           body: ListView(children: [NoorSongRow(song: a, onTap: () => plays++)]),
@@ -149,6 +166,49 @@ void main() {
     await settle(t);
     expect(c.read(historyProvider).map((s) => s.title), ['Beta']);
     expect(find.bySemanticsLabel('Like'), findsNothing);
+  });
+
+  testWidgets('deleting the playing song stops it and clears the bottom card', (t) async {
+    final p = _Player(NebulaPlayerState(song: a, status: NebulaPlayerStatus.playing));
+    final c = await open(t, {
+      'nebula_history': jsonEncode([a.toMap()]),
+      'noor_last_played': jsonEncode(a.toMap()),
+    }, player: p);
+    await swipeOpen(t);
+    await t.tap(find.bySemanticsLabel('Remove from history'));
+    await settle(t);
+    expect(p.cleared, 1);
+    expect(c.read(playerProvider).displaySong, isNull);
+    expect(c.read(lastPlayedProvider), isNull);
+    expect(c.read(historyProvider), isEmpty);
+  });
+
+  testWidgets('deleting the song waiting in the bottom card after a restart clears it', (t) async {
+    final p = _Player();
+    final c = await open(t, {
+      'nebula_history': jsonEncode([a.toMap()]),
+      'noor_last_played': jsonEncode(a.toMap()),
+    }, player: p);
+    await swipeOpen(t);
+    await t.tap(find.bySemanticsLabel('Remove from history'));
+    await settle(t);
+    expect(p.cleared, 0); // nothing was playing
+    expect(c.read(lastPlayedProvider), isNull);
+  });
+
+  testWidgets('deleting another song leaves playback alone', (t) async {
+    final other = song('z', 'Zeta');
+    final p = _Player(NebulaPlayerState(song: other, status: NebulaPlayerStatus.playing));
+    final c = await open(t, {
+      'nebula_history': jsonEncode([a.toMap(), other.toMap()]),
+      'noor_last_played': jsonEncode(other.toMap()),
+    }, player: p);
+    await swipeOpen(t);
+    await t.tap(find.bySemanticsLabel('Remove from history'));
+    await settle(t);
+    expect(p.cleared, 0);
+    expect(c.read(playerProvider).song?.title, 'Zeta');
+    expect(c.read(lastPlayedProvider)?.title, 'Zeta');
   });
 
   testWidgets('delete is disabled for a song not in the history', (t) async {
@@ -262,6 +322,7 @@ void main() {
   testWidgets('opening another row closes this one', (t) async {
     SharedPreferences.setMockInitialValues({});
     await t.pumpWidget(ProviderScope(
+      overrides: [playerProvider.overrideWith((ref) => _Player())],
       child: MaterialApp(
         home: Scaffold(
           body: ListView(children: [
@@ -287,6 +348,7 @@ void main() {
     addTearDown(t.view.reset);
     final songs = [for (var i = 0; i < 20; i++) song('s$i', 'Song $i')];
     await t.pumpWidget(ProviderScope(
+      overrides: [playerProvider.overrideWith((ref) => _Player())],
       child: MaterialApp(
         home: Scaffold(
           resizeToAvoidBottomInset: false,

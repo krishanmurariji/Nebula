@@ -7,7 +7,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/song.dart';
+import '../providers/last_played_provider.dart';
 import '../providers/library_provider.dart';
+import '../providers/player_provider.dart';
 import '../theme/noor_palette.dart';
 import '../theme/noor_song_card.dart';
 
@@ -216,7 +218,18 @@ class _NoorSongRowState extends ConsumerState<NoorSongRow>
 
   Future<void> _deleteFromHistory() async {
     HapticFeedback.mediumImpact();
-    await ref.read(historyProvider.notifier).remove(widget.song.videoId);
+    final id = widget.song.videoId;
+    // Deleting the song that is playing (or waiting in the bottom card after
+    // a restart) stops it and clears the bottom card.
+    if (ref.read(playerProvider).displaySong?.videoId == id) {
+      await ref.read(playerProvider.notifier).stopAndClear();
+    }
+    final last = ref.read(lastPlayedProvider.notifier);
+    await last.loaded;
+    if (!mounted) return;
+    if (ref.read(lastPlayedProvider)?.videoId == id) await last.clear();
+    if (!mounted) return;
+    await ref.read(historyProvider.notifier).remove(id);
     if (!mounted) return;
     ScaffoldMessenger.maybeOf(context)?.showSnackBar(const SnackBar(
         content: Text('Removed from your history'),

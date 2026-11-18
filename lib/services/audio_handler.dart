@@ -617,6 +617,19 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
         processingState: AudioProcessingState.idle, playing: false));
   }
 
+  /// Stops and forgets the current song (the user deleted it): afterwards
+  /// nothing is playing, queued or shown in the notification.
+  Future<void> stopAndForget() async {
+    await stop();
+    _current = null;
+    _queue = [];
+    _idx = 0;
+    mediaItem.add(null);
+    queue.add(const []);
+    _queueChanged.add(null);
+    nlog('[N] current song removed: stopped and cleared');
+  }
+
   /// Moves [_idx] to the next song according to [_playMode].
   /// Returns false when there is nothing to advance to (end of a sequential queue).
   /// [forced] is used after a failure: repeat-one must not retry a dead song forever.

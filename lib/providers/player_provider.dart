@@ -203,6 +203,13 @@ class PlayerNotifier extends StateNotifier<NebulaPlayerState> {
         queue: state.queue.isNotEmpty ? state.queue : null);
   }
 
+  /// The playing song was deleted: stop it and show nothing as playing.
+  Future<void> stopAndClear() async {
+    _stopCooldownCountdown();
+    await _handler.stopAndForget();
+    if (mounted) state = const NebulaPlayerState();
+  }
+
   Future<void> togglePlay() async {
     if (state.status == NebulaPlayerStatus.playing) {
       await _handler.pause();
