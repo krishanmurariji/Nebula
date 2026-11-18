@@ -1,13 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:cached_network_image/cached_network_image.dart';
-import '../models/song.dart';
 import '../providers/player_provider.dart';
 import '../providers/library_provider.dart';
 import '../providers/theme_provider.dart';
 import '../theme/noor_palette.dart';
-import '../theme/noor_album_tile.dart';
+import '../theme/noor_song_card.dart';
 import '../theme/noor_widgets.dart';
 
 class UpNextScreen extends ConsumerWidget {
@@ -158,19 +156,27 @@ class UpNextScreen extends ConsumerWidget {
                                     HapticFeedback.mediumImpact();
                                     ref.read(playerProvider.notifier).removeFromQueue(i);
                                   },
-                                  child: NoorAlbumTile(
+                                  child: NoorSongCard(
                                     thumbnailUrl: song.thumbnailUrl,
                                     title: song.title,
-                                    channel: song.artist,
+                                    artist: song.artist,
                                     liked: isLiked,
-                                    selected: isCurrent,
+                                    current: isCurrent,
                                     loading: isCurrent && ps.status == NebulaPlayerStatus.loading,
                                     playing: isCurrent && ps.status == NebulaPlayerStatus.playing,
                                     onToggleLike: () {
                                       HapticFeedback.mediumImpact();
                                       ref.read(likedProvider.notifier).toggle(song);
                                     },
-                                    onPlay: () {
+                                    onPlayPause: () {
+                                      HapticFeedback.lightImpact();
+                                      if (isCurrent) {
+                                        ref.read(playerProvider.notifier).togglePlay();
+                                      } else {
+                                        ref.read(playerProvider.notifier).playSong(song, queue: queue);
+                                      }
+                                    },
+                                    onTap: () {
                                       HapticFeedback.lightImpact();
                                       ref.read(playerProvider.notifier).playSong(song, queue: queue);
                                       Navigator.pop(context);

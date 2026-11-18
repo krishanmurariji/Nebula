@@ -100,7 +100,7 @@ class YoutubeSongDetailsSource implements SongDetailsSource {
         views: v.engagement.viewCount,
         likes: v.engagement.likeCount,
         duration: v.duration,
-        keywords: (v.keywords ?? const <String>[]).take(14).toList(),
+        keywords: v.keywords.take(14).toList(),
         songName: music?.song,
         artistName: music?.artist,
         albumName: music?.album,

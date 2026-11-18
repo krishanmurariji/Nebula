@@ -5,7 +5,8 @@ import 'package:flutter/material.dart';
 class NoorColors {
   NoorColors._();
 
-  static const ivory = Color(0xFFE8E0CE);
+  /// The light page colour. Pure white since the Nov 2026 redesign.
+  static const ivory = Color(0xFFFFFFFF);
   static const copper = Color(0xFF8E4A27);
   static const espresso = Color(0xFF1F1914);
   static const gold = Color(0xFFD8B06A);

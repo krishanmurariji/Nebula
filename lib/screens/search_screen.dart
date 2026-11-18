@@ -6,8 +6,8 @@ import '../providers/search_provider.dart';
 import '../providers/player_provider.dart';
 import '../providers/library_provider.dart';
 import '../providers/theme_provider.dart';
-import '../theme/noor_album_tile.dart';
 import '../theme/noor_palette.dart';
+import '../theme/noor_song_card.dart';
 import '../theme/noor_widgets.dart';
 import '../widgets/search_filter_bar.dart';
 import 'mini_player.dart';
@@ -54,6 +54,14 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     );
   }
 
+  void _playResult(Song s) {
+    HapticFeedback.lightImpact();
+    // "Up next" is what you played recently, not the search results.
+    final recent =
+        ref.read(historyProvider).where((h) => h.videoId != s.videoId).toList();
+    ref.read(playerProvider.notifier).playSong(s, queue: [s, ...recent]);
+  }
+
   @override
   Widget build(BuildContext context) {
     final search = ref.watch(searchProvider);
@@ -68,7 +76,6 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       backgroundColor: t.bg,
       body: Stack(
         children: [
-          const Positioned(top: 0, left: 0, right: 0, child: NoorBackdrop()),
           SafeArea(
             bottom: false,
             child: Column(
@@ -88,7 +95,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                               controller: _ctrl,
                               onSubmitted: _search,
                               onChanged: (_) => setState(() {}),
-                              autofocus: true,
+                              autofocus: false,
                               textInputAction: TextInputAction.search,
                               cursorColor: t.ac,
                               style: TextStyle(
@@ -268,31 +275,30 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                   player.status == NebulaPlayerStatus.loading;
               final liked =
                   likedSongs.any((l) => l.videoId == s.videoId);
-              return NoorAlbumTile(
+              return NoorSongCard(
                 thumbnailUrl: s.thumbnailUrl,
                 title: s.title,
-                channel: s.artist
+                artist: s.artist
                     .replaceAll(RegExp(r' - topic', caseSensitive: false), '')
                     .trim(),
-                isOfficial: s.isOfficial,
+                badge: s.isOfficial ? 'Official' : null,
                 liked: liked,
-                selected: isCurrent,
+                current: isCurrent,
                 loading: loading,
                 playing: playing,
                 onToggleLike: () {
                   HapticFeedback.mediumImpact();
                   ref.read(likedProvider.notifier).toggle(s);
                 },
-                onPlay: () {
-                  // "Up next" is what you played recently, not the search results.
-                  final recent = ref
-                      .read(historyProvider)
-                      .where((h) => h.videoId != s.videoId)
-                      .toList();
-                  ref
-                      .read(playerProvider.notifier)
-                      .playSong(s, queue: [s, ...recent]);
-                  ref.read(historyProvider.notifier).add(s);
+                onPlayPause: () {
+                  if (isCurrent) {
+                    ref.read(playerProvider.notifier).togglePlay();
+                  } else {
+                    _playResult(s);
+                  }
+                },
+                onTap: () {
+                  _playResult(s);
                   Navigator.push(context,
                       MaterialPageRoute(builder: (_) => const PlayerScreen()));
                 },

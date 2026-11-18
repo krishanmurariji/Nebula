@@ -9,6 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'app.dart';
+import 'providers/library_provider.dart';
 import 'theme/noor_palette.dart';
 import 'services/app_log.dart';
 import 'services/audio_handler.dart';
@@ -100,7 +101,10 @@ class _BootstrapState extends State<_Bootstrap> {
       builder: (context, snap) {
         if (snap.hasData) {
           return ProviderScope(
-            overrides: [audioHandlerProvider.overrideWithValue(snap.data!)],
+            overrides: [
+              audioHandlerProvider.overrideWithValue(snap.data!),
+              isOnDeviceProvider.overrideWithValue(snap.data!.isCached),
+            ],
             child: const NebulaApp(),
           );
         }

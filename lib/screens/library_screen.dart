@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import '../models/song.dart';
 import '../providers/player_provider.dart';
 import '../providers/library_provider.dart';
@@ -155,7 +154,6 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
     final mutedCol = t.mute;
     final accentCol = t.ac;
     final topPad = MediaQuery.of(context).padding.top;
-    final screenSize = MediaQuery.of(context).size;
 
     final liked = ref.watch(likedProvider);
     final playlists = ref.watch(playlistProvider);

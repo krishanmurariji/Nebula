@@ -233,6 +233,9 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
   int get songQueueIndex => _idx;
   AudioPlayer get player => _player;
   int get cachedSongCount => _cache?.count ?? 0;
+
+  /// True when [videoId] is fully downloaded on this device.
+  bool isCached(String videoId) => _cache?.contains(videoId) ?? false;
   int get cacheSizeBytes => _cache?.totalBytes ?? 0;
   PlayMode get playMode => _playMode;
   int get globalCooldownSeconds => _resolver.globalCooldownSeconds;

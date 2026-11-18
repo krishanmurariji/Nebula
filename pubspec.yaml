@@ -49,6 +49,12 @@ flutter:
           weight: 600
         - asset: assets/fonts/CormorantGaramond-Bold.ttf
           weight: 700
+    - family: NoorScript
+      fonts:
+        - asset: assets/fonts/DancingScript-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/DancingScript-Bold.ttf
+          weight: 700
   assets:
     - assets/images/
     - assets/images/app_logo_final.png

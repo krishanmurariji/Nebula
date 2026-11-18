@@ -164,9 +164,16 @@ class PlaylistNotifier extends StateNotifier<List<Playlist>> {
     await _save();
   }
 
+  /// Adds [song] to a playlist. A song lives in at most one playlist, so it
+  /// is taken out of any other playlist first.
   Future<void> addSong(String playlistId, Song song) async {
     state = state.map((p) {
-      if (p.id != playlistId) return p;
+      if (p.id != playlistId) {
+        return p.songs.any((s) => s.videoId == song.videoId)
+            ? p.copyWith(
+                songs: p.songs.where((s) => s.videoId != song.videoId).toList())
+            : p;
+      }
       if (p.songs.any((s) => s.videoId == song.videoId)) return p;
       return p.copyWith(songs: [...p.songs, song]);
     }).toList();
@@ -247,4 +254,28 @@ final libraryReadyProvider = FutureProvider<bool>((ref) async {
     ref.read(historyProvider.notifier).loaded,
   ]);
   return true;
+});
+
+/// Answers "is this song saved on the device?". Replaced in main.dart by the
+/// audio handler's disk cache; the default says no (tests, start-up).
+final isOnDeviceProvider = Provider<bool Function(String videoId)>((ref) => (_) => false);
+
+/// My Music: every song we know about (history, favorites, playlists) whose
+/// audio is fully saved on this device, so it plays offline.
+final myMusicProvider = Provider<List<Song>>((ref) {
+  final onDevice = ref.watch(isOnDeviceProvider);
+  final seen = <String>{};
+  final out = <Song>[];
+  void take(Iterable<Song> l) {
+    for (final s in l) {
+      if (seen.add(s.videoId) && onDevice(s.videoId)) out.add(s);
+    }
+  }
+
+  take(ref.watch(historyProvider));
+  take(ref.watch(likedProvider));
+  for (final p in ref.watch(playlistProvider)) {
+    take(p.songs);
+  }
+  return out;
 });

@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nebula_music_player/providers/player_provider.dart';
 import 'package:nebula_music_player/screens/home_screen.dart';
+import 'package:nebula_music_player/screens/mini_player.dart';
+import 'package:nebula_music_player/theme/noor_song_card.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'search_filter_test.dart' show FakePlayer;
 
@@ -18,33 +20,61 @@ Future<void> openHome(WidgetTester t, Map<String, Object> prefs) async {
   ));
 }
 
+const _song = {'videoId': 'abcdefghijk', 'title': 'Saved Song', 'artist': 'Someone', 'thumbnailUrl': ''};
+
 void main() {
-  const empty = 'Nothing here yet';
+  const first = "Let's play your first song";
 
-  testWidgets('no saved songs: the empty page appears only after loading', (t) async {
+  testWidgets('new install: the three cards and the first-song message, no bottom card', (t) async {
     await openHome(t, {});
-    // First frame: the library has not been read yet, so claim nothing.
-    expect(find.text(empty), findsNothing);
+    expect(find.text(first), findsNothing); // not before the library is read
     await t.pump(const Duration(milliseconds: 100));
-    expect(find.text(empty), findsOneWidget);
+    expect(find.text(first), findsOneWidget);
+    expect(find.text('Slide right to search for one'), findsOneWidget);
+    expect(find.text('My Favorites'), findsOneWidget);
+    expect(find.text('My History'), findsOneWidget);
+    expect(find.text('Search songs, artists…'), findsNothing);
+    expect(find.text('Saved Song'), findsNothing);
+    expect(find.descendant(of: find.byType(MiniPlayer), matching: find.byType(Text)), findsNothing);
     expect(t.takeException(), isNull);
   });
 
-  testWidgets('saved songs: the empty page never flashes', (t) async {
-    final song = {'videoId': 'abcdefghijk', 'title': 'Saved Song', 'artist': 'Someone', 'thumbnailUrl': ''};
-    await openHome(t, {'nebula_history': jsonEncode([song])});
-    expect(find.text(empty), findsNothing);
+  testWidgets('saved history: opens on My History, never flashes the empty message', (t) async {
+    await openHome(t, {'nebula_history': jsonEncode([_song])});
+    expect(find.text(first), findsNothing);
     await t.pump(const Duration(milliseconds: 100));
-    expect(find.text(empty), findsNothing);
+    expect(find.text(first), findsNothing);
     await t.pump(const Duration(milliseconds: 1500));
-    expect(find.text('Saved Song'), findsOneWidget);
+    expect(find.widgetWithText(NoorSongCard, 'Saved Song'), findsOneWidget);
     expect(t.takeException(), isNull);
   });
 
-  testWidgets('the header is just the search bar (no app icon)', (t) async {
-    await openHome(t, {});
+  testWidgets('after a restart the last played song waits, paused, in the bottom card', (t) async {
+    await openHome(t, {'noor_last_played': jsonEncode(_song)});
     await t.pump(const Duration(milliseconds: 100));
-    expect(find.text('Search songs, artists…'), findsOneWidget);
-    expect(find.bySemanticsLabel('Noor'), findsNothing);
+    expect(find.descendant(of: find.byType(MiniPlayer), matching: find.text('Saved Song')),
+        findsOneWidget);
+    expect(t.takeException(), isNull);
+  });
+
+  testWidgets('tapping a side card opens it and shows its songs', (t) async {
+    final other = Map<String, Object>.from(_song)..['videoId'] = 'zzzzzzzzzzz'..['title'] = 'Loved Song';
+    await openHome(t, {
+      'nebula_history': jsonEncode([_song]),
+      'nebula_liked': jsonEncode([other]),
+    });
+    await t.pump(const Duration(milliseconds: 1500));
+    expect(find.widgetWithText(NoorSongCard, 'Loved Song'), findsOneWidget);
+    await t.tapAt(t.getCenter(find.text('My History')) + const Offset(0, 50));
+    for (var i = 0; i < 20; i++) {
+      await t.pump(const Duration(milliseconds: 100));
+    }
+    expect(find.widgetWithText(NoorSongCard, 'Saved Song'), findsOneWidget);
+    expect(find.widgetWithText(NoorSongCard, 'Loved Song'), findsNothing);
+  });
+
+  test('the three default cards always come first; empty playlists are left out', () {
+    final cats = homeCategories(liked: [], history: [], onDevice: [], playlists: []);
+    expect(cats.map((c) => c.title), ['My Favorites', 'My History', 'My Music']);
   });
 }

@@ -3,6 +3,9 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'models/song.dart';
+import 'providers/last_played_provider.dart';
+import 'providers/library_provider.dart';
 import 'providers/player_provider.dart';
 import 'theme/noor_palette.dart';
 import 'providers/theme_provider.dart';
@@ -17,6 +20,13 @@ class NebulaApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final themeMode = ref.watch(themeProvider);
+    // Every song that starts playing goes to My History and is remembered
+    // as the last played song (shown paused when the app opens again).
+    ref.listen<Song?>(playerProvider.select((s) => s.song), (prev, song) {
+      if (song == null || prev?.videoId == song.videoId) return;
+      ref.read(historyProvider.notifier).add(song);
+      ref.read(lastPlayedProvider.notifier).set(song);
+    });
     ref.listen<String?>(playerProvider.select((s) => s.notice), (_, n) {
       if (n == null) return;
       _messengerKey.currentState

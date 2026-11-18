@@ -202,9 +202,9 @@ void main() {
       expect(t.takeException(), isNull);
     });
 
-    testWidgets('official songs carry the OFFICIAL badge on the border', (t) async {
+    testWidgets('official songs say so after the artist', (t) async {
       await open(t, results: sample);
-      expect(find.text('OFFICIAL'), findsNWidgets(2));
+      expect(find.textContaining('·  Official'), findsNWidgets(2));
     });
 
     testWidgets('the filter pop-up switches to Best match and remembers it', (t) async {

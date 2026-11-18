@@ -1,39 +1,45 @@
 import 'dart:math';
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import '../models/song.dart';
 import '../providers/player_provider.dart';
 import '../providers/library_provider.dart';
 import '../providers/theme_provider.dart';
+import 'main_shell.dart';
 import 'mini_player.dart';
 import '../theme/noor_palette.dart';
-import '../theme/noor_album_tile.dart';
+import '../theme/noor_record.dart';
+import '../theme/noor_song_card.dart';
 import '../theme/ripple_ring_clipper.dart';
-import 'search_screen.dart';
 import '../theme/noor_widgets.dart';
 
-// ── Models ───────────────────────────────────────────────────────────────────
-
-class _CategoryItem {
+/// One card of the Home slider.
+class HomeCategory {
+  const HomeCategory(this.id, this.title, this.songs);
   final String id;
   final String title;
-  final String subtitle;
-  final List<String> imageUrls;
-  final IconData icon;
-
-  _CategoryItem({
-    required this.id,
-    required this.title,
-    required this.subtitle,
-    required this.imageUrls,
-    required this.icon,
-  });
+  final List<Song> songs;
 }
 
-// ── Screen Definition ────────────────────────────────────────────────────────
+/// The Home slider: My Favorites, My History and My Music are always there
+/// (even when empty); playlists with songs follow.
+List<HomeCategory> homeCategories({
+  required List<Song> liked,
+  required List<Song> history,
+  required List<Song> onDevice,
+  required List<Playlist> playlists,
+}) {
+  final seen = <String>{};
+  final distinctHistory = history.where((s) => seen.add(s.videoId)).toList();
+  return [
+    HomeCategory('fav', 'My Favorites', liked),
+    HomeCategory('hist', 'My History', distinctHistory),
+    HomeCategory('music', 'My Music', onDevice),
+    for (final p in playlists)
+      if (p.songs.isNotEmpty) HomeCategory(p.id, p.name, p.songs),
+  ];
+}
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -43,23 +49,12 @@ class HomeScreen extends ConsumerStatefulWidget {
 }
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
-  String _selectedId = 'recent';
-  int _currentIndex = 0;
+  String? _selectedId;
 
-  void _onCategoryTap(int index, String id) {
-    if (_currentIndex == index) return;
+  void _select(String id) {
+    if (_selectedId == id) return;
     HapticFeedback.selectionClick();
-    setState(() {
-      _currentIndex = index;
-      _selectedId = id;
-    });
-  }
-
-  /// Opens the search page with the same ring wipe the list uses.
-  void _openSearch() {
-    HapticFeedback.selectionClick();
-    Navigator.of(context)
-        .push(NoorRippleRoute<void>(builder: (_) => const SearchScreen()));
+    setState(() => _selectedId = id);
   }
 
   void _toggleLike(Song song) {
@@ -67,7 +62,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     ref.read(likedProvider.notifier).toggle(song);
   }
 
-  void _playSong(Song song, List<Song> queue) {
+  void _play(Song song, List<Song> queue) {
     HapticFeedback.lightImpact();
     final ps = ref.read(playerProvider);
     if (ps.song?.videoId == song.videoId) {
@@ -77,359 +72,169 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     }
   }
 
+  void _goToPage(int page) => ref.read(shellTabProvider.notifier).state = page;
+
   @override
   Widget build(BuildContext context) {
     final playlists = ref.watch(playlistProvider);
     final history = ref.watch(historyProvider);
-    final likedSongs = ref.watch(likedSongsProvider);
-    final playerState = ref.watch(playerProvider);
+    final liked = ref.watch(likedSongsProvider);
+    final onDevice = ref.watch(myMusicProvider);
+    final ps = ref.watch(playerProvider);
     final libraryReady = ref.watch(libraryReadyProvider).valueOrNull ?? false;
-
     final isDark = ref.watch(themeProvider) == ThemeMode.dark;
     final t = NoorTheme.byMode(isDark);
-    final bg = t.bg;
-    final textCol = t.ac;
-    final mutedCol = t.mute;
-    
     final topPad = MediaQuery.of(context).padding.top;
     final screenWidth = MediaQuery.of(context).size.width;
 
-    final seen = <String>{};
-    final distinctHistory = history.where((s) => seen.add(s.videoId)).toList();
+    final cats = homeCategories(
+        liked: liked,
+        history: history,
+        onDevice: onDevice,
+        playlists: playlists);
 
-    final List<_CategoryItem> categories = [];
-    List<String> getUrls(List<Song> songs) => songs.take(4).map((e) => e.thumbnailUrl).toList();
-
-    if (distinctHistory.isNotEmpty) {
-      categories.add(_CategoryItem(id: 'recent', title: 'Recently Played', subtitle: '${distinctHistory.length} tracks', icon: Icons.history_rounded, imageUrls: getUrls(distinctHistory)));
+    // Start on the first card that has songs; keep the user's own choice.
+    var index = cats.indexWhere((c) => c.id == _selectedId);
+    if (index < 0) {
+      index = max(0, cats.indexWhere((c) => c.songs.isNotEmpty));
+      if (libraryReady) _selectedId = cats[index].id;
     }
-    if (likedSongs.isNotEmpty) {
-      categories.add(_CategoryItem(id: 'liked', title: 'Liked Songs', subtitle: '${likedSongs.length} favorites', icon: Icons.favorite_rounded, imageUrls: getUrls(likedSongs)));
-    }
-    for (var p in playlists) {
-      if (p.songs.isNotEmpty) {
-        categories.add(_CategoryItem(id: p.id, title: p.name, subtitle: '${p.songs.length} tracks', icon: Icons.queue_music_rounded, imageUrls: getUrls(p.songs)));
-      }
-    }
+    final current = cats[index];
+    final everythingEmpty = cats.every((c) => c.songs.isEmpty) && libraryReady;
 
-    if (categories.isNotEmpty && !categories.any((c) => c.id == _selectedId)) {
-      _selectedId = categories.first.id;
-      _currentIndex = 0;
-    }
-
-    int currentVisibleCount = 1;
-    if (_currentIndex > 0) currentVisibleCount++;
-    if (_currentIndex < categories.length - 1) currentVisibleCount++;
-
-    const double horizontalPadding = 24.0; 
-    final double totalMargins = currentVisibleCount * 12.0; 
-    final double totalAdjacentWidth = (currentVisibleCount - 1) * 48.0; 
-    final double activeWidth = screenWidth - horizontalPadding - totalMargins - totalAdjacentWidth - 1.0; 
-
-    List<Song> displaySongs = [];
-    if (categories.isNotEmpty) {
-      if (_selectedId == 'recent') displaySongs = distinctHistory;
-      else if (_selectedId == 'liked') displaySongs = likedSongs;
-      else displaySongs = playlists.firstWhere((p) => p.id == _selectedId, orElse: () => playlists.first).songs;
-    }
-
-    final String currentHeading = categories.isNotEmpty 
-        ? categories.firstWhere((c) => c.id == _selectedId, orElse: () => categories.first).title
-        : 'No Music Found';
+    final visible = 1 + (index > 0 ? 1 : 0) + (index < cats.length - 1 ? 1 : 0);
+    final activeWidth =
+        screenWidth - 24 - visible * 12.0 - (visible - 1) * 48.0 - 1;
 
     return Scaffold(
-      backgroundColor: bg,
+      backgroundColor: t.bg,
       body: Stack(
         children: [
-          const Positioned(top: 0, left: 0, right: 0, child: NoorBackdrop()),
-
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(height: topPad + 10),
-              
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                child: Row(
-                  children: [
-                    Expanded(child: NoorSearchBarButton(onTap: _openSearch)),
-                  ],
-                ),
+              SizedBox(height: topPad + 14),
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 20),
+                child: NoorWordmark(height: 30),
               ),
+              const SizedBox(height: 6),
 
-              if (categories.isEmpty)
-                Expanded(
-                  // Say "nothing here yet" only once the saved library has
-                  // really been read; until then show nothing at all.
-                  child: libraryReady
-                      ? const NoorEmptyState(
-                          message: 'Nothing here yet',
-                          hint: 'Search for a song and it will appear here.',
-                        )
-                      : const SizedBox.shrink(),
-                )
-              else ...[
+              // ── Slider ────────────────────────────────────────────────
               SizedBox(
-                height: 170, 
+                height: 176,
                 child: GestureDetector(
-                      onHorizontalDragEnd: (details) {
-                        const threshold = 200.0;
-                        if (details.primaryVelocity! < -threshold) { 
-                          if (_currentIndex < categories.length - 1) {
-                            _onCategoryTap(_currentIndex + 1, categories[_currentIndex + 1].id);
-                          }
-                        } else if (details.primaryVelocity! > threshold) {
-                          if (_currentIndex > 0) {
-                            _onCategoryTap(_currentIndex - 1, categories[_currentIndex - 1].id);
-                          }
-                        }
-                      },
-                      child: Container(
-                        color: Colors.transparent, 
-                        child: ListView.builder(
-                          scrollDirection: Axis.horizontal,
-                          physics: const NeverScrollableScrollPhysics(),
-                          padding: const EdgeInsets.symmetric(horizontal: 12),
-                          itemCount: categories.length,
-                          itemBuilder: (context, index) {
-                            final item = categories[index];
-                            final bool isActive = index == _currentIndex;
-                            final bool isAdjacent = index == _currentIndex - 1 || index == _currentIndex + 1;
-                            
-                            double width;
-                            double margin = 6.0;
-                            
-                            if (isActive) {
-                              width = activeWidth;
-                            } else if (isAdjacent) {
-                              width = 48.0; 
-                            } else {
-                              width = 0.0; 
-                              margin = 0.0; 
-                            }
-
-                            return GestureDetector(
-                              onTap: () => _onCategoryTap(index, item.id),
-                              child: AnimatedContainer(
-                                duration: const Duration(milliseconds: 500),
-                                curve: Curves.easeOutCubic,
-                                width: width,
-                                margin: EdgeInsets.symmetric(horizontal: margin, vertical: 10),
-                                padding: EdgeInsets.all((isActive || isAdjacent) ? 2 : 0),
-                                // Outer fine ring (the "second outline")
-                                decoration: BoxDecoration(
-                                  borderRadius:
-                                      BorderRadius.circular(isActive ? 30 : 26),
-                                  border: (isActive || isAdjacent)
-                                      ? Border.all(color: t.faint, width: 1)
-                                      : null,
-                                ),
-                                child: AnimatedContainer(
-                                  duration: const Duration(milliseconds: 500),
-                                  curve: Curves.easeOutCubic,
-                                  clipBehavior: Clip.antiAlias,
-                                  decoration: BoxDecoration(
-                                    color: t.tint(0.3),
-                                    borderRadius:
-                                        BorderRadius.circular(isActive ? 28 : 24),
-                                    border: (isActive || isAdjacent)
-                                        ? Border.all(color: t.ac, width: 1)
-                                        : null,
-                                  ),
-                                  child: Stack(
-                                    children: [
-                                      Positioned.fill(
-                                        child: Opacity(
-                                          opacity: isActive ? 1.0 : 0.55,
-                                          child: _CollageCover(urls: item.imageUrls),
-                                        ),
-                                      ),
-                                      Positioned.fill(
-                                        child: DecoratedBox(
-                                          decoration: BoxDecoration(
-                                            gradient: LinearGradient(
-                                              begin: Alignment.bottomCenter,
-                                              end: Alignment.topCenter,
-                                              colors: [
-                                                t.ac.withOpacity(isActive ? 0.92 : 0.7),
-                                                t.ac.withOpacity(0.0),
-                                              ],
-                                              stops: const [0.0, 0.75],
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                      Positioned.fill(
-                                        child: Center(
-                                          child: SingleChildScrollView(
-                                            scrollDirection: Axis.horizontal,
-                                            physics: const NeverScrollableScrollPhysics(),
-                                            child: Container(
-                                              constraints: const BoxConstraints(minWidth: 40),
-                                              child: Row(
-                                                mainAxisSize: MainAxisSize.min,
-                                                mainAxisAlignment: MainAxisAlignment.center,
-                                                children: [
-                                                  Container(
-                                                    width: 36,
-                                                    height: 36,
-                                                    decoration: BoxDecoration(
-                                                      shape: BoxShape.circle,
-                                                      color: t.bg,
-                                                      border: Border.all(color: t.ac, width: 1),
-                                                    ),
-                                                    child: Icon(item.icon, color: t.ac, size: 18),
-                                                  ),
-                                                  ClipRect(
-                                                    child: AnimatedAlign(
-                                                      duration: const Duration(milliseconds: 400),
-                                                      curve: Curves.easeOutCubic,
-                                                      alignment: Alignment.centerLeft,
-                                                      widthFactor: isActive ? 1.0 : 0.0,
-                                                      child: AnimatedOpacity(
-                                                        duration: const Duration(milliseconds: 300),
-                                                        opacity: isActive ? 1.0 : 0.0,
-                                                        child: Padding(
-                                                          padding: const EdgeInsets.only(left: 12.0, right: 8.0),
-                                                          child: Column(
-                                                            mainAxisSize: MainAxisSize.min,
-                                                            crossAxisAlignment: CrossAxisAlignment.start,
-                                                            children: [
-                                                              Text(item.title,
-                                                                maxLines: 1,
-                                                                softWrap: false,
-                                                                overflow: TextOverflow.fade,
-                                                                style: TextStyle(color: t.bg, fontWeight: FontWeight.w700, fontSize: 16)
-                                                              ),
-                                                              Text(item.subtitle,
-                                                                maxLines: 1,
-                                                                softWrap: false,
-                                                                overflow: TextOverflow.fade,
-                                                                style: TextStyle(color: t.bg.withOpacity(0.8), fontSize: 12)
-                                                              ),
-                                                            ],
-                                                          ),
-                                                        ),
-                                                      ),
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                      ),
-                    ),
-              ),
-
-              if (categories.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 6, 16, 6),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Row(
-                          children: [
-                            Flexible(
-                              child: Text(currentHeading,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: noorSerif(textCol, size: 22, height: 1.0)),
-                            ),
-                            const SizedBox(width: 10),
-                            const NoorDivider(width: 36),
-                          ],
-                        ),
-                      ),
-                      Text('${displaySongs.length} tracks', style: TextStyle(color: mutedCol, fontSize: 13, fontWeight: FontWeight.w600)),
-                    ],
-                  ),
-                ),
-
-              // ── Lower Section: Vertical Ripple Reveal List ────────────────
-              Expanded(
-                child: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 1100), 
-                  layoutBuilder: (currentChild, previousChildren) {
-                    return Stack(
-                      alignment: Alignment.topCenter,
-                      children: <Widget>[
-                        ...previousChildren,
-                        if (currentChild != null) currentChild,
-                      ],
-                    );
-                  },
-                  transitionBuilder: (Widget child, Animation<double> animation) {
-                    final isIncoming = child.key == ValueKey(_selectedId);
-
-                    if (isIncoming) {
-                      return AnimatedBuilder(
-                        animation: animation,
-                        builder: (context, _) {
-                          return ClipPath(
-                            clipper: RippleRingClipper(animation.value),
-                            child: child,
-                          );
-                        },
-                      );
-                    } else {
-                      // We don't fade the old list, it sits perfectly still while the rings wipe over it!
-                      return child;
+                  onHorizontalDragEnd: (d) {
+                    final v = d.primaryVelocity ?? 0;
+                    if (v < -200) {
+                      if (index < cats.length - 1) {
+                        _select(cats[index + 1].id);
+                      } else {
+                        _goToPage(2); // past the last card: Library
+                      }
+                    } else if (v > 200) {
+                      if (index > 0) {
+                        _select(cats[index - 1].id);
+                      } else {
+                        _goToPage(0); // before the first card: Search
+                      }
                     }
                   },
-                  child: displaySongs.isEmpty
-                      ? Container( 
-                          key: const ValueKey('empty'), 
-                          color: bg, // ── FIX: Solid Background for clean wiping ──
-                          alignment: Alignment.center,
-                          child: const NoorEmptyState(message: 'No songs here yet', hint: 'Play something and it will show up.'),
-                        )
-                      : Container(
-                          key: ValueKey(_selectedId), 
-                          color: bg, // ── FIX: Solid Background ensures the old list is completely hidden ──
-                          child: ListView.builder(
-                            padding: const EdgeInsets.fromLTRB(0, 0, 0, 120), 
-                            physics: const BouncingScrollPhysics(),
-                            itemCount: displaySongs.length,
-                            itemBuilder: (context, index) {
-                              final song = displaySongs[index];
-                              
-                              final targetSongId = playerState.pendingSong?.videoId ?? playerState.song?.videoId;
-                              final isTargetSong = song.videoId == targetSongId;
-                              final isPlayingState = playerState.status == NebulaPlayerStatus.playing;
-                              
-                              final isLoading = isTargetSong && 
-                                 (playerState.status == NebulaPlayerStatus.loading || 
-                                 (playerState.pendingSong != null && playerState.status != NebulaPlayerStatus.playing && playerState.status != NebulaPlayerStatus.paused));
-
-                              return NoorAlbumTile(
-                                thumbnailUrl: song.thumbnailUrl,
-                                title: song.title,
-                                channel: song.artist,
-                                liked: likedSongs.any((l) => l.videoId == song.videoId),
-                                selected: isTargetSong,
-                                loading: isLoading,
-                                playing: isTargetSong && isPlayingState,
-                                onPlay: () => _playSong(song, displaySongs),
-                                onToggleLike: () => _toggleLike(song),
-                              );
-                            },
-                          ),
+                  child: ListView.builder(
+                    scrollDirection: Axis.horizontal,
+                    physics: const NeverScrollableScrollPhysics(),
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    itemCount: cats.length,
+                    itemBuilder: (context, i) {
+                      final active = i == index;
+                      final adjacent = (i - index).abs() == 1;
+                      return GestureDetector(
+                        onTap: () => _select(cats[i].id),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 500),
+                          curve: Curves.easeOutCubic,
+                          width: active ? activeWidth : (adjacent ? 48 : 0),
+                          margin: EdgeInsets.symmetric(
+                              horizontal: (active || adjacent) ? 6 : 0,
+                              vertical: 12),
+                          child: (active || adjacent)
+                              ? _CategoryCard(
+                                  title: cats[i].title, active: active)
+                              : const SizedBox.shrink(),
                         ),
+                      );
+                    },
+                  ),
                 ),
               ),
-              ],
+              const SizedBox(height: 4),
+
+              // ── Songs (ring-wipe reveal when the card changes) ─────────
+              Expanded(
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 1100),
+                  layoutBuilder: (cur, prev) => Stack(
+                    alignment: Alignment.topCenter,
+                    children: [...prev, if (cur != null) cur],
+                  ),
+                  transitionBuilder: (child, animation) {
+                    if (child.key != ValueKey(current.id)) return child;
+                    return AnimatedBuilder(
+                      animation: animation,
+                      builder: (context, _) => ClipPath(
+                        clipper: RippleRingClipper(animation.value),
+                        child: child,
+                      ),
+                    );
+                  },
+                  child: Container(
+                    key: ValueKey(current.id),
+                    color: t.bg,
+                    child: !libraryReady
+                        ? const SizedBox.expand()
+                        : current.songs.isEmpty
+                            ? _EmptyList(
+                                category: current.id, firstRun: everythingEmpty)
+                            : ListView.builder(
+                                padding:
+                                    const EdgeInsets.fromLTRB(0, 4, 0, 120),
+                                physics: const BouncingScrollPhysics(),
+                                itemCount: current.songs.length,
+                                itemBuilder: (context, i) {
+                                  final song = current.songs[i];
+                                  final targetId = ps.pendingSong?.videoId ??
+                                      ps.song?.videoId;
+                                  final isCurrent = song.videoId == targetId;
+                                  final loading = isCurrent &&
+                                      (ps.status ==
+                                              NebulaPlayerStatus.loading ||
+                                          (ps.pendingSong != null &&
+                                              ps.status !=
+                                                  NebulaPlayerStatus.playing &&
+                                              ps.status !=
+                                                  NebulaPlayerStatus.paused));
+                                  return NoorSongCard(
+                                    thumbnailUrl: song.thumbnailUrl,
+                                    title: song.title,
+                                    artist: song.artist,
+                                    liked: liked
+                                        .any((l) => l.videoId == song.videoId),
+                                    current: isCurrent,
+                                    playing: isCurrent &&
+                                        ps.status == NebulaPlayerStatus.playing,
+                                    loading: loading,
+                                    onTap: () => _play(song, current.songs),
+                                    onPlayPause: () =>
+                                        _play(song, current.songs),
+                                    onToggleLike: () => _toggleLike(song),
+                                  );
+                                },
+                              ),
+                  ),
+                ),
+              ),
             ],
           ),
-
           const Positioned(left: 0, right: 0, bottom: 0, child: MiniPlayer()),
         ],
       ),
@@ -437,81 +242,143 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// COLLAGE BACKGROUND WIDGET
-// ═══════════════════════════════════════════════════════════════════════════════
-class _CollageCover extends StatelessWidget {
-  final List<String> urls;
-  const _CollageCover({required this.urls});
+/// A slider card: white with a thin accent border, a record in the middle
+/// and the name on a small pill. On a collapsed card the name stands upright
+/// in the middle; as the card opens it turns flat and slides to the bottom.
+class _CategoryCard extends StatelessWidget {
+  const _CategoryCard({required this.title, required this.active});
+  final String title;
+  final bool active;
 
   @override
   Widget build(BuildContext context) {
-    if (urls.isEmpty) return Container(color: NoorTheme.of(context).tint(0.35));
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        if (constraints.maxWidth < 5) return const SizedBox.shrink();
-
-        final tl = NoorTheme.of(context);
-        Widget img(String url) => url.isEmpty
-          ? Container(color: tl.tint(0.35))
-          : ClipRect(
-          child: Transform.scale(
-            scale: 1.35, 
-            child: CachedNetworkImage(
-              imageUrl: url,
-              fit: BoxFit.cover,
-              width: double.infinity,
-              height: double.infinity,
-              errorWidget: (_, __, ___) => Container(color: tl.tint(0.35), child: Icon(Icons.music_note, color: tl.bg)),
-            ),
-          ),
-        );
-
-        if (urls.length == 1) return img(urls[0]);
-        
-        if (urls.length == 2) {
-          return Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [Expanded(child: img(urls[0])), const SizedBox(width: 2), Expanded(child: img(urls[1]))],
-          );
-        }
-        
-        if (urls.length == 3) {
-          return Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+    final t = NoorTheme.of(context);
+    return LayoutBuilder(builder: (context, box) {
+      final h = box.maxHeight;
+      final record = h * 0.64;
+      return Container(
+        clipBehavior: Clip.antiAlias,
+        decoration: BoxDecoration(
+          color: t.bg,
+          borderRadius: BorderRadius.circular(kNoorCardRadius),
+          border: Border.all(color: t.ac, width: 1),
+        ),
+        child: TweenAnimationBuilder<double>(
+          tween: Tween(end: active ? 1 : 0),
+          duration: const Duration(milliseconds: 520),
+          curve: Curves.easeOutCubic,
+          builder: (context, v, _) => Stack(
             children: [
-              Expanded(child: img(urls[0])),
-              const SizedBox(width: 2),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [Expanded(child: img(urls[1])), const SizedBox(height: 2), Expanded(child: img(urls[2]))],
+              Positioned(
+                left: (box.maxWidth - record) / 2,
+                top: h * 0.07,
+                child: Opacity(
+                  opacity: 0.55 + 0.45 * v,
+                  child: NoorRecord(size: record),
                 ),
-              )
+              ),
+              Align(
+                alignment: Alignment.lerp(
+                    Alignment.center, const Alignment(0, 0.80), v)!,
+                child: Transform.rotate(
+                  angle: -pi / 2 * (1 - v),
+                  // A zero-size anchor lets Align place the label's centre;
+                  // the label itself may be wider than a collapsed card.
+                  child: SizedBox.shrink(
+                    child: OverflowBox(
+                      minWidth: 0,
+                      minHeight: 0,
+                      maxWidth: 400,
+                      maxHeight: 60,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: t.bg,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: t.ac, width: 0.8),
+                        ),
+                        child: Text(title,
+                            maxLines: 1,
+                            softWrap: false,
+                            style: TextStyle(
+                                color: t.ac,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                letterSpacing: 0.4)),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
             ],
-          );
-        }
-        
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+          ),
+        ),
+      );
+    });
+  }
+}
+
+/// Shown in the list area when the open card has no songs.
+class _EmptyList extends StatelessWidget {
+  const _EmptyList({required this.category, required this.firstRun});
+  final String category;
+  final bool firstRun;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = NoorTheme.of(context);
+    final (IconData icon, String title, String hint) = firstRun
+        ? (
+            Icons.queue_music_rounded,
+            "Let's play your first song",
+            'Slide right to search for one'
+          )
+        : switch (category) {
+            'fav' => (
+                Icons.favorite_border_rounded,
+                'No favorites yet',
+                'Double-tap any song to add it here'
+              ),
+            'hist' => (
+                Icons.history_rounded,
+                'Nothing played yet',
+                'Slide right to search for a song'
+              ),
+            _ => (
+                Icons.download_done_rounded,
+                'No songs on this device yet',
+                'Songs you play are saved here to play offline'
+              ),
+          };
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 90),
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Expanded(
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [Expanded(child: img(urls[0])), const SizedBox(width: 2), Expanded(child: img(urls[1]))],
-              ),
-            ),
-            const SizedBox(height: 2),
-            Expanded(
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [Expanded(child: img(urls[2])), const SizedBox(width: 2), Expanded(child: img(urls[3]))],
-              ),
+            Icon(icon, size: 40, color: t.ac),
+            const SizedBox(height: 14),
+            Text(title,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                    color: t.ac, fontSize: 17, fontWeight: FontWeight.w600)),
+            const SizedBox(height: 6),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(hint,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: t.mute, fontSize: 13)),
+                if (hint.startsWith('Slide right')) ...[
+                  const SizedBox(width: 6),
+                  Icon(Icons.east_rounded, size: 16, color: t.mute),
+                ],
+              ],
             ),
           ],
-        );
-      }
+        ),
+      ),
     );
   }
 }

@@ -4,7 +4,6 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_volume_controller/flutter_volume_controller.dart';
 import '../models/song.dart';
 import '../providers/player_provider.dart';
@@ -327,7 +326,6 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
 
     final bool isNeedleOnRecord = playing && !loading;
     final double diskSize = h * 0.315;
-    final double volumeRingSize = diskSize + 56.0;
     final double needleWidth = 110.0;
     final double needleHeight = h * 0.26 + 28;
 

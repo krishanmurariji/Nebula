@@ -8,10 +8,15 @@ import '../providers/theme_provider.dart';
 import '../theme/noor_palette.dart';
 
 import 'home_screen.dart';
+import 'search_screen.dart';
 import 'library_screen.dart';
 import 'settings_screen.dart';
 
-final shellTabProvider = StateProvider<int>((ref) => 0);
+/// Pages, left to right: Search, Home, Library, Settings. The app opens on
+/// Home, so sliding right from Home reaches Search.
+const kSearchPage = 0, kHomePage = 1, kLibraryPage = 2, kSettingsPage = 3;
+
+final shellTabProvider = StateProvider<int>((ref) => kHomePage);
 
 class MainShell extends ConsumerStatefulWidget {
   const MainShell({super.key});
@@ -25,7 +30,7 @@ class _MainShellState extends ConsumerState<MainShell> {
   @override
   void initState() {
     super.initState();
-    _pageCtrl = PageController();
+    _pageCtrl = PageController(initialPage: kHomePage);
     WidgetsBinding.instance
         .addPostFrameCallback((_) => _askNotificationPermission());
   }
@@ -84,15 +89,23 @@ class _MainShellState extends ConsumerState<MainShell> {
       backgroundColor: bg,
       resizeToAvoidBottomInset: false,
       // Just a pure PageView now, no bottom navigation bar
-      body: PageView(
-        controller: _pageCtrl,
-        onPageChanged: _onPageChanged,
-        physics: const BouncingScrollPhysics(),
-        children: [
-          const HomeScreen(),
-          const LibraryScreen(),
-          SettingsScreen(onNavigate: goTo),
-        ],
+      body: PopScope(
+        // Back from any other page returns to Home first.
+        canPop: ref.watch(shellTabProvider) == kHomePage,
+        onPopInvokedWithResult: (didPop, _) {
+          if (!didPop) goTo(kHomePage);
+        },
+        child: PageView(
+          controller: _pageCtrl,
+          onPageChanged: _onPageChanged,
+          physics: const BouncingScrollPhysics(),
+          children: [
+            const SearchScreen(),
+            const HomeScreen(),
+            const LibraryScreen(),
+            SettingsScreen(onNavigate: goTo),
+          ],
+        ),
       ),
     );
   }
