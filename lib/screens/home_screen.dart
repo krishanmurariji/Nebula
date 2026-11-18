@@ -343,22 +343,28 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               borderRadius: BorderRadius.circular(20),
               border: _searching ? Border.all(color: t.ac, width: 0.8) : null,
             ),
+            alignment: Alignment.centerLeft,
             child: _searching
                 ? TextField(
                     controller: _query,
                     focusNode: _queryFocus,
                     onSubmitted: (_) => _runSearch(),
                     textInputAction: TextInputAction.search,
+                    textAlignVertical: TextAlignVertical.center,
                     cursorColor: t.ac,
                     style: TextStyle(
-                        color: t.ac, fontSize: 14, fontWeight: FontWeight.w600),
+                        color: t.ac,
+                        fontSize: 14,
+                        height: 1.2,
+                        fontWeight: FontWeight.w600),
                     decoration: InputDecoration(
-                      isDense: true,
+                      isCollapsed: true,
                       hintText: 'Songs, artists…',
-                      hintStyle: TextStyle(color: t.mute, fontSize: 14),
+                      hintStyle:
+                          TextStyle(color: t.mute, fontSize: 14, height: 1.2),
                       border: InputBorder.none,
-                      contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 11),
+                      contentPadding:
+                          const EdgeInsets.symmetric(horizontal: 16),
                     ),
                   )
                 : null,
@@ -367,7 +373,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       );
 }
 
-/// The round search / close button at the top right.
+/// The "Search" button at the top right; while searching it becomes a
+/// round close button.
 class _SearchToggle extends StatelessWidget {
   const _SearchToggle({required this.open, required this.onTap});
   final bool open;
@@ -383,20 +390,31 @@ class _SearchToggle extends StatelessWidget {
       child: GestureDetector(
         onTap: onTap,
         behavior: HitTestBehavior.opaque,
-        child: Container(
-          width: 40,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 260),
+          curve: Curves.easeOutCubic,
           height: 40,
+          width: open ? 40 : 84,
+          alignment: Alignment.center,
           decoration: BoxDecoration(
-            shape: BoxShape.circle,
+            borderRadius: BorderRadius.circular(20),
             border: Border.all(color: t.ac, width: 0.8),
           ),
           child: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 220),
-            transitionBuilder: (c, a) => RotationTransition(
-                turns: Tween(begin: 0.75, end: 1.0).animate(a),
-                child: FadeTransition(opacity: a, child: c)),
-            child: Icon(open ? Icons.close_rounded : Icons.search_rounded,
-                key: ValueKey(open), color: t.ac, size: 20),
+            duration: const Duration(milliseconds: 200),
+            child: open
+                ? Icon(Icons.close_rounded,
+                    key: const ValueKey('x'), color: t.ac, size: 20)
+                : Text('Search',
+                    key: const ValueKey('s'),
+                    maxLines: 1,
+                    softWrap: false,
+                    overflow: TextOverflow.clip,
+                    style: TextStyle(
+                        color: t.ac,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 0.3)),
           ),
         ),
       ),
@@ -467,7 +485,7 @@ class _EmptyList extends StatelessWidget {
         ? (
             Icons.queue_music_rounded,
             "Let's play your first song",
-            'Tap search above to find one'
+            'Tap Search above to find one'
           )
         : switch (category) {
             'fav' => (
@@ -478,7 +496,7 @@ class _EmptyList extends StatelessWidget {
             'hist' => (
                 Icons.history_rounded,
                 'Nothing played yet',
-                'Tap search above to find a song'
+                'Tap Search above to find a song'
               ),
             _ => (
                 Icons.download_done_rounded,
@@ -499,18 +517,9 @@ class _EmptyList extends StatelessWidget {
                 style: TextStyle(
                     color: t.ac, fontSize: 17, fontWeight: FontWeight.w600)),
             const SizedBox(height: 6),
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(hint,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: t.mute, fontSize: 13)),
-                if (hint.startsWith('Tap search')) ...[
-                  const SizedBox(width: 6),
-                  Icon(Icons.search_rounded, size: 16, color: t.mute),
-                ],
-              ],
-            ),
+            Text(hint,
+                textAlign: TextAlign.center,
+                style: TextStyle(color: t.mute, fontSize: 13)),
           ],
         ),
       ),

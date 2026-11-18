@@ -3,7 +3,10 @@ import '../theme/noor_palette.dart';
 
 /// How search results are shown.
 enum SearchFilter {
-  /// Everything, best match first.
+  /// Every result, in YouTube's own order.
+  all,
+
+  /// Everything, Noor's best match first (the default).
   bestMatch,
 
   /// Only uploads from a trusted source (Topic / VEVO / label / the artist).
@@ -19,7 +22,11 @@ class SearchFilterBar extends StatelessWidget {
     required this.totalCount,
     required this.officialCount,
     required this.isDark,
+    this.allCount,
   });
+
+  /// How many results "All" holds; defaults to [totalCount].
+  final int? allCount;
 
   final SearchFilter filter;
   final ValueChanged<SearchFilter> onChanged;
@@ -30,12 +37,20 @@ class SearchFilterBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 2, 20, 6),
+      padding: const EdgeInsets.fromLTRB(14, 2, 14, 6),
       child: Wrap(
         alignment: WrapAlignment.center,
-        spacing: 10,
+        spacing: 8,
         runSpacing: 8,
         children: [
+          _FilterChipButton(
+            label: 'All',
+            count: allCount ?? totalCount,
+            icon: Icons.list_rounded,
+            selected: filter == SearchFilter.all,
+            isDark: isDark,
+            onTap: () => onChanged(SearchFilter.all),
+          ),
           _FilterChipButton(
             label: 'Official only',
             count: officialCount,
@@ -107,8 +122,6 @@ class _FilterChipButton extends StatelessWidget {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(icon, size: 16, color: fg),
-                const SizedBox(width: 6),
                 Text(
                   label,
                   maxLines: 1,

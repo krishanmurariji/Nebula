@@ -30,7 +30,7 @@ void main() {
     expect(find.text(first), findsNothing); // not before the library is read
     await t.pump(const Duration(milliseconds: 100));
     expect(find.text(first), findsOneWidget);
-    expect(find.text('Tap search above to find one'), findsOneWidget);
+    expect(find.text('Tap Search above to find one'), findsOneWidget);
     // Only the open card's name, under the slider; the cards show icons.
     expect(find.text('My Favorites'), findsOneWidget);
     expect(find.text('My History'), findsNothing);

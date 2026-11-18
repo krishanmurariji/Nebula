@@ -7,18 +7,24 @@ import '../widgets/search_filter_bar.dart';
 enum SearchStatus { idle, loading, loaded, error }
 
 class SearchState {
+  /// Best match first (Noor's ranking).
   final List<Song> results;
+
+  /// Every result in YouTube's own order (the "All" filter). Empty means
+  /// "same as [results]".
+  final List<Song> all;
   final SearchStatus status;
   final String? error;
   final String query;
   const SearchState({
-    this.results = const [], this.status = SearchStatus.idle,
+    this.results = const [], this.all = const [], this.status = SearchStatus.idle,
     this.error, this.query = '',
   });
   SearchState copyWith({
-    List<Song>? results, SearchStatus? status, String? error, String? query,
+    List<Song>? results, List<Song>? all, SearchStatus? status, String? error, String? query,
   }) => SearchState(
     results: results ?? this.results,
+    all:     all     ?? this.all,
     status:  status  ?? this.status,
     error:   error,
     query:   query   ?? this.query,
@@ -49,9 +55,10 @@ class SearchNotifier extends StateNotifier<SearchState> {
     if (query.isEmpty) { state = const SearchState(); return; }
     state = state.copyWith(status: SearchStatus.loading, query: query, error: null);
     try {
-      final results = await _ref.read(searchServiceProvider).searchSongs(query);
+      final r = await _ref.read(searchServiceProvider).searchAll(query);
       if (!mounted || mine != _seq) return;
-      state = state.copyWith(status: SearchStatus.loaded, results: results);
+      state = state.copyWith(
+          status: SearchStatus.loaded, results: r.ranked, all: r.all);
     } catch (e) {
       if (!mounted || mine != _seq) return;
       state = state.copyWith(
@@ -72,18 +79,25 @@ final searchProvider =
     StateNotifierProvider<SearchNotifier, SearchState>((ref) => SearchNotifier(ref));
 
 
-/// The results to show for [filter]. "Official only" keeps just the uploads
-/// the ranking trusts (Topic / VEVO / label / the artist's own channel).
+/// Filters a best-match list. "Official only" keeps just the uploads the
+/// ranking trusts (Topic / VEVO / label / the artist's own channel).
 List<Song> applySearchFilter(List<Song> songs, SearchFilter filter) =>
     filter == SearchFilter.officialOnly
         ? songs.where((s) => s.isOfficial).toList()
         : songs;
 
+/// What the list shows for [filter]: All = YouTube's order, Best match =
+/// Noor's ranking, Official only = the trusted uploads.
+List<Song> searchResultsFor(SearchState s, SearchFilter filter) =>
+    filter == SearchFilter.all
+        ? (s.all.isEmpty ? s.results : s.all)
+        : applySearchFilter(s.results, filter);
+
 const _kFilterKey = 'search_filter';
 
-/// The chosen filter, remembered between launches. Official only by default.
+/// The chosen filter, remembered between launches. Best match by default.
 class SearchFilterNotifier extends StateNotifier<SearchFilter> {
-  SearchFilterNotifier() : super(SearchFilter.officialOnly) {
+  SearchFilterNotifier() : super(SearchFilter.bestMatch) {
     _load();
   }
 
@@ -92,8 +106,8 @@ class SearchFilterNotifier extends StateNotifier<SearchFilter> {
       final p = await SharedPreferences.getInstance();
       final saved = p.getString(_kFilterKey);
       if (!mounted) return;
-      if (saved == SearchFilter.bestMatch.name) {
-        state = SearchFilter.bestMatch;
+      for (final f in SearchFilter.values) {
+        if (f.name == saved) state = f;
       }
     } catch (_) {/* default is fine */}
   }

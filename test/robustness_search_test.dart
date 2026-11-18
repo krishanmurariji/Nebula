@@ -15,6 +15,10 @@ class FakeSearch implements YoutubeSearchService {
     queries.add(query);
     return (pending[query] = Completer<List<Song>>()).future;
   }
+
+  @override
+  Future<SongSearchResult> searchAll(String query) async =>
+      SongSearchResult(await searchSongs(query), const []);
 }
 
 Song s(String id) => Song(videoId: id, title: id, artist: '', thumbnailUrl: '');

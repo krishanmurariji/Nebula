@@ -52,9 +52,16 @@ class YoutubeSearchService {
             ),
       ];
 
-  Future<List<Song>> searchSongs(String query) async {
+  /// Noor's ranking only (best match first).
+  Future<List<Song>> searchSongs(String query) async =>
+      (await searchAll(query)).ranked;
+
+  /// Both orders: [SongSearchResult.ranked] is Noor's best-match ranking
+  /// (top 30), [SongSearchResult.all] is every song result in YouTube's own
+  /// order.
+  Future<SongSearchResult> searchAll(String query) async {
     final q = query.trim();
-    if (q.isEmpty) return [];
+    if (q.isEmpty) return const SongSearchResult([], []);
 
     Object? last;
     for (var attempt = 0; attempt < 2; attempt++) {
@@ -84,16 +91,21 @@ class YoutubeSearchService {
         for (final r in ranked.take(5)) {
           nlog('[N] rank $r');
         }
-        return [
-          for (final r in ranked.take(30))
-            Song(
+        Song toSong(RankedCandidate r) => Song(
               videoId: r.candidate.videoId,
               title: r.candidate.title,
               artist: r.candidate.author,
               thumbnailUrl: r.candidate.thumbnailUrl,
               isOfficial: r.official,
-            ),
-        ];
+            );
+        final byId = {for (final r in ranked) r.candidate.videoId: r};
+        return SongSearchResult(
+          [for (final r in ranked.take(30)) toSong(r)],
+          [
+            for (final c in candidates)
+              if (byId[c.videoId] != null) toSong(byId[c.videoId]!),
+          ],
+        );
       } catch (e) {
         last = e;
         nlog('[N] search attempt ${attempt + 1} failed: $e');
@@ -109,4 +121,11 @@ class YoutubeSearchService {
         ? 'Search timed out. Check your connection and try again.'
         : 'Search failed. Check your connection and try again.');
   }
+}
+
+/// One search, in two orders.
+class SongSearchResult {
+  const SongSearchResult(this.ranked, this.all);
+  final List<Song> ranked;
+  final List<Song> all;
 }

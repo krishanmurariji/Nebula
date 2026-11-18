@@ -31,9 +31,11 @@ class SearchPanel extends ConsumerWidget {
       SearchStatus.idle => 'Search',
       SearchStatus.loading => 'Searching…',
       SearchStatus.error => 'Search',
-      SearchStatus.loaded => filter == SearchFilter.officialOnly
-          ? 'Official uploads'
-          : 'Top Results',
+      SearchStatus.loaded => switch (filter) {
+          SearchFilter.officialOnly => 'Official uploads',
+          SearchFilter.bestMatch => 'Top Results',
+          SearchFilter.all => 'All results',
+        },
     };
 
     return Column(
@@ -45,6 +47,7 @@ class SearchPanel extends ConsumerWidget {
             ref.read(searchFilterProvider.notifier).set(f);
           },
           totalCount: search.results.length,
+          allCount: search.all.isEmpty ? null : search.all.length,
           officialCount: official,
           isDark: t.isDark,
         ),
@@ -94,7 +97,7 @@ class SearchPanel extends ConsumerWidget {
         if (search.results.isEmpty) {
           return const NoorEmptyState(message: 'No results found');
         }
-        final visible = applySearchFilter(search.results, filter);
+        final visible = searchResultsFor(search, filter);
         if (visible.isEmpty) {
           return Center(
             child: Padding(
@@ -190,8 +193,8 @@ class _Watermark extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(24, 10, 24, 110),
       child: Center(
         child: Opacity(
-          opacity: 0.14,
-          child: Image.asset('assets/images/noor_mark_tight.png',
+          opacity: 0.16,
+          child: Image.asset('assets/images/noor_girl.png',
               fit: BoxFit.contain, semanticLabel: 'Noor'),
         ),
       ),
