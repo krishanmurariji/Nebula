@@ -244,6 +244,12 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
   }
 
   void _openNaming() async {
+    if (ref.read(playlistProvider.notifier).isFull) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('You can have up to $kMaxPlaylists playlists.'),
+          behavior: SnackBarBehavior.floating));
+      return;
+    }
     HapticFeedback.selectionClick();
     _nameCtrl.clear();
     await _listPanelCtrl.reverse();
@@ -266,6 +272,12 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
   Future<void> _confirmNaming(Song song) async {
     final name = _nameCtrl.text.trim();
     if (name.isEmpty) return;
+    if (ref.read(playlistProvider.notifier).nameTaken(name)) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('A playlist with this name already exists.'),
+          behavior: SnackBarBehavior.floating));
+      return;
+    }
     HapticFeedback.mediumImpact();
     _nameFocus.unfocus();
     final pl = await ref.read(playlistProvider.notifier).create(name);

@@ -10,6 +10,7 @@ import '../theme/noor_song_card.dart';
 import '../theme/noor_widgets.dart';
 import '../theme/noor_watermark.dart';
 import '../widgets/search_filter_bar.dart';
+import '../widgets/song_row.dart';
 
 /// What sits under the search bar on Home: the Best match / Official only
 /// chips, a centred label between two thin lines, then the results as song
@@ -136,7 +137,6 @@ class _Results extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final ps = ref.watch(playerProvider);
-    final liked = ref.watch(likedSongsProvider);
 
     void play(Song s) {
       HapticFeedback.lightImpact();
@@ -149,7 +149,8 @@ class _Results extends ConsumerWidget {
     }
 
     return ListView.builder(
-      padding: const EdgeInsets.only(bottom: 120),
+      padding: EdgeInsets.only(
+          bottom: 120 + MediaQuery.viewInsetsOf(context).bottom),
       physics: const BouncingScrollPhysics(),
       keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       itemCount: songs.length,
@@ -157,21 +158,16 @@ class _Results extends ConsumerWidget {
         final s = songs[i];
         final targetId = ps.pendingSong?.videoId ?? ps.song?.videoId;
         final isCurrent = s.videoId == targetId;
-        return NoorSongCard(
-          thumbnailUrl: s.thumbnailUrl,
-          title: s.title,
+        return NoorSongRow(
+          key: ValueKey('search_${s.videoId}'),
+          song: s,
           artist: s.artist
               .replaceAll(RegExp(r' - topic', caseSensitive: false), '')
               .trim(),
           badge: s.isOfficial ? 'Official' : null,
-          liked: liked.any((l) => l.videoId == s.videoId),
           current: isCurrent,
           playing: isCurrent && ps.status == NebulaPlayerStatus.playing,
           loading: isCurrent && ps.status == NebulaPlayerStatus.loading,
-          onToggleLike: () {
-            HapticFeedback.mediumImpact();
-            ref.read(likedProvider.notifier).toggle(s);
-          },
           onPlayPause: () => ps.song?.videoId == s.videoId
               ? ref.read(playerProvider.notifier).togglePlay()
               : play(s),
@@ -183,4 +179,3 @@ class _Results extends ConsumerWidget {
     );
   }
 }
-

@@ -121,6 +121,17 @@ class Playlist {
   );
 }
 
+/// At most this many playlists (the add-to-playlist radial menu holds 10).
+const int kMaxPlaylists = 10;
+
+/// Thrown by [PlaylistNotifier.create] when there are already
+/// [kMaxPlaylists] playlists.
+class PlaylistLimitException implements Exception {
+  const PlaylistLimitException();
+  @override
+  String toString() => 'You can have up to $kMaxPlaylists playlists.';
+}
+
 final playlistProvider =
     StateNotifierProvider<PlaylistNotifier, List<Playlist>>(
         (ref) => PlaylistNotifier());
@@ -148,7 +159,16 @@ class PlaylistNotifier extends StateNotifier<List<Playlist>> {
         json.encode(state.map((pl) => pl.toMap()).toList()));
   }
 
+  bool get isFull => state.length >= kMaxPlaylists;
+
+  /// True when a playlist already has this name (ignoring case and spaces).
+  bool nameTaken(String name) {
+    final n = name.trim().toLowerCase();
+    return state.any((p) => p.name.trim().toLowerCase() == n);
+  }
+
   Future<Playlist> create(String name) async {
+    if (isFull) throw const PlaylistLimitException();
     final pl = Playlist(
         id: '${DateTime.now().microsecondsSinceEpoch}',
         name: name.trim().isEmpty
@@ -241,6 +261,12 @@ class HistoryNotifier extends StateNotifier<List<Song>> {
     state = [];
     final p = await SharedPreferences.getInstance();
     await p.remove(_kHistory);
+  }
+
+  /// Removes one song from the history.
+  Future<void> remove(String videoId) async {
+    state = state.where((s) => s.videoId != videoId).toList();
+    await _save();
   }
 }
 

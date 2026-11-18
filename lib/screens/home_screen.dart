@@ -15,6 +15,7 @@ import '../theme/noor_artwork.dart';
 import '../theme/noor_song_card.dart';
 import '../theme/ripple_ring_clipper.dart';
 import '../theme/noor_widgets.dart';
+import '../widgets/song_row.dart';
 import '../theme/noor_watermark.dart';
 import '../theme/noor_search_button.dart';
 
@@ -31,7 +32,7 @@ class HomeCategory {
 }
 
 /// The Home slider: My Favorites, My History and My Music are always there
-/// (even when empty); playlists with songs follow.
+/// (even when empty); every playlist follows.
 List<HomeCategory> homeCategories({
   required List<Song> liked,
   required List<Song> history,
@@ -44,8 +45,7 @@ List<HomeCategory> homeCategories({
     HomeCategory('fav', 'My Favorites', liked),
     HomeCategory('hist', 'My History', distinctHistory),
     HomeCategory('music', 'My Music', onDevice),
-    for (final p in playlists)
-      if (p.songs.isNotEmpty) HomeCategory(p.id, p.name, p.songs),
+    for (final p in playlists) HomeCategory(p.id, p.name, p.songs),
   ];
 }
 
@@ -110,9 +110,38 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     setState(() => _selectedId = id);
   }
 
-  void _toggleLike(Song song) {
+  /// Long press on a playlist card: offer to delete the playlist.
+  Future<void> _confirmDeletePlaylist(HomeCategory c) async {
+    if (!ref.read(playlistProvider).any((p) => p.id == c.id)) return;
     HapticFeedback.mediumImpact();
-    ref.read(likedProvider.notifier).toggle(song);
+    final t = NoorTheme.of(context);
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: t.bg,
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(24),
+            side: BorderSide(color: t.ac, width: 0.8)),
+        title: Text('Delete "${c.title}"?',
+            style: TextStyle(color: t.ac, fontWeight: FontWeight.w700)),
+        content: Text(
+            'The playlist goes away. Its songs stay in your favorites and history.',
+            style: TextStyle(color: t.mute)),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text('Keep', style: TextStyle(color: t.mute))),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: Text('Delete',
+                  style: TextStyle(color: t.ac, fontWeight: FontWeight.w700))),
+        ],
+      ),
+    );
+    if (ok == true) {
+      await ref.read(playlistProvider.notifier).delete(c.id);
+      if (mounted && _selectedId == c.id) setState(() => _selectedId = null);
+    }
   }
 
   void _play(Song song, List<Song> queue) {
@@ -165,7 +194,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       // Back (button or gesture) closes search first.
       canPop: !_searching,
       onPopInvokedWithResult: (didPop, _) {
-        if (!didPop && _searching) _closeSearch();
+        // A song row with its actions open handles back itself.
+        if (!didPop && _searching && ref.read(openSongRowProvider) == null) {
+          _closeSearch();
+        }
       },
       child: Scaffold(
         backgroundColor: t.bg,
@@ -207,7 +239,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           if (index < cats.length - 1) {
                             _select(cats[index + 1].id);
                           } else {
-                            _goToPage(kLibraryPage); // past the last card
+                            _goToPage(kSettingsPage); // past the last card
                           }
                         } else if (v > 200) {
                           if (index > 0) {
@@ -227,6 +259,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           final adjacent = (i - index).abs() == 1;
                           return GestureDetector(
                             onTap: () => _select(cats[i].id),
+                            onLongPress: () => _confirmDeletePlaylist(cats[i]),
                             child: AnimatedContainer(
                               duration: const Duration(milliseconds: 500),
                               curve: Curves.easeOutCubic,
@@ -275,8 +308,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                             : current.songs.isEmpty
                                 ? const _EmptyList()
                                 : ListView.builder(
-                                    padding:
-                                        const EdgeInsets.fromLTRB(0, 4, 0, 120),
+                                    // Room for the keyboard, so a card being
+                                    // named can scroll above it.
+                                    padding: EdgeInsets.fromLTRB(
+                                        0,
+                                        4,
+                                        0,
+                                        120 +
+                                            MediaQuery.viewInsetsOf(context)
+                                                .bottom),
                                     physics: const BouncingScrollPhysics(),
                                     itemCount: current.songs.length,
                                     itemBuilder: (context, i) {
@@ -296,12 +336,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                                   ps.status !=
                                                       NebulaPlayerStatus
                                                           .paused));
-                                      return NoorSongCard(
-                                        thumbnailUrl: song.thumbnailUrl,
-                                        title: song.title,
-                                        artist: song.artist,
-                                        liked: liked.any(
-                                            (l) => l.videoId == song.videoId),
+                                      return NoorSongRow(
+                                        key: ValueKey(
+                                            '${current.id}_${song.videoId}'),
+                                        song: song,
                                         current: isCurrent,
                                         playing: isCurrent &&
                                             ps.status ==
@@ -310,7 +348,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                         onTap: () => _play(song, current.songs),
                                         onPlayPause: () =>
                                             _play(song, current.songs),
-                                        onToggleLike: () => _toggleLike(song),
                                       );
                                     },
                                   ),
@@ -452,7 +489,9 @@ class _EmptyList extends StatelessWidget {
                 Text('No song available',
                     textAlign: TextAlign.center,
                     style: TextStyle(
-                        color: t.ac, fontSize: 17, fontWeight: FontWeight.w600)),
+                        color: t.ac,
+                        fontSize: 17,
+                        fontWeight: FontWeight.w600)),
               ],
             ),
           ),

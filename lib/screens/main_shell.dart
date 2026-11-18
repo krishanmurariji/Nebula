@@ -8,12 +8,11 @@ import '../providers/theme_provider.dart';
 import '../theme/noor_palette.dart';
 
 import 'home_screen.dart';
-import 'library_screen.dart';
 import 'settings_screen.dart';
 
-/// Pages, left to right: Home, Library, Settings. Search lives inside Home
-/// (the search icon at the top right).
-const kHomePage = 0, kLibraryPage = 1, kSettingsPage = 2;
+/// Pages, left to right: Home, Settings. Search lives inside Home (the
+/// Search button at the top right); playlists are cards in Home's slider.
+const kHomePage = 0, kSettingsPage = 1;
 
 final shellTabProvider = StateProvider<int>((ref) => kHomePage);
 
@@ -100,7 +99,6 @@ class _MainShellState extends ConsumerState<MainShell> {
           physics: const BouncingScrollPhysics(),
           children: [
               const HomeScreen(),
-            const LibraryScreen(),
             SettingsScreen(onNavigate: goTo),
           ],
         ),

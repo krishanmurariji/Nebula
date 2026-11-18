@@ -42,7 +42,11 @@ class NoorSongCard extends StatefulWidget {
     this.playing = false,
     this.loading = false,
     this.badge,
+    this.onLongPress,
   });
+
+  /// Long press (opens the song's actions where available).
+  final VoidCallback? onLongPress;
 
   final String thumbnailUrl;
   final String title;
@@ -160,6 +164,7 @@ class _NoorSongCardState extends State<NoorSongCard>
             behavior: HitTestBehavior.opaque,
             onTap: w.onTap,
             onDoubleTap: w.onToggleLike == null ? null : _doubleTap,
+            onLongPress: w.onLongPress,
             child: Container(
               height: NoorSongCard.height,
               decoration: BoxDecoration(

@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:nebula_music_player/providers/library_provider.dart';
 import 'package:nebula_music_player/providers/player_provider.dart';
 import 'package:nebula_music_player/screens/home_screen.dart';
 import 'package:nebula_music_player/screens/mini_player.dart';
@@ -104,8 +105,29 @@ void main() {
     expect(find.byType(TextField), findsNothing);
   });
 
-  test('the three default cards always come first; empty playlists are left out', () {
-    final cats = homeCategories(liked: [], history: [], onDevice: [], playlists: []);
-    expect(cats.map((c) => c.title), ['My Favorites', 'My History', 'My Music']);
+  test('the three default cards always come first, then every playlist', () {
+    final cats = homeCategories(liked: [], history: [], onDevice: [], playlists: [
+      const Playlist(id: 'p', name: 'Empty one'),
+    ]);
+    expect(cats.map((c) => c.title), ['My Favorites', 'My History', 'My Music', 'Empty one']);
+  });
+
+  testWidgets('long press on a playlist card offers to delete it', (t) async {
+    await openHome(t, {
+      'nebula_playlists': jsonEncode([
+        {'id': 'p1', 'name': 'Road Trip', 'songs': [_song]}
+      ]),
+    });
+    for (var i = 0; i < 10; i++) {
+      await t.pump(const Duration(milliseconds: 100));
+    }
+    // Home opens on the first card with songs: the playlist.
+    final container = ProviderScope.containerOf(t.element(find.byType(HomeScreen)));
+    await t.longPress(find.byIcon(Icons.queue_music_rounded));
+    await t.pump(const Duration(milliseconds: 400));
+    expect(find.text('Delete "Road Trip"?'), findsOneWidget);
+    await t.tap(find.text('Delete'));
+    await t.pump(const Duration(milliseconds: 400));
+    expect(container.read(playlistProvider), isEmpty);
   });
 }
