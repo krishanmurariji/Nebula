@@ -11,6 +11,7 @@ import '../theme/noor_widgets.dart';
 import '../theme/noor_watermark.dart';
 import '../widgets/search_filter_bar.dart';
 import '../widgets/song_row.dart';
+import 'settings_screen.dart';
 
 /// What sits under the search bar on Home: the Best match / Official only
 /// chips, a centred label between two thin lines, then the results as song
@@ -52,6 +53,7 @@ class SearchPanel extends ConsumerWidget {
           allCount: search.all.isEmpty ? null : search.all.length,
           officialCount: official,
           isDark: t.isDark,
+          trailing: const _SettingsButton(),
         ),
         const SizedBox(height: 6),
         NoorLinedLabel(label),
@@ -176,6 +178,39 @@ class _Results extends ConsumerWidget {
               : play(s),
         );
       },
+    );
+  }
+}
+
+/// A small gear in an empty ring, beside the search filters: opens Settings.
+class _SettingsButton extends StatelessWidget {
+  const _SettingsButton();
+
+  @override
+  Widget build(BuildContext context) {
+    final t = NoorTheme.of(context);
+    return Semantics(
+      container: true,
+      button: true,
+      label: 'Settings',
+      excludeSemantics: true,
+      child: GestureDetector(
+        onTap: () {
+          HapticFeedback.selectionClick();
+          FocusScope.of(context).unfocus();
+          Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const SettingsScreen()));
+        },
+        child: Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            border: Border.all(color: t.ac, width: 0.8),
+          ),
+          child: Icon(Icons.settings_outlined, size: 19, color: t.ac),
+        ),
+      ),
     );
   }
 }

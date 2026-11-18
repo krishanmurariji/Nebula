@@ -138,10 +138,13 @@ final playlistProvider =
 
 class PlaylistNotifier extends StateNotifier<List<Playlist>> {
   PlaylistNotifier() : super([]) {
-    loaded = _load();
+    loaded = _load().whenComplete(() => isLoaded = true);
   }
 
   late final Future<void> loaded;
+
+  /// True once the saved playlists have been read.
+  bool isLoaded = false;
 
   Future<void> _load() async {
     final p = await SharedPreferences.getInstance();

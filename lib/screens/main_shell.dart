@@ -1,6 +1,5 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -8,11 +7,11 @@ import '../providers/theme_provider.dart';
 import '../theme/noor_palette.dart';
 
 import 'home_screen.dart';
-import 'settings_screen.dart';
 
-/// Pages, left to right: Home, Settings. Search lives inside Home (the
-/// Search button at the top right); playlists are cards in Home's slider.
-const kHomePage = 0, kSettingsPage = 1;
+/// The app has one main page, Home. Search lives inside Home (the Search
+/// button), playlists are cards in Home's slider, and Settings opens from
+/// the gear next to the search filters.
+const kHomePage = 0;
 
 final shellTabProvider = StateProvider<int>((ref) => kHomePage);
 
@@ -23,12 +22,10 @@ class MainShell extends ConsumerStatefulWidget {
 }
 
 class _MainShellState extends ConsumerState<MainShell> {
-  late final PageController _pageCtrl;
 
   @override
   void initState() {
     super.initState();
-    _pageCtrl = PageController(initialPage: kHomePage);
     WidgetsBinding.instance
         .addPostFrameCallback((_) => _askNotificationPermission());
   }
@@ -50,59 +47,18 @@ class _MainShellState extends ConsumerState<MainShell> {
 
   @override
   void dispose() {
-    _pageCtrl.dispose();
     super.dispose();
-  }
-
-  void _onPageChanged(int i) {
-    // Only update provider if it was a manual swipe
-    if (ref.read(shellTabProvider) != i) {
-      ref.read(shellTabProvider.notifier).state = i;
-    }
-  }
-
-  void goTo(int i) {
-    HapticFeedback.selectionClick();
-    ref.read(shellTabProvider.notifier).state = i;
   }
 
   @override
   Widget build(BuildContext context) {
-    // Listen to changes from the provider (e.g., when a child screen calls goTo)
-    // and animate the PageView automatically.
-    ref.listen<int>(shellTabProvider, (previous, next) {
-      if (_pageCtrl.hasClients && _pageCtrl.page?.round() != next) {
-        _pageCtrl.animateToPage(
-          next,
-          duration: const Duration(milliseconds: 350),
-          curve: Curves.easeOutCubic,
-        );
-      }
-    });
-
     final isDark = ref.watch(themeProvider) == ThemeMode.dark;
     final bg = NoorTheme.byMode(isDark).bg;
 
     return Scaffold(
       backgroundColor: bg,
       resizeToAvoidBottomInset: false,
-      // Just a pure PageView now, no bottom navigation bar
-      body: PopScope(
-        // Back from any other page returns to Home first.
-        canPop: ref.watch(shellTabProvider) == kHomePage,
-        onPopInvokedWithResult: (didPop, _) {
-          if (!didPop) goTo(kHomePage);
-        },
-        child: PageView(
-          controller: _pageCtrl,
-          onPageChanged: _onPageChanged,
-          physics: const BouncingScrollPhysics(),
-          children: [
-              const HomeScreen(),
-            SettingsScreen(onNavigate: goTo),
-          ],
-        ),
-      ),
+      body: const HomeScreen(),
     );
   }
 }

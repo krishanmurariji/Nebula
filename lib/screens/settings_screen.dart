@@ -11,8 +11,7 @@ import '../theme/noor_palette.dart';
 import '../theme/noor_widgets.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
-  final void Function(int) onNavigate;
-  const SettingsScreen({super.key, required this.onNavigate});
+  const SettingsScreen({super.key});
 
   @override
   ConsumerState<SettingsScreen> createState() => _SettingsScreenState();
@@ -42,7 +41,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> with TickerProv
       backgroundColor: t.bg,
       body: Stack(
         children: [
-          const Positioned(top: 0, left: 0, right: 0, child: NoorBackdrop()),
           SafeArea(
             bottom: false,
             child: Column(
@@ -54,15 +52,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> with TickerProv
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Settings',
-                            style: noorSerif(textCol, size: 38, height: 1.0)),
-                        const SizedBox(height: 28),
-
-                        // ── THEME ORBIT SELECTOR ──────────────────────────
-                        _SectionLabel('VISUAL EXPERIENCE', mutedCol),
-                        const SizedBox(height: 16),
-                        _CircularThemeSelector(isDark: isDark),
-
+                        Row(children: [
+                          NoorRoundButton(
+                            size: 44,
+                            semanticLabel: 'Back',
+                            onTap: () => Navigator.of(context).maybePop(),
+                            child: const Icon(Icons.arrow_back_rounded),
+                          ),
+                          const SizedBox(width: 14),
+                          Text('Settings',
+                              style: noorSerif(textCol, size: 38, height: 1.0)),
+                        ]),
                         const SizedBox(height: 32),
 
                         _SectionLabel('DATA', mutedCol),
@@ -181,85 +181,6 @@ class _SectionLabel extends StatelessWidget {
           fontWeight: FontWeight.w700,
           color: color,
           letterSpacing: 2.2));
-}
-
-class _CircularThemeSelector extends ConsumerWidget {
-  final bool isDark;
-  const _CircularThemeSelector({required this.isDark});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final t = NoorTheme.byMode(isDark);
-    return NoorFrame(
-      radius: 50,
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-      child: SizedBox(
-        height: 84,
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            _ThemeOption(
-                label: 'Light',
-                icon: Icons.wb_sunny_rounded,
-                active: !isDark,
-                onTap: () =>
-                    !isDark ? null : ref.read(themeProvider.notifier).toggle()),
-            AnimatedRotation(
-              duration: const Duration(milliseconds: 500),
-              turns: isDark ? 0.5 : 0,
-              child: Icon(Icons.sync_rounded, color: t.ac, size: 28),
-            ),
-            _ThemeOption(
-                label: 'Dark',
-                icon: Icons.nightlight_round,
-                active: isDark,
-                onTap: () =>
-                    isDark ? null : ref.read(themeProvider.notifier).toggle()),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _ThemeOption extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final bool active;
-  final VoidCallback onTap;
-  const _ThemeOption(
-      {required this.label,
-      required this.icon,
-      required this.active,
-      required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    final t = NoorTheme.of(context);
-    final fg = active ? t.onAc : t.mute;
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 300),
-        width: 76,
-        height: 76,
-        decoration: BoxDecoration(
-          color: active ? t.ac : Colors.transparent,
-          shape: BoxShape.circle,
-          border: Border.all(color: active ? t.ac : t.soft, width: 1),
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, color: fg, size: 24),
-            Text(label,
-                style: TextStyle(
-                    fontSize: 10, color: fg, fontWeight: FontWeight.w700)),
-          ],
-        ),
-      ),
-    );
-  }
 }
 
 class _MemoryCard extends StatelessWidget {

@@ -23,7 +23,11 @@ class SearchFilterBar extends StatelessWidget {
     required this.officialCount,
     required this.isDark,
     this.allCount,
+    this.trailing,
   });
+
+  /// Shown after the chips (e.g. the settings button).
+  final Widget? trailing;
 
   /// How many results "All" holds; defaults to [totalCount].
   final int? allCount;
@@ -67,6 +71,7 @@ class SearchFilterBar extends StatelessWidget {
             isDark: isDark,
             onTap: () => onChanged(SearchFilter.bestMatch),
           ),
+          if (trailing != null) trailing!,
         ],
       ),
     );

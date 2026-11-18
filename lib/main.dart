@@ -117,9 +117,17 @@ class _BootstrapState extends State<_Bootstrap> {
             action: FilledButton(onPressed: _retry, child: const Text('Try again')),
           );
         }
-        // Nothing to show while the audio service starts: a plain surface in
-        // the same colour as the launch screen, so Home simply appears.
-        return const ColoredBox(color: NoorColors.ivory);
+        // While the audio service starts: the same white screen with the
+        // Noor girl as the launch screen, so the two join up seamlessly.
+        return const ColoredBox(
+          color: NoorColors.ivory,
+          child: Center(
+            child: Image(
+              image: AssetImage('assets/images/noor_girl.png'),
+              height: 152,
+            ),
+          ),
+        );
       },
     );
   }

@@ -6,7 +6,6 @@ import '../models/song.dart';
 import '../providers/player_provider.dart';
 import '../providers/library_provider.dart';
 import '../providers/theme_provider.dart';
-import 'main_shell.dart';
 import 'mini_player.dart';
 import 'search_screen.dart';
 import '../providers/search_provider.dart';
@@ -154,7 +153,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     }
   }
 
-  void _goToPage(int page) => ref.read(shellTabProvider.notifier).state = page;
 
   @override
   Widget build(BuildContext context) {
@@ -237,10 +235,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         final v = d.primaryVelocity ?? 0;
                         if (v < -200) {
                           if (index < cats.length - 1) {
-                            _select(cats[index + 1].id);
-                          } else {
-                            _goToPage(kSettingsPage); // past the last card
-                          }
+                        _select(cats[index + 1].id);
+                      }
                         } else if (v > 200) {
                           if (index > 0) {
                             _select(cats[index - 1].id);

@@ -50,12 +50,12 @@ Future<void> settle(WidgetTester t, [int frames = 15]) async {
 }
 
 Future<void> swipeOpen(WidgetTester t) async {
-  await t.fling(find.text('Alpha'), const Offset(260, 0), 1200);
+  await t.fling(find.text('Alpha'), const Offset(-260, 0), 1200);
   await settle(t);
 }
 
 void main() {
-  testWidgets('swipe right reveals like, add to playlist and delete', (t) async {
+  testWidgets('swipe left shrinks the card and shows like, add to playlist and delete', (t) async {
     await open(t, {});
     expect(find.bySemanticsLabel('Like'), findsNothing);
     await swipeOpen(t);
@@ -65,25 +65,64 @@ void main() {
     expect(t.takeException(), isNull);
   });
 
-  testWidgets('a short drag snaps back; swipe left puts the card back', (t) async {
+  testWidgets('a short drag snaps back; swipe right puts the card back', (t) async {
     await open(t, {});
-    await t.drag(find.text('Alpha'), const Offset(60, 0));
+    await t.drag(find.text('Alpha'), const Offset(-60, 0));
     await settle(t);
     expect(find.bySemanticsLabel('Like'), findsNothing);
     await swipeOpen(t);
-    await t.fling(find.bySemanticsLabel('Add to playlist'), const Offset(-260, 0), 1200);
+    await t.fling(find.text('Alpha'), const Offset(220, 0), 1200);
     await settle(t);
     expect(find.bySemanticsLabel('Like'), findsNothing);
   });
 
-  testWidgets('a left swipe is left to the page behind the list', (t) async {
+  testWidgets('tapping the shrunk card puts it back instead of playing', (t) async {
+    var plays = 0;
+    SharedPreferences.setMockInitialValues({});
+    t.view.physicalSize = const Size(411, 891);
+    t.view.devicePixelRatio = 1.0;
+    addTearDown(t.view.reset);
+    await t.pumpWidget(ProviderScope(
+      child: MaterialApp(
+        home: Scaffold(
+          body: ListView(children: [NoorSongRow(song: a, onTap: () => plays++)]),
+        ),
+      ),
+    ));
+    await t.pump(const Duration(milliseconds: 100));
+    await swipeOpen(t);
+    // The shrunk card keeps its record and title; the actions sit to its right.
+    expect(find.text('Alpha'), findsOneWidget);
+    expect(t.getRect(find.bySemanticsLabel('Like')).left,
+        greaterThan(t.getRect(find.text('Alpha')).left));
+    await t.tap(find.text('Alpha'));
+    await settle(t);
+    expect(plays, 0);
+    expect(find.bySemanticsLabel('Like'), findsNothing);
+  });
+
+  testWidgets('6 or more playlists fan out in a full circle', (t) async {
+    await open(t, playlists(8));
+    await swipeOpen(t);
+    await t.tap(find.bySemanticsLabel('Add to playlist'));
+    await settle(t, 14);
+    final centre = t.getCenter(find.bySemanticsLabel('Make a new playlist'));
+    final below = [
+      for (var i = 0; i < 8; i++)
+        t.getCenter(find.bySemanticsLabel('Add to List $i')).dy > centre.dy + 10
+    ].where((b) => b).length;
+    expect(below, greaterThanOrEqualTo(3)); // bubbles all the way round
+    expect(t.takeException(), isNull);
+  });
+
+  testWidgets('a right swipe is left to whatever is behind the list', (t) async {
     var parentDrags = 0;
     await open(t, {},
         wrap: (row) => GestureDetector(
               onHorizontalDragEnd: (_) => parentDrags++,
               child: ListView(children: [row]),
             ));
-    await t.fling(find.text('Alpha'), const Offset(-260, 0), 1200);
+    await t.fling(find.text('Alpha'), const Offset(260, 0), 1200);
     await settle(t);
     expect(parentDrags, 1);
     expect(find.bySemanticsLabel('Like'), findsNothing);
@@ -235,7 +274,7 @@ void main() {
     await t.pump(const Duration(milliseconds: 100));
     await swipeOpen(t);
     expect(find.bySemanticsLabel('Like'), findsOneWidget);
-    await t.fling(find.text('Beta'), const Offset(260, 0), 1200);
+    await t.fling(find.text('Beta'), const Offset(-260, 0), 1200);
     await settle(t);
     expect(find.bySemanticsLabel('Like'), findsOneWidget); // only Beta's
     expect(find.text('Alpha'), findsOneWidget);
@@ -265,7 +304,7 @@ void main() {
     // Song 10 sits near the bottom of the screen.
     final target = find.text('Song 10');
     expect(t.getRect(target).bottom, greaterThan(600));
-    await t.fling(target, const Offset(260, 0), 1200);
+    await t.fling(target, const Offset(-260, 0), 1200);
     await settle(t);
     await t.tap(find.bySemanticsLabel('Add to playlist'));
     await settle(t, 8);

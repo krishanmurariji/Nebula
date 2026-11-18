@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'noor_disc.dart';
 import 'noor_palette.dart';
@@ -128,7 +129,8 @@ class _NoorSongCardState extends State<NoorSongCard>
               // 0 = empty heart, 1 = red heart
               final fill = _becomingLiked ? mix : 1 - mix;
               final scale = 0.35 +
-                  0.85 * Curves.easeOutBack.transform((v / 0.3).clamp(0.0, 1.0));
+                  0.85 *
+                      Curves.easeOutBack.transform((v / 0.3).clamp(0.0, 1.0));
               final opacity =
                   v < 0.72 ? 1.0 : (1 - (v - 0.72) / 0.28).clamp(0.0, 1.0);
               return Center(
@@ -141,8 +143,7 @@ class _NoorSongCardState extends State<NoorSongCard>
                           size: 44,
                           color: Color.lerp(Colors.white, _likeRed, fill)),
                       Icon(Icons.favorite_border_rounded,
-                          size: 44,
-                          color: Color.lerp(t.ac, _likeRed, fill)),
+                          size: 44, color: Color.lerp(t.ac, _likeRed, fill)),
                     ]),
                   ),
                 ),
@@ -172,44 +173,61 @@ class _NoorSongCardState extends State<NoorSongCard>
                 borderRadius: BorderRadius.circular(kNoorCardRadius),
                 border: Border.all(color: t.ac, width: w.current ? 1.2 : 0.8),
               ),
-              child: Row(
-                children: [
-                  const SizedBox(width: 6),
-                  RotationTransition(
-                    turns: _spin,
-                    child: NoorDisc(
-                        url: w.thumbnailUrl, size: NoorSongCard._disc),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(w.title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: noorSongTitleStyle(t.ac)),
-                        const SizedBox(height: 2),
-                        Text(
-                            w.badge == null
-                                ? w.artist
-                                : '${w.artist}  ·  ${w.badge}',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: noorArtistStyle(t.mute)),
-                      ],
+              // Narrow (actions open): no play button. Tiny (naming a
+              // playlist): just the record.
+              child: LayoutBuilder(builder: (context, box) {
+                final compact = box.maxWidth < 230;
+                if (box.maxWidth < 120) {
+                  return Center(
+                    child: RotationTransition(
+                      turns: _spin,
+                      child: NoorDisc(
+                          url: w.thumbnailUrl,
+                          size: min(NoorSongCard._disc, box.maxWidth - 8)),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  NoorPlayPauseButton(
-                    playing: w.current && w.playing,
-                    loading: w.loading,
-                    onTap: w.onPlayPause ?? w.onTap,
-                  ),
-                  const SizedBox(width: 12),
-                ],
-              ),
+                  );
+                }
+                return Row(
+                  children: [
+                    const SizedBox(width: 6),
+                    RotationTransition(
+                      turns: _spin,
+                      child: NoorDisc(
+                          url: w.thumbnailUrl, size: NoorSongCard._disc),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(w.title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: noorSongTitleStyle(t.ac)),
+                          const SizedBox(height: 2),
+                          Text(
+                              w.badge == null
+                                  ? w.artist
+                                  : '${w.artist}  ·  ${w.badge}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: noorArtistStyle(t.mute)),
+                        ],
+                      ),
+                    ),
+                    if (!compact) ...[
+                      const SizedBox(width: 8),
+                      NoorPlayPauseButton(
+                        playing: w.current && w.playing,
+                        loading: w.loading,
+                        onTap: w.onPlayPause ?? w.onTap,
+                      ),
+                    ],
+                    const SizedBox(width: 12),
+                  ],
+                );
+              }),
             ),
           ),
           _burst(t),
