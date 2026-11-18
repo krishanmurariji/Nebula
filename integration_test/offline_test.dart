@@ -25,8 +25,17 @@ void main() {
     report('offline: pill shown');
 
     // My Music with the permission granted: no permission button.
+    // On a fresh install the slider opens on My Favorites, so step along it
+    // (My History, then My Music) to bring My Music on screen.
+    final history = find.byIcon(Icons.history_rounded);
+    if (history.evaluate().isNotEmpty) {
+      await t.tap(history.first);
+      await idle(t, const Duration(seconds: 2));
+    }
     final music = find.byIcon(Icons.download_done_rounded);
-    if (music.evaluate().isNotEmpty) {
+    expect(await waitFor(t, music, timeout: const Duration(seconds: 5)), isTrue,
+        reason: 'Could not reach the My Music card');
+    {
       await t.tap(music.first);
       await idle(t, const Duration(seconds: 2));
       expect(find.bySemanticsLabel('Allow access'), findsNothing,
