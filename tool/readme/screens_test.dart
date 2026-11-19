@@ -211,9 +211,33 @@ void main() {
   testWidgets('player record swap animation', (t) async {
     await boot(t, const _LibraryLoaded(child: PlayerScreen()));
     final turntable = t.getCenter(find.byType(PlayerScreen)) - const Offset(0, 120);
-    await t.flingFrom(turntable, const Offset(-260, 0), 1500);
-    await t.pump();
-    await frames(t, 'swap', 40, 60);
+    // The record follows the finger and the next one slides in; a little
+    // back (it can be taken back), then on past a third and let go.
+    final g = await t.startGesture(turntable);
+    var n = 0;
+    var ms = 0;
+    Future<void> step(double dx) async {
+      ms += 60;
+      await g.moveBy(Offset(dx, 0), timeStamp: Duration(milliseconds: ms));
+      await t.pump(const Duration(milliseconds: 60));
+      await shot(t, 'swap_${(n++).toString().padLeft(3, '0')}');
+    }
+
+    for (var i = 0; i < 12; i++) {
+      await step(-10);
+    }
+    for (var i = 0; i < 6; i++) {
+      await step(8);
+    }
+    for (var i = 0; i < 10; i++) {
+      await step(-12);
+    }
+    await g.up();
+    for (var i = 0; i < 16; i++) {
+      await t.pump(const Duration(milliseconds: 60));
+      await shot(t, 'swap_${(n++).toString().padLeft(3, '0')}');
+    }
+    await settle(t, 12);
   });
 
   testWidgets('search', (t) async {
