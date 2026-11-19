@@ -47,7 +47,8 @@ void main() {
     await open(t);
     expect(find.byType(NoorTurntable), findsOneWidget);
     expect(find.text('Two'), findsOneWidget);
-    expect(find.text('Search'), findsOneWidget);
+    expect(find.bySemanticsLabel('Search'), findsOneWidget);
+    expect(find.bySemanticsLabel('Settings'), findsOneWidget);
     for (final l in ['Shuffle', 'Previous', 'Next', 'Repeat this song']) {
       expect(find.bySemanticsLabel(l), findsOneWidget);
     }

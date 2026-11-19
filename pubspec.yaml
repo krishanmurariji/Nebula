@@ -42,7 +42,7 @@ flutter_launcher_icons:
   ios: true
   image_path: "assets/images/noor_app_icon.png"
   # Ensures the icon fits perfectly on modern Android circles/squares
-  adaptive_icon_background: "#F4F0E4"
+  adaptive_icon_background: "#F6EFE8"
   adaptive_icon_foreground: "assets/images/noor_icon_foreground.png"
 
 flutter:

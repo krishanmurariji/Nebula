@@ -12,6 +12,7 @@ import 'package:noor/screens/home_screen.dart';
 import 'package:noor/screens/mini_player.dart';
 import 'package:noor/screens/player_screen.dart';
 import 'package:noor/screens/search_screen.dart';
+import 'package:noor/theme/noor_search_button.dart';
 import 'package:noor/widgets/song_row.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -233,7 +234,7 @@ void main() {
     await t.tap(find.descendant(of: find.byType(MiniPlayer), matching: find.text('Alpha')));
     await settle(t, 8);
     expect(find.byType(PlayerScreen), findsOneWidget);
-    await t.tap(find.text('Search').last);
+    await t.tap(find.byType(NoorSearchButton).last);
     await settle(t, 8);
     expect(find.byType(SearchPage), findsOneWidget);
     await t.binding.handlePopRoute();

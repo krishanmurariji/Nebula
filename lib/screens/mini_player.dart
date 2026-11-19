@@ -207,7 +207,7 @@ class _MiniPlayerState extends ConsumerState<MiniPlayer>
               },
               child: CustomPaint(
                   foregroundPainter: NoorGapBorderPainter(
-                      color: t.ac, radius: kNoorCardRadius),
+                      color: t.ac, radius: kNoorCardRadius, gap: 0, dot: 0),
                   child: Container(
                     height: height,
                     decoration: BoxDecoration(
@@ -314,8 +314,8 @@ class _PeekCard extends StatelessWidget {
     final t = NoorTheme.of(context);
     return IgnorePointer(
       child: CustomPaint(
-          foregroundPainter:
-              NoorGapBorderPainter(color: t.ac, radius: kNoorCardRadius),
+          foregroundPainter: NoorGapBorderPainter(
+              color: t.ac, radius: kNoorCardRadius, gap: 0, dot: 0),
           child: Container(
             height: height,
             decoration: BoxDecoration(

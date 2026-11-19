@@ -83,8 +83,8 @@ void main() {
       await t.pump(const Duration(milliseconds: 100));
     }
     expect(find.byType(TextField), findsOneWidget);
-    expect(find.text('Official only'), findsOneWidget);
-    expect(find.text('Best match'), findsOneWidget);
+    // The filters now sit behind the settings button, which says so.
+    expect(find.bySemanticsLabel('Search filters'), findsOneWidget);
     expect(find.bySemanticsLabel('Noor'), findsWidgets); // the faded mark
     expect(find.text(first), findsNothing);
     await t.tap(find.bySemanticsLabel('Close search'));

@@ -10,12 +10,13 @@ import '../providers/local_music_provider.dart';
 import '../providers/theme_provider.dart';
 import 'mini_player.dart';
 import 'search_screen.dart';
+import 'settings_screen.dart';
+import '../widgets/search_filter_menu.dart';
 import '../providers/search_provider.dart';
 import '../theme/noor_palette.dart';
 import '../theme/noor_artwork.dart';
 import '../theme/noor_song_card.dart';
 import '../theme/ripple_ring_clipper.dart';
-import '../theme/noor_widgets.dart';
 import '../widgets/song_row.dart';
 import '../widgets/offline_pill.dart';
 import '../theme/noor_watermark.dart';
@@ -81,6 +82,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     Future.delayed(const Duration(milliseconds: 280), () {
       if (mounted && _searching) _queryFocus.requestFocus();
     });
+  }
+
+  void _openSettings() {
+    HapticFeedback.selectionClick();
+    Navigator.of(context)
+        .push(MaterialPageRoute(builder: (_) => const SettingsScreen()));
   }
 
   void _closeSearch() {
@@ -252,13 +259,24 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     height: 44,
                     child: Row(
                       children: [
-                        const NoorWordmark(height: 30),
-                        const SizedBox(width: 12),
+                        const NoorLogo(),
+                        const SizedBox(width: 10),
                         Expanded(child: _searchField(t)),
                         const SizedBox(width: 8),
                         NoorSearchButton(
                             open: _searching,
                             onTap: _searching ? _closeSearch : _openSearch),
+                        const SizedBox(width: 8),
+                        // Home: Settings. While searching: the result filters.
+                        Builder(
+                            builder: (b) => NoorSettingsButton(
+                                label: _searching ? 'Search filters' : 'Settings',
+                                onTap: () => _searching
+                                    ? (() {
+                                        _queryFocus.unfocus();
+                                        showSearchFilters(context, anchor: b);
+                                      })()
+                                    : _openSettings())),
                       ],
                     ),
                   ),

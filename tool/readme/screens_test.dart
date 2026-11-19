@@ -18,6 +18,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:noor/theme/noor_search_button.dart';
 import 'package:noor/models/song.dart';
 import 'package:noor/providers/library_provider.dart';
 import 'package:noor/providers/player_provider.dart';
@@ -244,7 +245,7 @@ void main() {
     await boot(t, const HomeScreen(),
         search: SearchState(
             results: songs, status: SearchStatus.loaded, query: 'monsoon'));
-    await t.tap(find.text('Search'));
+    await t.tap(find.byType(NoorSearchButton));
     await settle(t, 8);
     await t.runAsync(() => _precache(t));
     await t.pump();

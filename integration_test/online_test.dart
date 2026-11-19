@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
+import 'package:noor/theme/noor_search_button.dart';
 import 'package:noor/main.dart' as app;
 import 'package:noor/theme/noor_play_pause.dart';
 import 'package:noor/widgets/song_details_panel.dart';
@@ -20,12 +21,12 @@ void main() {
 
   testWidgets('first run → search → play', (t) async {
     app.main();
-    expect(await waitFor(t, find.text('Search'), timeout: const Duration(seconds: 90)),
+    expect(await waitFor(t, find.byType(NoorSearchButton), timeout: const Duration(seconds: 90)),
         isTrue, reason: 'Home did not appear');
     await idle(t, const Duration(seconds: 2));
     await shot(b, t, '01_home_first_run');
 
-    await t.tap(find.text('Search'));
+    await t.tap(find.byType(NoorSearchButton));
     await idle(t, const Duration(seconds: 1));
     // YouTube's suggestions while typing.
     await t.enterText(find.byType(TextField).first, 'Kesar');

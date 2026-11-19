@@ -48,7 +48,7 @@ class NoorGapBorderPainter extends CustomPainter {
           ..style = PaintingStyle.stroke
           ..strokeWidth = width
           ..strokeCap = StrokeCap.round);
-    canvas.drawCircle(Offset(cx, t), dot, Paint()..color = color);
+    if (dot > 0) canvas.drawCircle(Offset(cx, t), dot, Paint()..color = color);
   }
 
   @override

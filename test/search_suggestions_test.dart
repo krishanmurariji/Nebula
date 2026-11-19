@@ -9,6 +9,7 @@ import 'package:noor/providers/search_provider.dart';
 import 'package:noor/providers/search_suggestions_provider.dart';
 import 'package:noor/screens/home_screen.dart';
 import 'package:noor/services/youtube_search_service.dart';
+import 'package:noor/theme/noor_search_button.dart';
 import 'package:noor/widgets/search_suggestions.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -145,7 +146,7 @@ void main() {
       ));
       container = ProviderScope.containerOf(t.element(find.byType(HomeScreen)));
       await settle(t);
-      await t.tap(find.text('Search'));
+      await t.tap(find.byType(NoorSearchButton));
       await settle(t);
     }
 
