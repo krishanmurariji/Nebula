@@ -194,6 +194,14 @@ class PlaylistNotifier extends StateNotifier<List<Playlist>> {
     await _save();
   }
 
+  /// Puts a deleted playlist back where it was (Undo).
+  Future<void> restore(Playlist playlist, int index) async {
+    if (state.any((p) => p.id == playlist.id)) return;
+    final list = [...state]..insert(index.clamp(0, state.length), playlist);
+    state = list;
+    await _save();
+  }
+
   /// Adds [song] to a playlist. A song lives in at most one playlist, so it
   /// is taken out of any other playlist first.
   Future<void> addSong(String playlistId, Song song) async {
