@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'connection_provider.dart';
+import 'search_suggestions_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/song.dart';
 import '../services/youtube_search_service.dart';
@@ -56,6 +57,7 @@ class SearchNotifier extends StateNotifier<SearchState> {
     final query = sanitizeQuery(rawQuery);
     final mine = ++_seq;
     if (query.isEmpty) { state = const SearchState(); return; }
+    unawaited(_ref.read(searchHistoryProvider.notifier).add(query));
     final net = _ref.read(connectionProvider.notifier);
     if (net.isOffline) {
       // No point asking YouTube: search what is on the phone instead.

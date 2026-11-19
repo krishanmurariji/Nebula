@@ -10,6 +10,7 @@ import '../theme/noor_song_card.dart';
 import '../theme/noor_widgets.dart';
 import '../theme/noor_watermark.dart';
 import '../widgets/search_filter_bar.dart';
+import '../widgets/search_suggestions.dart';
 import '../widgets/song_row.dart';
 import '../widgets/offline_pill.dart';
 import 'settings_screen.dart';
@@ -20,10 +21,24 @@ import '../theme/noor_search_button.dart';
 /// chips, a centred label between two thin lines, then the results as song
 /// cards. Before any search, a large faded Noor mark.
 class SearchPanel extends ConsumerWidget {
-  const SearchPanel({super.key, required this.onRetry});
+  const SearchPanel({
+    super.key,
+    required this.onRetry,
+    this.query,
+    this.queryFocus,
+    this.onPick,
+  });
 
   /// Runs the last search again (after an error).
   final VoidCallback onRetry;
+
+  /// The search box above the panel. With all three given, suggestions
+  /// cover the panel while the box is being typed in.
+  final TextEditingController? query;
+  final FocusNode? queryFocus;
+
+  /// Searches a suggestion the user tapped.
+  final ValueChanged<String>? onPick;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -46,7 +61,7 @@ class SearchPanel extends ConsumerWidget {
     };
 
     final offline = search.status == SearchStatus.offline;
-    return Column(
+    final panel = Column(
       children: [
         if (offline)
           const Align(
@@ -72,6 +87,16 @@ class SearchPanel extends ConsumerWidget {
         NoorLinedLabel(label),
         const SizedBox(height: 6),
         Expanded(child: _body(context, ref, t, search, filter)),
+      ],
+    );
+    if (query == null || queryFocus == null || onPick == null) return panel;
+    return Stack(
+      children: [
+        Positioned.fill(child: panel),
+        Positioned.fill(
+          child: SearchSuggestions(
+              controller: query!, focus: queryFocus!, onPick: onPick!),
+        ),
       ],
     );
   }
@@ -329,7 +354,15 @@ class _SearchPageState extends ConsumerState<SearchPage> {
           const SizedBox(height: 8),
           Expanded(
             child: Stack(children: [
-              Positioned.fill(child: SearchPanel(onRetry: _run)),
+              Positioned.fill(
+                  child: SearchPanel(
+                      onRetry: _run,
+                      query: _query,
+                      queryFocus: _focus,
+                      onPick: (q) {
+                        _query.text = q;
+                        _run();
+                      })),
               // The bottom card shows "Loading…" and the song that plays.
               // Tapping it goes back to the player (already open below).
               Positioned(

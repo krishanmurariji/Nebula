@@ -228,7 +228,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       onPopInvokedWithResult: (didPop, _) {
         // A song row with its actions open handles back itself.
         if (!didPop && _searching && ref.read(openSongRowProvider) == null) {
-          _closeSearch();
+          // Suggestions over earlier results: back shows the results first.
+          if (_queryFocus.hasFocus &&
+              ref.read(searchProvider).status != SearchStatus.idle) {
+            _queryFocus.unfocus();
+          } else {
+            _closeSearch();
+          }
         }
       },
       child: Scaffold(
@@ -300,7 +306,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       child: _searching
                           ? KeyedSubtree(
                               key: const ValueKey('search'),
-                              child: SearchPanel(onRetry: _runSearch))
+                              child: SearchPanel(
+                                  onRetry: _runSearch,
+                                  query: _query,
+                                  queryFocus: _queryFocus,
+                                  onPick: (q) {
+                                    _query.text = q;
+                                    _runSearch();
+                                  }))
                           : KeyedSubtree(
                               key: const ValueKey('home'),
                               child: Column(

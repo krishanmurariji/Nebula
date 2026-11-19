@@ -27,6 +27,15 @@ void main() {
 
     await t.tap(find.text('Search'));
     await idle(t, const Duration(seconds: 1));
+    // YouTube's suggestions while typing.
+    await t.enterText(find.byType(TextField).first, 'Kesar');
+    final suggested = await waitFor(t, find.byIcon(Icons.north_west_rounded),
+        timeout: const Duration(seconds: 15));
+    await shot(b, t, '01b_suggestions');
+    report(suggested
+        ? 'suggestions: ${find.byIcon(Icons.north_west_rounded).evaluate().length} shown'
+        : 'suggestions: none came back');
+
     await t.enterText(find.byType(TextField).first, 'Kesariya');
     await t.testTextInput.receiveAction(TextInputAction.search);
 

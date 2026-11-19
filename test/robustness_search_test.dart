@@ -20,6 +20,9 @@ class FakeSearch implements YoutubeSearchService {
   @override
   Future<SongSearchResult> searchAll(String query) async =>
       SongSearchResult(await searchSongs(query), const []);
+
+  @override
+  Future<List<String>> suggestions(String query) async => const [];
 }
 
 Song s(String id) => Song(videoId: id, title: id, artist: '', thumbnailUrl: '');

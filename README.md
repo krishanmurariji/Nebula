@@ -71,6 +71,7 @@
 | Any song card | Swipe left, or long press | Show **Like**, **Add to playlist** and **Delete** beside the card |
 | Home slider | Swipe or tap a side card | Open that list |
 | Home | Swipe down (or pull the list down) | Home sinks away and search drops in |
+| Search box | Type | Your recent searches (clock) and YouTube's suggestions drop down; tap one to search it, tap ↖ to put it in the box and keep typing, swipe a recent one away to forget it |
 | Home, a playlist card | Long press | Delete the playlist (its songs stay in Favorites and History) |
 | Bottom player | Swipe left / right | Next / previous song |
 | Player record | Swipe left / right | Next / previous song, with the record swap |

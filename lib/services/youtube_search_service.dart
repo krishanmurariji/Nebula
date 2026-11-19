@@ -52,6 +52,15 @@ class YoutubeSearchService {
             ),
       ];
 
+  /// What YouTube suggests while [query] is being typed (its own list, the
+  /// one under YouTube's search box). Up to ten.
+  Future<List<String>> suggestions(String query) async {
+    final q = query.trim();
+    if (q.isEmpty) return const [];
+    final list = await _yt.search.getQuerySuggestions(q);
+    return list.where((s) => s.trim().isNotEmpty).take(10).toList();
+  }
+
   /// Noor's ranking only (best match first).
   Future<List<Song>> searchSongs(String query) async =>
       (await searchAll(query)).ranked;
