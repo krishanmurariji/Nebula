@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+<defs>
+<radialGradient id="bgg" cx=".4" cy=".3" r=".9"><stop offset="0" stop-color="#4a4d52"/><stop offset=".6" stop-color="#2a2c30"/><stop offset="1" stop-color="#141517"/></radialGradient>
+<filter id="grain" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency=".85" numOctaves="3" seed="4" result="n"/><feColorMatrix in="n" type="matrix" values="0 0 0 0 .8  0 0 0 0 .8  0 0 0 0 .8  0 0 0 1.1 -.35"/><feComposite in2="SourceGraphic" operator="in"/></filter>
+<filter id="emb" x="-15%" y="-15%" width="130%" height="130%" color-interpolation-filters="sRGB">
+<feGaussianBlur in="SourceAlpha" stdDeviation="4.5" result="b"/>
+<feSpecularLighting in="b" surfaceScale="8" specularConstant="1.25" specularExponent="26" lighting-color="#fff2c4" result="sp"><feDistantLight azimuth="225" elevation="46"/></feSpecularLighting>
+<feComposite in="sp" in2="SourceAlpha" operator="in" result="spi"/>
+<feDiffuseLighting in="b" surfaceScale="8" diffuseConstant="1.05" lighting-color="#d9ad55" result="df"><feDistantLight azimuth="225" elevation="52"/></feDiffuseLighting>
+<feComposite in="df" in2="SourceAlpha" operator="in" result="dfi"/>
+<feComposite in="dfi" in2="spi" operator="arithmetic" k1="0" k2="1" k3="1" k4="0" result="lit"/>
+<feGaussianBlur in="SourceAlpha" stdDeviation="9" result="sb"/><feOffset in="sb" dx="10" dy="16" result="so"/>
+<feColorMatrix in="so" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 .75 0" result="sh"/>
+<feMerge><feMergeNode in="sh"/><feMergeNode in="lit"/></feMerge></filter>
+<filter id="soft"><feGaussianBlur stdDeviation="3"/></filter><filter id="soft2"><feGaussianBlur stdDeviation="10"/></filter>
+<radialGradient id="fl" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#fff"/><stop offset=".25" stop-color="#d6f6ff"/><stop offset=".6" stop-color="#5bc8ff" stop-opacity=".35"/><stop offset="1" stop-color="#5bc8ff" stop-opacity="0"/></radialGradient>
+<mask id="ribbon"><rect width="1024" height="1024" fill="#000"/><path d="M 770 760 C 760 940 482 930 482 790 V 200 C 482 130 520 105 545 125 C 640 200 630 340 490 450 C 350 560 300 640 330 730 C 360 820 510 820 530 720 C 548 630 450 590 400 650" fill="none" stroke="#fff" stroke-width="46" stroke-linecap="round" stroke-linejoin="round"/><path d="M 770 760 C 760 940 482 930 482 790 V 200 C 482 130 520 105 545 125 C 640 200 630 340 490 450 C 350 560 300 640 330 730 C 360 820 510 820 530 720 C 548 630 450 590 400 650" fill="none" stroke="#000" stroke-width="17" stroke-linecap="round" stroke-linejoin="round"/></mask>
+<clipPath id="clip"><rect width="1024" height="1024" rx="0"/></clipPath>
+</defs>
+<g clip-path="url(#clip)"><rect width="1024" height="1024" fill="url(#bgg)"/><rect width="1024" height="1024" filter="url(#grain)" opacity=".95"/></g>
+<g transform="translate(512 512) scale(1.0) translate(-512 -512)">
+<g filter="url(#emb)"><rect width="1024" height="1024" fill="#999" mask="url(#ribbon)"/></g>
+<g transform="translate(628 742)"><circle r="95" fill="url(#fl)" opacity=".9"/>
+<ellipse rx="230" ry="5" fill="#bfeaff" opacity=".95" filter="url(#soft)"/><ellipse rx="120" ry="2.5" fill="#fff" filter="url(#soft)"/>
+<g transform="rotate(-38)"><ellipse rx="130" ry="3" fill="#bfeaff" opacity=".8" filter="url(#soft)"/></g>
+<circle r="14" fill="#fff"/></g></g></svg>

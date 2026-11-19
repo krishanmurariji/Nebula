@@ -1,430 +1,481 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import '../models/song.dart';
-import '../providers/search_provider.dart';
-import '../providers/player_provider.dart';
 import '../providers/library_provider.dart';
-import '../providers/theme_provider.dart';
-import 'player_screen.dart';
+import '../providers/player_provider.dart';
+import '../providers/search_provider.dart';
+import '../theme/noor_palette.dart';
+import '../theme/noor_song_card.dart';
+import '../theme/noor_widgets.dart';
+import '../theme/noor_watermark.dart';
+import '../widgets/search_filter_bar.dart';
+import '../widgets/search_suggestions.dart';
+import '../widgets/song_row.dart';
+import '../widgets/offline_pill.dart';
+import 'settings_screen.dart';
 import 'mini_player.dart';
+import '../theme/noor_search_button.dart';
 
-class SearchScreen extends ConsumerStatefulWidget {
-  final void Function(int) onNavigate;
-  const SearchScreen({super.key, required this.onNavigate});
+/// What sits under the search bar on Home: the Best match / Official only
+/// chips, a centred label between two thin lines, then the results as song
+/// cards. Before any search, a large faded Noor mark.
+class SearchPanel extends ConsumerWidget {
+  const SearchPanel({
+    super.key,
+    required this.onRetry,
+    this.query,
+    this.queryFocus,
+    this.onPick,
+  });
+
+  /// Runs the last search again (after an error).
+  final VoidCallback onRetry;
+
+  /// The search box above the panel. With all three given, suggestions
+  /// cover the panel while the box is being typed in.
+  final TextEditingController? query;
+  final FocusNode? queryFocus;
+
+  /// Searches a suggestion the user tapped.
+  final ValueChanged<String>? onPick;
+
   @override
-  ConsumerState<SearchScreen> createState() => _SearchScreenState();
+  Widget build(BuildContext context, WidgetRef ref) {
+    final t = NoorTheme.of(context);
+    final search = ref.watch(searchProvider);
+    final filter = ref.watch(searchFilterProvider);
+    ref.watch(historyProvider); // keep it loaded: it becomes the queue
+
+    final official = search.results.where((s) => s.isOfficial).length;
+    final label = switch (search.status) {
+      SearchStatus.idle => 'Search',
+      SearchStatus.loading => 'Searching…',
+      SearchStatus.error => 'Search',
+      SearchStatus.offline => 'On this phone',
+      SearchStatus.loaded => switch (filter) {
+          SearchFilter.officialOnly => 'Official uploads',
+          SearchFilter.bestMatch => 'Top Results',
+          SearchFilter.all => 'All results',
+        },
+    };
+
+    final offline = search.status == SearchStatus.offline;
+    final panel = Column(
+      children: [
+        if (offline)
+          const Align(
+              alignment: Alignment.centerRight,
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(0, 2, 14, 6),
+                child: _SettingsButton(),
+              ))
+        else
+          SearchFilterBar(
+            filter: filter,
+            onChanged: (f) {
+              HapticFeedback.selectionClick();
+              ref.read(searchFilterProvider.notifier).set(f);
+            },
+            totalCount: search.results.length,
+            allCount: search.all.isEmpty ? null : search.all.length,
+            officialCount: official,
+            isDark: t.isDark,
+            trailing: const _SettingsButton(),
+          ),
+        const SizedBox(height: 6),
+        NoorLinedLabel(label),
+        const SizedBox(height: 6),
+        Expanded(child: _body(context, ref, t, search, filter)),
+      ],
+    );
+    if (query == null || queryFocus == null || onPick == null) return panel;
+    return Stack(
+      children: [
+        Positioned.fill(child: panel),
+        Positioned.fill(
+          child: SearchSuggestions(
+              controller: query!, focus: queryFocus!, onPick: onPick!),
+        ),
+      ],
+    );
+  }
+
+  Widget _pill(NoorTheme t, String text, VoidCallback onTap) => GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 10),
+          decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(kNoorCardRadius),
+              border: Border.all(color: t.ac, width: 0.8)),
+          child: Text(text,
+              style: TextStyle(color: t.ac, fontWeight: FontWeight.w600)),
+        ),
+      );
+
+  Widget _body(BuildContext context, WidgetRef ref, NoorTheme t,
+      SearchState search, SearchFilter filter) {
+    switch (search.status) {
+      case SearchStatus.offline:
+        return _OfflineResults(query: search.query);
+      case SearchStatus.idle:
+        return const NoorGirlWatermark();
+      case SearchStatus.loading:
+        return Center(
+            child: CircularProgressIndicator(color: t.ac, strokeWidth: 1.6));
+      case SearchStatus.error:
+        return Center(
+          child: Padding(
+            padding: const EdgeInsets.all(32),
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              Icon(Icons.wifi_off_outlined, size: 44, color: t.ac),
+              const SizedBox(height: 14),
+              Text(search.error ?? 'Error',
+                  textAlign: TextAlign.center, style: TextStyle(color: t.mute)),
+              const SizedBox(height: 18),
+              _pill(t, 'Retry', onRetry),
+            ]),
+          ),
+        );
+      case SearchStatus.loaded:
+        if (search.results.isEmpty) {
+          return const NoorEmptyState(message: 'No results found');
+        }
+        final visible = searchResultsFor(search, filter);
+        if (visible.isEmpty) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(32),
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                Icon(Icons.verified_outlined, size: 44, color: t.ac),
+                const SizedBox(height: 14),
+                Text('No official upload found for this search',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: t.ac, fontWeight: FontWeight.w600)),
+                const SizedBox(height: 6),
+                Text('${search.results.length} other results are available.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: t.mute, fontSize: 13)),
+                const SizedBox(height: 18),
+                _pill(
+                    t,
+                    'Show all results',
+                    () => ref
+                        .read(searchFilterProvider.notifier)
+                        .set(SearchFilter.bestMatch)),
+              ]),
+            ),
+          );
+        }
+        return _Results(songs: visible);
+    }
+  }
 }
 
-class _SearchScreenState extends ConsumerState<SearchScreen> {
-  final _ctrl = TextEditingController();
+class _Results extends ConsumerWidget {
+  const _Results({required this.songs});
+  final List<Song> songs;
 
   @override
-  void dispose() { _ctrl.dispose(); super.dispose(); }
+  Widget build(BuildContext context, WidgetRef ref) {
+    final ps = ref.watch(playerProvider);
 
-  void _search(String q) {
-    if (q.trim().isEmpty) return;
+    void play(Song s) {
+      HapticFeedback.lightImpact();
+      // "Up next" is what you played recently, not the search results.
+      final recent = ref
+          .read(historyProvider)
+          .where((h) => h.videoId != s.videoId)
+          .toList();
+      ref.read(playerProvider.notifier).playSong(s, queue: [s, ...recent]);
+    }
+
+    return ListView.builder(
+      padding: EdgeInsets.only(
+          bottom: 120 + MediaQuery.viewInsetsOf(context).bottom),
+      physics: const BouncingScrollPhysics(),
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+      itemCount: songs.length,
+      itemBuilder: (context, i) {
+        final s = songs[i];
+        final targetId = ps.pendingSong?.videoId ?? ps.song?.videoId;
+        final isCurrent = s.videoId == targetId;
+        return NoorSongRow(
+          key: ValueKey('search_${s.videoId}'),
+          song: s,
+          // Tap the card for its details; the play button plays.
+          expandable: true,
+          artist: s.artist
+              .replaceAll(RegExp(r' - topic', caseSensitive: false), '')
+              .trim(),
+          badge: s.isOfficial ? 'Official' : null,
+          current: isCurrent,
+          playing: isCurrent && ps.status == NebulaPlayerStatus.playing,
+          loading: isCurrent &&
+              (ps.status == NebulaPlayerStatus.loading ||
+                  (ps.pendingSong != null &&
+                      ps.status != NebulaPlayerStatus.playing &&
+                      ps.status != NebulaPlayerStatus.paused)),
+          onPlayPause: () => ps.song?.videoId == s.videoId
+              ? ref.read(playerProvider.notifier).togglePlay()
+              : play(s),
+          onTap: () => ps.song?.videoId == s.videoId
+              ? ref.read(playerProvider.notifier).togglePlay()
+              : play(s),
+        );
+      },
+    );
+  }
+}
+
+/// A small gear in an empty ring, beside the search filters: opens Settings.
+class _SettingsButton extends StatelessWidget {
+  const _SettingsButton();
+
+  @override
+  Widget build(BuildContext context) {
+    final t = NoorTheme.of(context);
+    return Semantics(
+      container: true,
+      button: true,
+      label: 'Settings',
+      excludeSemantics: true,
+      child: GestureDetector(
+        onTap: () {
+          HapticFeedback.selectionClick();
+          FocusScope.of(context).unfocus();
+          Navigator.of(context)
+              .push(MaterialPageRoute(builder: (_) => const SettingsScreen()));
+        },
+        child: Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            border: Border.all(color: t.ac, width: 0.8),
+          ),
+          child: Icon(Icons.settings_outlined, size: 19, color: t.ac),
+        ),
+      ),
+    );
+  }
+}
+
+/// Search as a page of its own, opened from the player's Search button, so
+/// back (or Cancel) returns to the player rather than to Home.
+class SearchPage extends ConsumerStatefulWidget {
+  const SearchPage({super.key});
+
+  @override
+  ConsumerState<SearchPage> createState() => _SearchPageState();
+}
+
+class _SearchPageState extends ConsumerState<SearchPage> {
+  final _query = TextEditingController();
+  final _focus = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    Future.delayed(const Duration(milliseconds: 300), () {
+      if (mounted) _focus.requestFocus();
+    });
+  }
+
+  @override
+  void dispose() {
+    _query.dispose();
+    _focus.dispose();
+    super.dispose();
+  }
+
+  void _run() {
+    final q = _query.text.trim();
+    if (q.isEmpty) return;
     ref.read(searchProvider.notifier).search(q);
-    FocusScope.of(context).unfocus();
+    _focus.unfocus();
   }
 
   @override
   Widget build(BuildContext context) {
-    final search  = ref.watch(searchProvider);
-    final player  = ref.watch(playerProvider);
-    final isDark  = ref.watch(themeProvider) == ThemeMode.dark;
-    
-    // Watch liked songs to show the heart badge on search results
-    final likedSongs = ref.watch(likedSongsProvider); 
-    
-    final bg      = isDark ? const Color(0xFF0D1117) : const Color(0xFFEDF2F7);
-    final cardBg  = isDark ? const Color(0xFF161B22) : Colors.white;
-    final textCol = isDark ? Colors.white : const Color(0xFF1A1A2E);
-    
-    final screenSize = MediaQuery.of(context).size;
-
+    final t = NoorTheme.of(context);
     return Scaffold(
-      backgroundColor: bg,
-      body: Stack(
+      backgroundColor: t.bg,
+      resizeToAvoidBottomInset: false,
+      body: Column(
         children: [
-          // ── Big Background App Logo Watermark ─────────────────────────────
-          Positioned.fill(
-            child: Center(
-              child: Opacity(
-                opacity: isDark ? 0.03 : 0.05, 
-                child: Image.asset(
-                  'assets/images/app_logo_final.png',
-                  width: screenSize.width * 0.85, 
-                  fit: BoxFit.contain,
-                  errorBuilder: (_, __, ___) => const SizedBox(),
-                ),
-              ),
-            ),
-          ),
-
-          // ── Main Foreground Content ───────────────────────────────────────
-          SafeArea(
-            bottom: false, 
-            child: Column(
-              children: [
-                // ── Search bar ────────────────────────────────────────────────
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 10),
+          SizedBox(height: MediaQuery.paddingOf(context).top + 14),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 14, 0),
+            child: SizedBox(
+              height: 44,
+              child: Row(children: [
+                const NoorWordmark(height: 30),
+                const SizedBox(width: 12),
+                Expanded(
                   child: Container(
-                    height: 48,
+                    height: 40,
+                    alignment: Alignment.centerLeft,
                     decoration: BoxDecoration(
-                      color: cardBg,
-                      borderRadius: BorderRadius.circular(24),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(isDark ? 0.3 : 0.07),
-                          blurRadius: 12, offset: const Offset(0, 3)
-                        )
-                      ]
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: t.ac, width: 0.8),
                     ),
                     child: TextField(
-                      controller: _ctrl,
-                      onSubmitted: _search,
-                      onChanged: (_) => setState(() {}),
-                      autofocus: false, 
+                      controller: _query,
+                      focusNode: _focus,
+                      onSubmitted: (_) => _run(),
                       textInputAction: TextInputAction.search,
-                      style: TextStyle(color: textCol, fontSize: 14, fontWeight: FontWeight.w500),
+                      textAlignVertical: TextAlignVertical.center,
+                      cursorColor: t.ac,
+                      style: TextStyle(
+                          color: t.ac,
+                          fontSize: 14,
+                          height: 1.2,
+                          fontWeight: FontWeight.w600),
                       decoration: InputDecoration(
-                        hintText: 'Artists, songs...',
-                        hintStyle: const TextStyle(color: Color(0xFFB0BEC5), fontSize: 14),
-                        prefixIcon: const Icon(Icons.search, color: Color(0xFF4993FC), size: 20),
-                        suffixIcon: _ctrl.text.isNotEmpty
-                            ? IconButton(
-                                icon: const Icon(Icons.close, color: Color(0xFFB0BEC5), size: 18),
-                                onPressed: () {
-                                  _ctrl.clear();
-                                  ref.read(searchProvider.notifier).clear();
-                                  setState(() {});
-                                })
-                            : null,
+                        isCollapsed: true,
+                        hintText: 'Songs, artists…',
+                        hintStyle:
+                            TextStyle(color: t.mute, fontSize: 14, height: 1.2),
                         border: InputBorder.none,
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14)
+                        contentPadding:
+                            const EdgeInsets.symmetric(horizontal: 16),
                       ),
                     ),
                   ),
                 ),
-
-                // ── Results & MiniPlayer Stack ────────────────────────────────
-                Expanded(
-                  child: Stack(
-                    children: [
-                      Positioned.fill(
-                        child: ShaderMask(
-                          shaderCallback: (Rect bounds) {
-                            return LinearGradient(
-                              begin: Alignment.topCenter,
-                              end: Alignment.bottomCenter,
-                              colors: [Colors.white, Colors.white, Colors.white.withOpacity(0.0)],
-                              stops: const [0.0, 0.85, 1.0],
-                            ).createShader(bounds);
-                          },
-                          blendMode: BlendMode.dstIn,
-                          child: _buildBody(search, player, textCol, isDark, likedSongs),
-                        ),
-                      ),
-
-                      const Positioned(
-                        left: 0, right: 0, bottom: 0,
-                        child: MiniPlayer(),
-                      ),
-                    ],
-                  ),
-                ),
-              ]
-            )
+                const SizedBox(width: 8),
+                NoorSearchButton(
+                    open: true, onTap: () => Navigator.of(context).maybePop()),
+              ]),
+            ),
+          ),
+          const NoorOfflinePill(),
+          const SizedBox(height: 8),
+          Expanded(
+            child: Stack(children: [
+              Positioned.fill(
+                  child: SearchPanel(
+                      onRetry: _run,
+                      query: _query,
+                      queryFocus: _focus,
+                      onPick: (q) {
+                        _query.text = q;
+                        _run();
+                      })),
+              // The bottom card shows "Loading…" and the song that plays.
+              // Tapping it goes back to the player (already open below).
+              Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  child: MiniPlayer(
+                      onOpen: () => Navigator.of(context).maybePop())),
+            ]),
           ),
         ],
       ),
     );
   }
-
-  Widget _buildBody(SearchState search, NebulaPlayerState player, Color textCol, bool isDark, List<Song> likedSongs) {
-    switch (search.status) {
-      case SearchStatus.loading:
-        return const Center(child: CircularProgressIndicator(
-            color: Color(0xFF4993FC), strokeWidth: 2));
-      case SearchStatus.error:
-        return Center(child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            const Icon(Icons.wifi_off_outlined, size: 52, color: Color(0xFFD0DBE8)),
-            const SizedBox(height: 16),
-            Text(search.error ?? 'Error', textAlign: TextAlign.center,
-              style: const TextStyle(color: Color(0xFF8A9BB0))),
-            const SizedBox(height: 20),
-            GestureDetector(
-              onTap: () => _search(_ctrl.text),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 12),
-                decoration: BoxDecoration(color: const Color(0xFF4993FC),
-                    borderRadius: BorderRadius.circular(30)),
-                child: const Text('Retry', style: TextStyle(color: Colors.white,
-                    fontWeight: FontWeight.w600)))),
-          ])));
-      case SearchStatus.loaded:
-        if (search.results.isEmpty) return const Center(
-          child: Text('No results found',
-              style: TextStyle(color: Color(0xFF8A9BB0))));
-        return ListView(
-          padding: const EdgeInsets.only(bottom: 130), 
-          physics: const BouncingScrollPhysics(),
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 16, 24, 14),
-              child: Text('Top Results', style: TextStyle(fontSize: 20,
-                  fontWeight: FontWeight.w800, color: textCol))),
-            ...search.results.map((s) {
-              final isPlaying = player.song?.videoId == s.videoId &&
-                  (player.status == NebulaPlayerStatus.playing || player.status == NebulaPlayerStatus.loading);
-              
-              final isLiked = likedSongs.any((liked) => liked.videoId == s.videoId);
-              
-              return _CapsuleSongTile(
-                song: s,
-                isPlaying: isPlaying,
-                isLiked: isLiked,
-                isDark: isDark,
-                onTap: () {
-                  ref.read(playerProvider.notifier)
-                      .playSong(s, queue: search.results);
-                  ref.read(historyProvider.notifier).add(s);
-                  Navigator.push(context,
-                      MaterialPageRoute(builder: (_) => const PlayerScreen()));
-                },
-              );
-            }),
-          ],
-        );
-      default:
-        return Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min, 
-            children: [
-              Container(
-                width: 72,
-                height: 72,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, 4))
-                  ]
-                ),
-                child: ClipOval(
-                  child: Image.asset(
-                    'assets/images/app_logo_final.png',
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => const Icon(Icons.search_outlined, size: 56, color: Color(0xFFD0DBE8)),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
-              Text('Search for any song or artist',
-                  style: TextStyle(color: textCol.withOpacity(0.5))),
-            ]
-          )
-        );
-    }
-  }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// CUSTOM PREMIUM CAPSULE TILE (With Smart Badges & Verified Icon)
-// ═══════════════════════════════════════════════════════════════════════════════
-class _CapsuleSongTile extends StatelessWidget {
-  final Song song;
-  final bool isPlaying;
-  final bool isLiked;
-  final bool isDark;
-  final VoidCallback onTap;
+/// Searching without internet: say so, then show the songs on the phone (its
+/// own music and the songs Noor saved) that match the words typed.
+class _OfflineResults extends ConsumerWidget {
+  const _OfflineResults({required this.query});
+  final String query;
 
-  const _CapsuleSongTile({
-    required this.song,
-    required this.isPlaying,
-    required this.isLiked,
-    required this.isDark,
-    required this.onTap,
-  });
+  /// Every song that can play right now without internet.
+  static List<Song> playableOffline(WidgetRef ref) {
+    final onDevice = ref.watch(isOnDeviceProvider);
+    final seen = <String>{};
+    final out = <Song>[];
+    void take(Iterable<Song> l) {
+      for (final s in l) {
+        if ((s.isLocal || onDevice(s.videoId)) && seen.add(s.videoId))
+          out.add(s);
+      }
+    }
+
+    take(ref.watch(myMusicProvider));
+    take(ref.watch(likedSongsProvider));
+    take(ref.watch(historyProvider));
+    for (final p in ref.watch(playlistProvider)) {
+      take(p.songs);
+    }
+    return out;
+  }
 
   @override
-  Widget build(BuildContext context) {
-    final cardBg = isDark ? const Color(0xFF161B22) : Colors.white;
-    final textCol = isDark ? Colors.white : const Color(0xFF1A1A2E);
-    final mutedCol = isDark ? Colors.white54 : const Color(0xFF8A9BB0);
-    const accentCol = Color(0xFF4993FC);
+  Widget build(BuildContext context, WidgetRef ref) {
+    final t = NoorTheme.of(context);
+    final ps = ref.watch(playerProvider);
+    final words =
+        query.toLowerCase().split(RegExp(r'\s+')).where((w) => w.isNotEmpty);
+    final matches = playableOffline(ref).where((s) {
+      final hay = '${s.title} ${s.artist}'.toLowerCase();
+      return words.every(hay.contains);
+    }).toList();
 
-    // ── DYNAMIC SMART BADGE LOGIC ──
-    final titleLower = song.title.toLowerCase();
-    
-    // Check if it's live or a cover
-    final isLive = titleLower.contains('live');
-    final isCover = titleLower.contains('cover');
-    
-    // We can use the isOfficial property directly from your Song model!
-    final isOfficial = song.isOfficial;
-    
-    // FIX: Using Dart's native caseSensitive parameter instead of the inline (?i) flag
-    final cleanArtist = song.artist.replaceAll(RegExp(r' - topic', caseSensitive: false), '').trim();
-
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        height: 76, 
-        margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
-        decoration: BoxDecoration(
-          color: isPlaying ? accentCol.withOpacity(0.08) : cardBg,
-          borderRadius: BorderRadius.circular(38),
-          border: isPlaying ? Border.all(color: accentCol.withOpacity(0.3), width: 1.5) : null,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(isDark ? 0.3 : 0.08),
-              blurRadius: 20,
-              offset: const Offset(0, 4),
-            )
-          ],
+    final banner = Padding(
+      padding: const EdgeInsets.fromLTRB(20, 4, 20, 10),
+      child: Row(children: [
+        Icon(Icons.wifi_off_rounded, size: 20, color: t.ac),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+              "You're offline. Showing songs on this phone that match "
+              '"$query".',
+              style: TextStyle(color: t.ac, fontSize: 13, height: 1.3)),
         ),
-        child: Row(
-          children: [
-            const SizedBox(width: 6),
-            
-            // ── Circular Album Art ──
-            Container(
-              width: 64,
-              height: 64,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.15),
-                    blurRadius: 8,
-                    offset: const Offset(0, 3)
-                  )
-                ],
-              ),
-              child: ClipOval(
-                child: Transform.scale(
-                  scale: 1.35, 
-                  child: CachedNetworkImage(
-                    imageUrl: song.thumbnailUrl,
-                    fit: BoxFit.cover,
-                    width: double.infinity,
-                    height: double.infinity,
-                    errorWidget: (_, __, ___) => Container(
-                      color: Colors.grey[800],
-                      child: const Icon(Icons.music_note, color: Colors.white54, size: 18)
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            
-            const SizedBox(width: 14),
-            
-            // ── Song Info & Badges ──
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  // TITLE
-                  Text(
-                    song.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w800,
-                      color: isPlaying ? accentCol : textCol,
-                      letterSpacing: -0.3,
-                    ),
-                  ),
-                  const SizedBox(height: 5),
-                  
-                  // BADGES AND ARTIST ROW
-                  Row(
-                    children: [
-                      // ── Smart Badges ──
-                      if (isOfficial) ...[
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: isDark ? Colors.white12 : Colors.black.withOpacity(0.05),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text('OFFICIAL', style: TextStyle(fontSize: 8, fontWeight: FontWeight.w900, color: textCol, letterSpacing: 0.5)),
-                        ),
-                        const SizedBox(width: 6),
-                      ] else if (isLive) ...[
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: Colors.red.withOpacity(0.15),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: const Text('LIVE', style: TextStyle(fontSize: 8, fontWeight: FontWeight.w900, color: Colors.redAccent, letterSpacing: 0.5)),
-                        ),
-                        const SizedBox(width: 6),
-                      ] else if (isCover) ...[
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: Colors.orange.withOpacity(0.15),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: const Text('COVER', style: TextStyle(fontSize: 8, fontWeight: FontWeight.w900, color: Colors.orange, letterSpacing: 0.5)),
-                        ),
-                        const SizedBox(width: 6),
-                      ],
+      ]),
+    );
 
-                      // ── Artist Name ──
-                      Flexible(
-                        child: Text(
-                          cleanArtist,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: mutedCol,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                      
-                      // ── Verified Tick ──
-                      if (isOfficial) ...[
-                        const SizedBox(width: 4),
-                        const Icon(Icons.check_circle, size: 12, color: Color(0xFF4993FC)),
-                      ],
-                    ],
-                  ),
-                ],
-              ),
+    if (matches.isEmpty) {
+      return Column(children: [
+        banner,
+        Expanded(
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(32, 0, 32, 110),
+              child: Text(
+                  'No saved song matches. Search YouTube again when you are back online.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: t.mute, fontSize: 13)),
             ),
-            
-            // ── Interactive Indicators ──
-            if (isLiked)
-              const Padding(
-                padding: EdgeInsets.only(right: 12.0),
-                child: Icon(Icons.favorite_rounded, color: Colors.pinkAccent, size: 18),
-              ),
-              
-            if (isPlaying)
-              const Padding(
-                padding: EdgeInsets.only(right: 18.0),
-                child: Icon(Icons.equalizer_rounded, color: accentCol, size: 22),
-              )
-            else
-              Padding(
-                padding: const EdgeInsets.only(right: 20.0),
-                child: Icon(Icons.play_arrow_rounded, color: mutedCol.withOpacity(0.3), size: 24),
-              ),
-          ],
+          ),
         ),
-      ),
+      ]);
+    }
+    return ListView.builder(
+      padding: EdgeInsets.only(
+          bottom: 120 + MediaQuery.viewInsetsOf(context).bottom),
+      physics: const BouncingScrollPhysics(),
+      itemCount: matches.length + 1,
+      itemBuilder: (context, i) {
+        if (i == 0) return banner;
+        final s = matches[i - 1];
+        final isCurrent =
+            (ps.pendingSong?.videoId ?? ps.song?.videoId) == s.videoId;
+        void play() {
+          HapticFeedback.lightImpact();
+          if (ps.song?.videoId == s.videoId) {
+            ref.read(playerProvider.notifier).togglePlay();
+          } else {
+            ref.read(playerProvider.notifier).playSong(s, queue: matches);
+          }
+        }
+
+        return NoorSongRow(
+          key: ValueKey('offline_${s.videoId}'),
+          song: s,
+          current: isCurrent,
+          playing: isCurrent && ps.status == NebulaPlayerStatus.playing,
+          loading: isCurrent && ps.status == NebulaPlayerStatus.loading,
+          onTap: play,
+          onPlayPause: play,
+        );
+      },
     );
   }
 }

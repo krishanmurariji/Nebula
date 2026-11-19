@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024"><defs>
+<linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2A1B54"/><stop offset="1" stop-color="#17123A"/></linearGradient>
+<linearGradient id="sun" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFD66B"/><stop offset=".55" stop-color="#FF9B4A"/><stop offset="1" stop-color="#FF5E7E"/></linearGradient>
+<radialGradient id="glow" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#FF9B4A" stop-opacity=".55"/><stop offset="1" stop-color="#FF9B4A" stop-opacity="0"/></radialGradient>
+</defs><defs><mask id="cm"><rect width="1024" height="1024" fill="#fff"/><circle cx="610" cy="440" r="250" fill="#000"/></mask></defs><circle cx="480" cy="520" r="290" fill="#fff" mask="url(#cm)"/><rect x="590" y="475.0" width="34" height="90" rx="17" fill="#fff"/><rect x="650" y="435.0" width="34" height="170" rx="17" fill="#fff"/><rect x="710" y="395.0" width="34" height="250" rx="17" fill="#fff"/><rect x="770" y="435.0" width="34" height="170" rx="17" fill="#fff"/><rect x="830" y="475.0" width="34" height="90" rx="17" fill="#fff"/></svg>

@@ -1,0 +1,60 @@
+<!doctype html><meta charset=utf-8>
+<style>html,body{margin:0;background:transparent}#w{width:1024px;height:1024px;border-radius:224px;overflow:hidden;position:relative;background:radial-gradient(circle at 50% 38%,#26307a 0%,#10143a 55%,#07081c 100%)}canvas{display:block}</style>
+<div id=w></div>
+<script type=importmap>{"imports":{"three":"/node_modules/three/build/three.module.js","three/addons/":"/node_modules/three/examples/jsm/"}}</script>
+<script type=module>
+import * as THREE from 'three';
+import {RoomEnvironment} from 'three/addons/environments/RoomEnvironment.js';
+const q=new URLSearchParams(location.search);const v=q.get('v')||'a';if(q.get('bg')==='g')document.getElementById('w').style.background='radial-gradient(circle at 50% 38%,#0f6b5c 0%,#07302b 55%,#030f0d 100%)';
+const r=new THREE.WebGLRenderer({antialias:true,alpha:true,preserveDrawingBuffer:true});
+r.setSize(1024,1024);r.setPixelRatio(1);r.toneMapping=THREE.ACESFilmicToneMapping;r.toneMappingExposure=1.0;r.outputColorSpace=THREE.SRGBColorSpace;
+document.getElementById('w').appendChild(r.domElement);
+const scene=new THREE.Scene();
+const pm=new THREE.PMREMGenerator(r);
+const env=new THREE.Scene();
+const room=new THREE.Mesh(new THREE.BoxGeometry(40,40,40),new THREE.MeshBasicMaterial({color:0x5a4a38,side:THREE.BackSide}));env.add(room);
+function panel(x,y,z,w,h,rgb,rx,ry){const m=new THREE.MeshBasicMaterial({side:THREE.DoubleSide});m.color.setRGB(...rgb);const p=new THREE.Mesh(new THREE.PlaneGeometry(w,h),m);p.position.set(x,y,z);p.rotation.set(rx||0,ry||0,0);env.add(p);}
+panel(-10,12,12,14,10,[14,13,11],-0.6,-0.6);
+panel(0,9,20,26,8,[12,9,4],0,Math.PI);
+panel(0,2,20,26,8,[5,3.2,1.4],0,Math.PI);
+panel(0,-5,20,26,8,[1.2,0.8,0.4],0,Math.PI);
+panel(14,2,8,5,18,[9,6,3],0,-1.1);
+panel(0,-14,6,22,6,[2.5,3.5,6],1.2,0);
+panel(-16,-2,-4,6,16,[3,4,8],0,1.3);
+panel(0,16,-6,18,6,[6,6,6],1.4,0);
+scene.environment=pm.fromScene(env,0.02).texture;
+const cam=new THREE.PerspectiveCamera(30,1,0.1,100);cam.position.set(0,0.2,17);
+function rounded(pts,rad){const s=new THREE.Shape();const n=pts.length;
+ for(let i=0;i<n;i++){const p0=pts[(i+n-1)%n],p1=pts[i],p2=pts[(i+1)%n];
+  const d1=new THREE.Vector2(p0[0]-p1[0],p0[1]-p1[1]).normalize(),d2=new THREE.Vector2(p2[0]-p1[0],p2[1]-p1[1]).normalize();
+  const a=new THREE.Vector2(p1[0]+d1.x*rad,p1[1]+d1.y*rad),b=new THREE.Vector2(p1[0]+d2.x*rad,p1[1]+d2.y*rad);
+  if(i==0)s.moveTo(a.x,a.y);else s.lineTo(a.x,a.y);s.quadraticCurveTo(p1[0],p1[1],b.x,b.y);}
+ s.closePath();return s;}
+const N=[[0,0],[0,4],[0.95,4],[2.05,1.85],[2.05,4],[3,4],[3,0],[2.05,0],[0.95,2.15],[0.95,0]];
+const geo=new THREE.ExtrudeGeometry(rounded(N,0.28),{depth:0.7,bevelEnabled:true,bevelThickness:0.28,bevelSize:0.26,bevelSegments:14,curveSegments:24});
+geo.center();
+const gold=new THREE.MeshPhysicalMaterial({color:0xffd98a,metalness:1,roughness:0.14,clearcoat:0.6,clearcoatRoughness:0.08,envMapIntensity:1.5});
+const n=new THREE.Mesh(geo,gold);
+const grp=new THREE.Group();grp.add(n);scene.add(grp);
+const key=new THREE.DirectionalLight(0xfff1d6,2.2);key.position.set(-6,8,10);scene.add(key);
+const rim=new THREE.DirectionalLight(0x7aa2ff,1.6);rim.position.set(8,-2,-6);scene.add(rim);
+function glowTex(){const c=document.createElement('canvas');c.width=c.height=256;const g=c.getContext('2d');const gr=g.createRadialGradient(128,128,0,128,128,128);gr.addColorStop(0,'rgba(255,255,255,1)');gr.addColorStop(.18,'rgba(255,236,170,.85)');gr.addColorStop(.5,'rgba(255,190,90,.25)');gr.addColorStop(1,'rgba(255,190,90,0)');g.fillStyle=gr;g.fillRect(0,0,256,256);return new THREE.CanvasTexture(c);}
+function glow(x,y,z,s){const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:glowTex(),blending:THREE.AdditiveBlending,depthWrite:false,transparent:true}));sp.position.set(x,y,z);sp.scale.set(s,s,1);scene.add(sp);return sp;}
+if(v==='a'){
+ grp.rotation.set(0.2,-0.58,0.04);grp.scale.setScalar(1.0);
+ // light orb: the "noor"
+ const orb=new THREE.Mesh(new THREE.SphereGeometry(0.2,64,64),new THREE.MeshBasicMaterial({color:0xffffff,toneMapped:false}));orb.position.set(1.9,2.9,1.2);scene.add(orb);
+ glow(1.9,2.9,1.3,5.5);
+ const pl=new THREE.PointLight(0xffd37a,60,12);pl.position.copy(orb.position);scene.add(pl);
+}else{
+ grp.scale.setScalar(0.62);grp.rotation.set(0.1,-0.35,0);
+ const gl=new THREE.MeshPhysicalMaterial({color:0xffffff,metalness:0,roughness:0.03,transmission:1,thickness:2.2,ior:1.45,attenuationColor:new THREE.Color(0x8fb4ff),attenuationDistance:6,clearcoat:1,envMapIntensity:1.4,transparent:true});
+ const sph=new THREE.Mesh(new THREE.SphereGeometry(3.3,128,128),gl);scene.add(sph);
+ const inner=new THREE.Mesh(new THREE.SphereGeometry(0.28,48,48),new THREE.MeshBasicMaterial({color:0xffffff,toneMapped:false}));inner.position.set(0.9,1.5,0.4);scene.add(inner);glow(0.9,1.5,0.6,3.2);
+ const pl=new THREE.PointLight(0xffd37a,40,12);pl.position.copy(inner.position);scene.add(pl);
+}
+// soft contact shadow
+const sc=document.createElement('canvas');sc.width=sc.height=256;const g=sc.getContext('2d');const gr=g.createRadialGradient(128,128,0,128,128,128);gr.addColorStop(0,'rgba(0,0,0,.6)');gr.addColorStop(1,'rgba(0,0,0,0)');g.fillStyle=gr;g.fillRect(0,0,256,256);
+const sh=new THREE.Mesh(new THREE.PlaneGeometry(7,2),new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(sc),transparent:true,depthWrite:false}));sh.rotation.x=-Math.PI/2;sh.position.set(0,-3.4,0);scene.add(sh);
+r.render(scene,cam);window.__done=true;
+</script>

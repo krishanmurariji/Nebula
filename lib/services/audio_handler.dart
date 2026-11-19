@@ -1,37 +1,30 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
-import 'dart:typed_data';
 
 import 'package:audio_service/audio_service.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:just_audio/just_audio.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 
 import '../models/song.dart';
+import 'app_log.dart';
+import 'audio_cache.dart';
+import 'backup_settings.dart';
+import 'connectivity_probe.dart';
+import 'fallback_sources.dart';
+import 'latest_wins_runner.dart';
+import 'playback_failure.dart';
+import 'resolved_stream.dart';
+import 'self_test.dart';
+import 'song_acquirer.dart';
+import 'stream_resolver.dart';
+import 'youtube_clients.dart';
+import 'webview_js_solver.dart';
 
 final audioHandlerProvider =
     Provider<NebulaAudioHandler>((ref) => throw UnimplementedError());
-
-const _kMaxCacheBytes = 500 * 1024 * 1024; // 500 MB
-
-// ── How long a fetched manifest URL is considered fresh. ─────────────────────
-// YouTube URLs are typically valid for ~6h, but we use 5 min to be safe.
-// If a URL expires mid-play the error handler will invalidate and re-fetch.
-const _kManifestTtl = Duration(minutes: 5);
-
-// ── Disk-cache entry ──────────────────────────────────────────────────────────
-class _CE {
-  final String id;
-  final int sz;
-  int ts;
-  _CE(this.id, this.sz, this.ts);
-  Map toJson() => {'id': id, 'sz': sz, 'ts': ts};
-  factory _CE.fromJson(Map j) =>
-      _CE(j['id'] as String, j['sz'] as int, j['ts'] as int);
-}
 
 // ── Play mode ─────────────────────────────────────────────────────────────────
 // repeatAll  — wraps around when queue ends (default)
@@ -40,198 +33,209 @@ class _CE {
 // sequential — plays to end of queue then stops
 enum PlayMode { repeatAll, repeatOne, shuffle, sequential }
 
-// ── In-memory manifest cache entry ───────────────────────────────────────────
-class _ManifestEntry {
-  final AudioStreamInfo info;
-  final DateTime fetchedAt;
-  _ManifestEntry(this.info) : fetchedAt = DateTime.now();
+/// How many different clients/sources a single song may try before giving up.
+const int _kMaxStreamAttempts = 4;
 
-  bool get isExpired =>
-      DateTime.now().difference(fetchedAt) > _kManifestTtl;
+class _LoadRequest {
+  final Song song;
+  final int tok;
+  final Duration? resumeAt;
+  final int attempt;
+  const _LoadRequest(this.song, this.tok, this.resumeAt, this.attempt);
 }
 
 class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
   final AudioPlayer _player = AudioPlayer();
-  final YoutubeExplode _yt = YoutubeExplode();
+  // Solves YouTube's JavaScript challenges (the "n" parameter / signatures) in
+  // an invisible WebView. Without it most streams are throttled to zero bytes
+  // or refused with 403.
+  late final WebViewEJSSolver _jsSolver =
+      WebViewEJSSolver(log: (m) => nlog('[N] $m'));
+  late final YoutubeExplode _yt = YoutubeExplode(jsSolver: _jsSolver);
 
   Song? _current;
   List<Song> _queue = [];
   int _idx = 0;
   int _tok = 0;
 
+  /// The load token while a new song is being prepared (from the tap until
+  /// its audio source is set). Meanwhile the player may still report the
+  /// previous song as "playing"; those events must not reach the UI as the
+  /// new song playing, or the loading feedback vanishes at once.
+  int? _loadingTok;
+  bool get _switching => _loadingTok != null && _loadingTok == _tok;
+
   // Current play mode — changed by the UI via setPlayMode().
   PlayMode _playMode = PlayMode.repeatAll;
 
-  Directory? _cacheDir;
-  final Map<String, _CE> _index = {};
-  final Completer<void> _cacheReadyCompleter = Completer<void>();
-
-  // ── In-memory manifest URL cache ─────────────────────────────────────────
-  // Keyed by videoId. Populated by _getInfo and eager prefetch.
-  // Checked before hitting the network — makes skip/play near-instant
-  // when the next song was prefetched while the current one was playing.
-  final Map<String, _ManifestEntry> _manifestCache = {};
-
-  // ── Rate-limit state ──────────────────────────────────────────────────────
-  final Map<int, DateTime> _clientCooldownUntil = {};
-  final Map<int, int> _clientFailCount = {};
-
+  // ── Stream resolution ─────────────────────────────────────────────────────
   // androidVr first — bypasses IP-level blocks that hit android/ios/mweb.
+  // Order matters (and the resolver then remembers the last one that worked).
+  // The first two are yt-dlp's current default clients and the only ones that
+  // were not refused (HTTP 403 / "unplayable") on a real device;
+  // androidSdkless and mweb are kept as fallbacks. Dead clients (androidVr,
+  // ios, tv, android …) were removed: each one costs seconds and one more
+  // request to YouTube, which is how rate limiting gets triggered.
   static final _clients = [
-    YoutubeApiClient.androidVr,
-    YoutubeApiClient.android,
-    YoutubeApiClient.ios,
+    kVisionOsClient, // worked first on the device, and needs no JS challenge
+    kTvSamsungClient,
+    YoutubeApiClient.androidSdkless,
     YoutubeApiClient.mweb,
   ];
 
-  static const _timeouts = [
-    Duration(seconds: 20),
-    Duration(seconds: 12),
-    Duration(seconds: 12),
-    Duration(seconds: 12),
-  ];
+  // The backup source (Piped/Invidious) comes after every YouTube client.
+  static final int _kBackupClient = _clients.length;
+
+  late final FallbackStreamFetcher _fallback =
+      FallbackStreamFetcher(instances: loadBackupInstances);
+
+  late final StreamResolver<ResolvedStream> _resolver =
+      StreamResolver<ResolvedStream>(
+    fetch: _fetchStream,
+    log: (m) => nlog('[N] resolver: $m'),
+    // Generous: the first lookup also loads and runs the JavaScript solver.
+    timeouts: const [
+      Duration(seconds: 25), // visionos
+      Duration(seconds: 40), // tv_samsung (also runs the JS solver)
+      Duration(seconds: 30), // androidSdkless
+      Duration(seconds: 30), // mweb
+      Duration(seconds: 20), // backup source (up to two instances)
+    ],
+  );
+
+  final ConnectivityProbe _net = ConnectivityProbe();
+
+  Future<ResolvedStream?> _fetchStream(String videoId, int client) async {
+    if (client == _kBackupClient) {
+      return (await _fallback.fetch(videoId))?.withClient(client);
+    }
+
+    nlog('[N] manifest client=$client for $videoId');
+    final m = await _yt.videos.streamsClient
+        .getManifest(videoId, ytClients: [_clients[client]]);
+    if (m.audioOnly.isEmpty) return null;
+
+    // Lowest bitrate among plain downloadable audio (no HLS/DASH fragments):
+    // fastest start and smallest download. Codec does not matter: Android
+    // plays both AAC (mp4) and Opus (webm).
+    final usable = m.audioOnly.where((s) => s.fragments.isEmpty).toList()
+      ..sort((a, b) => a.bitrate.compareTo(b.bitrate));
+    if (usable.isEmpty) return null;
+    final info = usable.first;
+    nlog('[N] ✓ manifest ok client=$client ${info.codec.mimeType} @ ${info.bitrate}');
+    return ResolvedStream(
+      url: info.url,
+      totalBytes: info.size.totalBytes,
+      mimeType: info.codec.mimeType,
+      open: () => _yt.videos.streamsClient.get(info),
+      clientIndex: client,
+      userAgent: _clients[client].payload['context']?['client']?['userAgent']
+          as String?,
+    );
+  }
+
+  // ── Disk cache ────────────────────────────────────────────────────────────
+  AudioCache? _cache; // null until ready, or if the disk is unusable
+  final Completer<void> _cacheReady = Completer<void>();
+
+  late final SongAcquirer _acquirer = SongAcquirer(
+    resolver: _resolver,
+    cache: () => _cache,
+    log: (m) => nlog('[N] $m'),
+  );
+
+  // ── Load pipeline state ───────────────────────────────────────────────────
+  // All loads go through this runner: one at a time, newest request wins.
+  // The native player therefore never sees overlapping stop()/setAudioSource().
+  late final LatestWinsRunner<_LoadRequest> _runner =
+      LatestWinsRunner<_LoadRequest>(_runLoad);
+
+  Timer? _retryTimer;
+  int _consecutiveFailures = 0; // songs in a row that failed (reset on success/user action)
+  int _midPlayRetries = 0;      // mid-song recoveries for the current song
+  int _mediaRefusals = 0;       // distinct clients whose download got HTTP 403
+  int _completedTok = -1;       // guards against double "completed" events
+
+  final StreamController<String> _notices = StreamController.broadcast();
+
+  /// Short human-readable messages ("Skipped unavailable song") for the UI.
+  Stream<String> get notices => _notices.stream;
+
+  /// Fired whenever the queue or its index is changed by the handler itself.
+  final StreamController<void> _queueChanged = StreamController.broadcast();
+
+  /// true when playback found the network gone, false when a song came
+  /// over the network again. Feeds the app's offline indicator.
+  final StreamController<bool> _offline = StreamController.broadcast();
+  Stream<bool> get offlineChanges => _offline.stream;
+  Stream<void> get queueChanges => _queueChanged.stream;
 
   NebulaAudioHandler() {
     _player.playbackEventStream.listen(
       _broadcast,
-      onError: (Object e, StackTrace st) {
-        // Broadcast error state AND attempt manifest-invalidation + retry.
-        debugPrint('[N] event err: $e');
-        playbackState.add(playbackState.value.copyWith(
-            processingState: AudioProcessingState.error));
-        _handlePlaybackError(e, st);
-      },
+      onError: (Object e, StackTrace st) => _onPlayerError(e),
     );
     _player.processingStateStream.listen((s) {
-      if (s == ProcessingState.completed) skipToNext();
+      // Song finished by itself. Ignore while a load is running, and make sure
+      // one finished song can only advance the queue once.
+      if (s == ProcessingState.completed &&
+          !_runner.isBusy &&
+          _completedTok != _tok) {
+        _completedTok = _tok;
+        skipToNext();
+      }
     });
 
-    _initCache();
+    unawaited(_initCache());
+    unawaited(_jsSolver.warmUp().catchError((Object e) {
+      nlog('[N] JS solver could not start: $e');
+    }));
   }
 
-  // ── Playback error handler ────────────────────────────────────────────────
-  // Called when just_audio reports an error on the playbackEventStream.
-  //
-  // IMPORTANT: We must NOT retry on every error. Specifically:
-  //   - "abort" / "Loading interrupted" — means we called stop() ourselves
-  //     (e.g. user skipped). Retrying would cause "player already exists".
-  //   - HTTP 403/410 or "Source error" — genuine URL expiry. Safe to retry
-  //     after invalidating the manifest cache entry.
-  void _handlePlaybackError(Object e, StackTrace st) {
-    final errStr = e.toString().toLowerCase();
-
-    // Never retry self-inflicted interruptions.
-    if (errStr.contains('abort') ||
-        errStr.contains('loading interrupted') ||
-        errStr.contains('already exists')) {
-      debugPrint('[N] playback error ignored (self-inflicted): $e');
-      return;
-    }
+  // ── Error from the native player while a song is (or should be) playing ──
+  // Typically an expired/throttled stream URL. Re-resolve and resume from the
+  // same position a couple of times, then give up on the song and skip it.
+  void _onPlayerError(Object e) {
+    final kind = classifyPlaybackError(e);
+    nlog('[N] player error ($kind): $e');
+    if (kind == FailureKind.cancelled) return;
+    // A load in progress reports its own failures through exceptions.
+    if (_runner.isBusy) return;
 
     final song = _current;
     if (song == null) return;
-    debugPrint('[N] playback error for ${song.videoId}: $e — invalidating manifest cache and retrying');
-    _manifestCache.remove(song.videoId);
 
-    // Capture tok BEFORE the microtask so we abort if user skips in the meantime.
-    final tok = _tok;
-    Future.microtask(() async {
-      if (_tok != tok) return;
-      debugPrint('[N] retrying load after URL expiry: ${song.title}');
-      await _load(song);
-    });
+    if (kind != FailureKind.permanent && _midPlayRetries < 2) {
+      _midPlayRetries++;
+      _resolver.invalidate(song.videoId);
+      _requestLoad(song, resumeAt: _player.position, attempt: 1);
+    } else {
+      unawaited(_giveUpOnCurrent(song, kind));
+    }
   }
 
   // ── Cache init ────────────────────────────────────────────────────────────
 
-  void _initCache() async {
+  Future<void> _initCache() async {
     try {
-      final candidates = <String>[];
-      final tmp = Platform.environment['TMPDIR'] ?? '';
-      if (tmp.isNotEmpty) {
-        candidates.add(
-            tmp.replaceAll(RegExp(r'[/\\]cache$'), '/files/nebula_cache'));
-        candidates.add('$tmp/nebula_cache');
-      }
-      candidates.addAll([
-        '/data/data/com.nebula.nebula_music_player/files/nebula_cache',
-        '/data/user/0/com.nebula.nebula_music_player/files/nebula_cache',
-        '${Directory.systemTemp.path}/nebula_cache',
-      ]);
-      for (final path in candidates) {
-        try {
-          final d = Directory(path);
-          await d.create(recursive: true);
-          final t = File('$path/.test');
-          t.writeAsStringSync('ok');
-          t.deleteSync();
-          _cacheDir = d;
-          debugPrint('[N] cache: $path');
-          break;
-        } catch (_) {}
-      }
-      _cacheDir ??= Directory.systemTemp;
-      final idx = File('${_cacheDir!.path}/index.json');
-      if (idx.existsSync()) {
-        try {
-          final raw = jsonDecode(idx.readAsStringSync()) as List;
-          for (final e in raw) {
-            final ce = _CE.fromJson(e as Map);
-            if (File('${_cacheDir!.path}/${ce.id}.mp4').existsSync()) {
-              _index[ce.id] = ce;
-            }
-          }
-          debugPrint('[N] index: ${_index.length} songs');
-        } catch (_) {}
-      }
+      final base = await getApplicationSupportDirectory();
+      final cache = AudioCache(Directory('${base.path}/nebula_cache'));
+      await cache.init();
+      _cache = cache;
+      nlog('[N] cache ready: ${cache.count} songs, ${cache.totalBytes} bytes');
     } catch (e) {
-      _cacheDir = Directory.systemTemp;
+      // No usable disk → just stream without caching.
+      nlog('[N] cache disabled: $e');
     } finally {
-      if (!_cacheReadyCompleter.isCompleted) _cacheReadyCompleter.complete();
+      if (!_cacheReady.isCompleted) _cacheReady.complete();
     }
   }
 
-  void _saveIndex() {
-    try {
-      File('${_cacheDir!.path}/index.json').writeAsStringSync(
-          jsonEncode(_index.values.map((e) => e.toJson()).toList()));
-    } catch (_) {}
-  }
+  Future<void> _ensureCache() => _cacheReady.future
+      .timeout(const Duration(seconds: 5), onTimeout: () {});
 
-  File _cf(String id) => File('${_cacheDir!.path}/$id.mp4');
-  File _tf(String id) => File('${_cacheDir!.path}/$id.tmp');
-
-  bool _isCached(String id) {
-    final f = _cf(id);
-    return _index.containsKey(id) && f.existsSync() && f.lengthSync() > 4096;
-  }
-
-  void _markUsed(String id) {
-    _index[id]?.ts = DateTime.now().millisecondsSinceEpoch;
-    _saveIndex();
-  }
-
-  void _evict() {
-    int total = _index.values.fold(0, (s, e) => s + e.sz);
-    if (total <= _kMaxCacheBytes) return;
-    final sorted = _index.values.toList()
-      ..sort((a, b) => a.ts.compareTo(b.ts));
-    for (final e in sorted) {
-      if (total <= (_kMaxCacheBytes * 0.8).toInt()) break;
-      try {
-        _cf(e.id).deleteSync();
-        total -= e.sz;
-        _index.remove(e.id);
-      } catch (_) {}
-    }
-    _saveIndex();
-  }
-
-  Future<void> _ensureCache() async {
-    await _cacheReadyCompleter.future
-        .timeout(const Duration(seconds: 5), onTimeout: () {});
-    _cacheDir ??= Directory.systemTemp;
-  }
+  Set<String> get _protectedIds =>
+      {if (_current != null) _current!.videoId};
 
   // ── Public getters ────────────────────────────────────────────────────────
 
@@ -240,504 +244,422 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
   int get queueIndex => _idx;
   int get songQueueIndex => _idx;
   AudioPlayer get player => _player;
-  int get cachedSongCount => _index.length;
-  int get cacheSizeBytes => _index.values.fold(0, (s, e) => s + e.sz);
+  int get cachedSongCount => _cache?.count ?? 0;
+
+  /// True when [videoId] is fully downloaded on this device.
+  bool isCached(String videoId) => _cache?.contains(videoId) ?? false;
+  int get cacheSizeBytes => _cache?.totalBytes ?? 0;
   PlayMode get playMode => _playMode;
+  int get globalCooldownSeconds => _resolver.globalCooldownSeconds;
 
   void setPlayMode(PlayMode mode) {
     _playMode = mode;
-    debugPrint('[N] playMode → $mode');
-  }
-
-  // ── Rate-limit helpers ────────────────────────────────────────────────────
-
-  Duration _backoffFor(int clientIndex) {
-    final n = _clientFailCount[clientIndex] ?? 0;
-    final secs = min(4 * pow(2, n).toInt(), 60);
-    return Duration(seconds: secs);
-  }
-
-  void _markClientRateLimited(int clientIndex) {
-    final count = (_clientFailCount[clientIndex] ?? 0) + 1;
-    _clientFailCount[clientIndex] = count;
-    final cooldown = _backoffFor(clientIndex);
-    _clientCooldownUntil[clientIndex] = DateTime.now().add(cooldown);
-    debugPrint(
-        '[N] client=$clientIndex rate-limited → backoff ${cooldown.inSeconds}s (fail #$count)');
-  }
-
-  void _markClientSuccess(int clientIndex) {
-    _clientFailCount.remove(clientIndex);
-    _clientCooldownUntil.remove(clientIndex);
-  }
-
-  bool _clientIsOnCooldown(int clientIndex) {
-    final until = _clientCooldownUntil[clientIndex];
-    if (until == null) return false;
-    return DateTime.now().isBefore(until);
-  }
-
-  int get globalCooldownSeconds {
-    final now = DateTime.now();
-    for (int i = 0; i < _clients.length; i++) {
-      if (!_clientIsOnCooldown(i)) return 0;
-    }
-    int minRemaining = 999;
-    for (int i = 0; i < _clients.length; i++) {
-      final until = _clientCooldownUntil[i];
-      if (until != null) {
-        final remaining = until.difference(now).inSeconds;
-        if (remaining < minRemaining) minRemaining = remaining;
-      }
-    }
-    return max(0, minRemaining);
+    nlog('[N] playMode → $mode');
   }
 
   // ── Play / Load ───────────────────────────────────────────────────────────
 
-  Future<void> playSong(Song song, {List<Song>? queue, int index = 0}) async {
-    if (queue != null) {
+  Future<void> playSong(Song song, {List<Song>? queue, int index = 0}) {
+    if (queue != null && queue.isNotEmpty) {
       _queue = List.from(queue);
-      _idx = index.clamp(0, queue.length - 1);
+      // Trust the song itself, not the caller's index: if it is not in the
+      // list (stale UI, deleted entry) it is put in front so the queue and
+      // what plays can never disagree.
+      final at = _queue.indexOf(song);
+      if (at < 0) {
+        _queue.insert(0, song);
+        _idx = 0;
+      } else {
+        _idx = at;
+      }
     } else if (!_queue.contains(song)) {
       _queue.add(song);
       _idx = _queue.length - 1;
     } else {
       _idx = _queue.indexOf(song);
     }
-    await _load(song);
+    _resetFailureCounters();
+    _requestLoad(song);
+    _queueChanged.add(null);
+    return _runner.idle;
   }
 
-  Future<void> _load(Song song) async {
+  void _resetFailureCounters() {
+    _consecutiveFailures = 0;
+    _midPlayRetries = 0;
+    _mediaRefusals = 0;
+  }
+
+  /// Entry point for every load. Synchronous and cheap: it only records the
+  /// request and publishes the new song to the UI immediately.
+  void _requestLoad(Song song, {Duration? resumeAt, int attempt = 0}) {
     final tok = ++_tok;
-    try {
-      // Await stop() so the platform player fully tears down before we call
-      // setAudioSource. Without this, just_audio throws:
-      //   PlatformException(abort, Loading interrupted)
-      // because the old source teardown races with the new source setup.
-      await _player.stop();
-      playbackState.add(playbackState.value.copyWith(
-          processingState: AudioProcessingState.loading, playing: false));
-      mediaItem.add(MediaItem(
-        id: song.videoId,
-        title: song.title,
-        artist: song.artist,
-        artUri: song.thumbnailUrl.isNotEmpty
-            ? Uri.tryParse(song.thumbnailUrl)
-            : null,
-      ));
+    _loadingTok = tok;
+    _retryTimer?.cancel();
+    // Stop moving bytes for whatever the user just left behind.
+    _acquirer.cancelAll();
+    _current = song;
 
-      debugPrint('[N] ▶ ${song.title}');
-      await _ensureCache();
-      if (_tok != tok) return;
+    playbackState.add(playbackState.value.copyWith(
+        processingState: AudioProcessingState.loading,
+        playing: false,
+        queueIndex: _idx));
+    mediaItem.add(MediaItem(
+      id: song.videoId,
+      title: song.title,
+      artist: song.artist,
+      artUri: song.thumbnailUrl.startsWith('http')
+          ? Uri.tryParse(song.thumbnailUrl)
+          : null,
+    ));
 
-      // ── Path 1: Disk cache hit — instant playback ─────────────────────────
-      if (_isCached(song.videoId)) {
-        _markUsed(song.videoId);
-        debugPrint('[N] disk cache hit');
-        await _player.setAudioSource(
-            AudioSource.file(_cf(song.videoId).path));
-        if (_tok != tok) {
-          _player.stop();
-          return;
-        }
-        _current = song;
-        await _player.play();
-        debugPrint('[N] ✓ PLAYING (disk cached): ${song.title}');
-        _scheduleNextPrefetch(tok);
-        return;
-      }
-
-      // ── Path 2: Manifest cache hit — stream with near-zero delay ──────────
-      // If the next song was prefetched while the current one was playing,
-      // its manifest URL is already in _manifestCache — no network call needed.
-      final cached = _manifestCache[song.videoId];
-      if (cached != null && !cached.isExpired) {
-        debugPrint('[N] manifest cache hit — streaming immediately');
-        await _player.setAudioSource(AudioSource.uri(cached.info.url));
-        if (_tok != tok) {
-          _player.stop();
-          return;
-        }
-        _current = song;
-        await _player.play();
-        debugPrint('[N] ✓ STREAMING (manifest cached): ${song.title}');
-        _cacheInBackground(cached.info, song.videoId, tok);
-        _scheduleNextPrefetch(tok);
-        return;
-      }
-
-      // ── Path 3: Cold start — fetch manifest then stream ───────────────────
-      debugPrint('[N] cold manifest fetch for ${song.title}');
-      final info = await _getInfo(song.videoId, tok);
-      if (_tok != tok) return;
-      if (info == null) {
-        debugPrint('[N] ✗ no stream info for ${song.videoId}');
-        playbackState.add(playbackState.value.copyWith(
-            processingState: AudioProcessingState.error));
-        return;
-      }
-
-      await _player.setAudioSource(AudioSource.uri(info.url));
-      if (_tok != tok) {
-        _player.stop();
-        return;
-      }
-      _current = song;
-      await _player.play();
-      debugPrint('[N] ✓ STREAMING (cold): ${song.title}');
-      _cacheInBackground(info, song.videoId, tok);
-      _scheduleNextPrefetch(tok);
-    } catch (e, st) {
-      if (_tok != tok) return;
-      debugPrint('[N] _load error: $e\n$st');
-      playbackState.add(playbackState.value.copyWith(
-          processingState: AudioProcessingState.error));
-    }
+    _runner.submit(_LoadRequest(song, tok, resumeAt, attempt));
   }
 
-  void _cacheInBackground(
-      AudioStreamInfo info, String videoId, int tok) {
-    Future.microtask(() async {
+  /// Runs on the single worker. Never overlaps with another load.
+  Future<void> _runLoad(_LoadRequest req, RunContext ctx) async {
+    final song = req.song;
+    bool live() => ctx.isCurrent && _tok == req.tok;
+    var usedDiskCache = false;
+
+    try {
+      nlog('[N] ▶ ${song.title} (attempt ${req.attempt})');
+      if (!song.isPlayable) {
+        // Corrupt or tampered entry: skip it, never hand it to the network or disk.
+        throw const ResolveFailure(FailureKind.permanent);
+      }
       try {
-        await _download(info, videoId, tok);
-        debugPrint('[N] bg cache done: $videoId');
+        await _player.stop();
       } catch (e) {
-        debugPrint('[N] bg cache err: $e');
+        nlog('[N] stop() before load ignored: $e');
       }
-    });
+      if (!live()) return;
+
+      // A music file on the phone: play it straight from Android's media
+      // library. It never touches YouTube, the resolver or the disk cache.
+      if (song.isLocal) {
+        await _player.setAudioSource(AudioSource.uri(Uri.parse(song.localUri!)),
+            initialPosition: req.resumeAt);
+        if (!live()) return;
+        _loadingTok = null;
+        unawaited(_player.play().catchError((Object e) {
+          if (live()) _onPlayerError(e);
+        }));
+        _consecutiveFailures = 0;
+        nlog('[N] ✓ started (phone file): ${song.title}');
+        _scheduleNextPrefetch(req.tok);
+        return;
+      }
+
+      await _ensureCache();
+      if (!live()) return;
+
+      final got = await _acquirer.acquire(
+        song.videoId,
+        superseded: ctx.superseded,
+        protect: _protectedIds,
+      );
+      if (!live()) return;
+      usedDiskCache = got.fromCache;
+      final AudioSource source = got.file != null
+          ? AudioSource.file(got.file!.path)
+          : AudioSource.uri(got.url!,
+              headers: got.headers.isEmpty ? null : got.headers);
+
+      await _player.setAudioSource(source, initialPosition: req.resumeAt);
+      if (!live()) return;
+      _loadingTok = null;
+
+      // IMPORTANT: play() only completes when playback pauses or ends, so it
+      // must NOT be awaited here or the worker would be blocked for the whole
+      // song and skipping would stall.
+      unawaited(_player.play().catchError((Object e) {
+        if (live()) _onPlayerError(e);
+      }));
+
+      _consecutiveFailures = 0;
+      if (!usedDiskCache) _offline.add(false); // it came over the network
+      nlog('[N] ✓ started: ${song.title}');
+      _scheduleNextPrefetch(req.tok);
+    } on AcquireSuperseded {
+      return; // the user moved on; nothing to report
+    } catch (e, st) {
+      _acquirer.cancelActive();
+      if (!live()) return; // superseded: whatever happened is irrelevant now
+      _loadingTok = null; // failure handling below reports its own state
+      if (e is DownloadFailure) {
+        nlog('[N] download failed: $e');
+        unawaited(_handleDownloadFailure(req, e));
+        return;
+      }
+      var kind =
+          e is ResolveFailure ? e.kind : classifyPlaybackError(e);
+      nlog('[N] load failed ($kind): $e\n$st');
+      if (kind == FailureKind.cancelled) kind = FailureKind.transient;
+      // A phone file that will not play (deleted, unreadable) will not fix
+      // itself, and the network has nothing to do with it: skip it.
+      if (song.isLocal) kind = FailureKind.permanent;
+      if (usedDiskCache) unawaited(_cache?.remove(song.videoId)); // maybe corrupt
+      unawaited(_handleLoadFailure(req, kind));
+    }
   }
 
-  // ── Manifest fetch with per-client exponential backoff ───────────────────
+  /// The stream a client handed out could not be downloaded. Penalize that
+  /// client for a while and immediately try the next one, so a client that
+  /// returns addresses YouTube refuses to serve cannot wedge playback.
+  Future<void> _handleDownloadFailure(
+      _LoadRequest req, DownloadFailure f) async {
+    final song = req.song;
 
-  Future<AudioStreamInfo?> _getInfo(String videoId, int tok) async {
-    if (_tok != tok) return null;
-
-    // Return a fresh cached entry without any network call.
-    final existing = _manifestCache[videoId];
-    if (existing != null && !existing.isExpired) {
-      debugPrint('[N] _getInfo: manifest cache hit for $videoId');
-      return existing.info;
-    }
-
-    debugPrint('[N] manifest fetch for $videoId');
-
-    for (int pass = 0; pass < 2; pass++) {
-      for (int ci = 0; ci < _clients.length; ci++) {
-        if (_tok != tok) return null;
-
-        if (_clientIsOnCooldown(ci)) {
-          final until = _clientCooldownUntil[ci]!;
-          final remaining = until.difference(DateTime.now()).inSeconds;
-          debugPrint(
-              '[N] client=$ci skipped (cooldown ${remaining}s remaining)');
-          continue;
-        }
-
-        try {
-          debugPrint('[N] manifest client=$ci for $videoId');
-          final m = await _yt.videos.streamsClient
-              .getManifest(videoId, ytClients: [_clients[ci]])
-              .timeout(_timeouts[ci]);
-
-          if (m.audioOnly.isEmpty) {
-            debugPrint('[N] client=$ci no audio streams, trying next');
-            continue;
-          }
-
-          // ── Quality selection: always pick lowest bitrate ─────────────────
-          // Caller said latency > quality. Lowest bitrate = fastest buffering
-          // start and smallest background download. Typically 48kbps AAC.
-          final mp4 = m.audioOnly
-              .where((s) => s.codec.mimeType.contains('mp4'))
-              .toList()
-            ..sort((a, b) => a.bitrate.compareTo(b.bitrate));
-
-          // Pick the absolute lowest mp4; fall back to lowest of any codec
-          // if no mp4 streams exist (preserves existing fallback behaviour).
-          final chosen = mp4.isNotEmpty
-              ? mp4.first
-              : (m.audioOnly.toList()
-                    ..sort((a, b) => a.bitrate.compareTo(b.bitrate)))
-                  .first;
-
-          debugPrint(
-              '[N] ✓ manifest ok client=$ci ${chosen.codec.mimeType} @ ${chosen.bitrate}');
-          _markClientSuccess(ci);
-
-          // Store in manifest cache so next play / prefetch is instant.
-          _manifestCache[videoId] = _ManifestEntry(chosen);
-
-          return chosen;
-        } on RequestLimitExceededException {
-          _markClientRateLimited(ci);
-        } on TimeoutException {
-          debugPrint('[N] client=$ci timeout, trying next');
-        } catch (e) {
-          debugPrint('[N] client=$ci error: $e');
-        }
-      }
-
-      if (pass == 0) {
-        final now = DateTime.now();
-        bool anyAvailableNow = false;
-        Duration? shortestWait;
-
-        for (int ci = 0; ci < _clients.length; ci++) {
-          final until = _clientCooldownUntil[ci];
-          if (until == null || now.isAfter(until)) {
-            anyAvailableNow = true;
-            break;
-          }
-          final wait = until.difference(now);
-          if (shortestWait == null || wait < shortestWait) {
-            shortestWait = wait;
-          }
-        }
-
-        if (anyAvailableNow) continue;
-
-        if (shortestWait != null && shortestWait.inSeconds <= 30) {
-          debugPrint(
-              '[N] all clients on cooldown, waiting ${shortestWait.inSeconds}s');
-          for (int s = 0; s < shortestWait.inSeconds + 1; s++) {
-            if (_tok != tok) return null;
-            await Future.delayed(const Duration(seconds: 1));
-          }
-          debugPrint('[N] cooldown wait done, retrying pass 2');
-        } else {
-          debugPrint('[N] all clients need >30s cooldown, aborting');
-          break;
-        }
+    // A server that answered "403" proves we are online, so skip the offline
+    // probe. Two different clients refused by the media server means YouTube is
+    // refusing audio for this device/network: more attempts cannot help and
+    // each one asks YouTube again (which is how rate limiting gets triggered).
+    final status = httpStatusInCause(f.cause);
+    if (status == 403) {
+      _mediaRefusals++;
+      if (_mediaRefusals >= 2) {
+        if (_tok != req.tok) return;
+        _notices.add('YouTube refused the audio download (HTTP 403) for this '
+            'device or network. Nothing is wrong with your connection.');
+        _setError();
+        return;
       }
     }
+    if (status == null && !await _net.isOnline()) {
+      if (_tok != req.tok) return;
+      _handleOffline(song, req.tok, resumeAt: req.resumeAt);
+      return;
+    }
+    if (_tok != req.tok) return;
 
-    debugPrint('[N] all clients failed for $videoId');
-    return null;
+    // DNS / connection errors are the network's fault, not this client's:
+    // do not burn through the other clients (each one costs seconds).
+    if (classifyPlaybackError(f.cause) == FailureKind.network) {
+      await _handleLoadFailure(req, FailureKind.network);
+      return;
+    }
+
+    _resolver.invalidate(song.videoId);
+    _resolver.penalize(f.client, const Duration(minutes: 5));
+    if (req.attempt + 1 < _kMaxStreamAttempts) {
+      _requestLoad(song, resumeAt: req.resumeAt, attempt: req.attempt + 1);
+    } else {
+      await _giveUpOnCurrent(song, FailureKind.transient);
+    }
   }
 
-  // ── Download ──────────────────────────────────────────────────────────────
+  // ── Failure policy ────────────────────────────────────────────────────────
+  // offline      → never burn retries or skip: play downloaded songs, or wait
+  //                and resume automatically when the network returns
+  // permanent    → skip the song right away
+  // rateLimited  → stop and surface the countdown (retrying now makes it worse)
+  // transient    → retry with backoff (max 2 retries), then skip
+  Future<void> _handleLoadFailure(_LoadRequest req, FailureKind kind) async {
+    final song = req.song;
+    _resolver.invalidate(song.videoId);
 
-  Future<File?> _download(
-      AudioStreamInfo info, String videoId, int tok) async {
-    final dest = _cf(videoId);
-    final tmp = _tf(videoId);
-    if (tmp.existsSync()) tmp.deleteSync();
+    if (kind != FailureKind.permanent &&
+        kind != FailureKind.rateLimited &&
+        !await _net.isOnline()) {
+      if (_tok != req.tok) return;
+      _handleOffline(song, req.tok, resumeAt: req.resumeAt);
+      return;
+    }
+    if (_tok != req.tok) return;
 
-    IOSink? sink;
-    StreamSubscription<List<int>>? sub;
-    try {
-      sink = tmp.openWrite();
-      int bytes = 0;
-      final totalKB = (info.size.totalBytes / 1024).toStringAsFixed(0);
-      debugPrint('[N] downloading $totalKB KB...');
-
-      final comp = Completer<void>();
-      final timer = Timer(const Duration(seconds: 180), () {
-        if (!comp.isCompleted) {
-          comp.completeError(TimeoutException('download timeout 180s'));
+    if (kind == FailureKind.network) {
+      // We can reach the internet in general (checked above) but not YouTube:
+      // typically broken DNS on this Wi-Fi. Skipping songs would not help.
+      _notices.add("Can't reach YouTube from this network (DNS/connection "
+          'failed). Try mobile data or a different DNS.');
+      _setError();
+      return;
+    }
+    if (kind == FailureKind.rateLimited) {
+      // YouTube answered (so we ARE online) but is limiting this network.
+      final wait = _resolver.globalCooldownSeconds;
+      _notices.add('YouTube is limiting requests from your network'
+          '${wait > 0 ? ' — retrying in ${wait}s' : ''}');
+      _setError();
+      return;
+    }
+    if (kind == FailureKind.transient && req.attempt < 2) {
+      final delay = retryDelay(req.attempt);
+      nlog('[N] retry in ${delay.inMilliseconds}ms');
+      final tok = req.tok;
+      _retryTimer?.cancel();
+      _retryTimer = Timer(delay, () {
+        // Only retry if nothing newer has happened in the meantime.
+        if (_tok == tok && _current == song) {
+          _requestLoad(song, resumeAt: req.resumeAt, attempt: req.attempt + 1);
         }
       });
+      return;
+    }
+    await _giveUpOnCurrent(song, kind);
+  }
 
-      sub = _yt.videos.streamsClient.get(info).listen(
-        (chunk) {
-          if (_tok != tok) {
-            sub?.cancel();
-            if (!comp.isCompleted) comp.complete();
-            return;
-          }
-          sink?.add(chunk);
-          bytes += chunk.length;
-          if (bytes % (512 * 1024) < chunk.length) {
-            debugPrint(
-                '[N] dl ${(bytes / 1024).toStringAsFixed(0)}/$totalKB KB');
-          }
-        },
-        onDone: () {
-          if (!comp.isCompleted) comp.complete();
-        },
-        onError: (Object e, StackTrace st) {
-          debugPrint('[N] stream error: $e');
-          if (!comp.isCompleted) comp.completeError(e, st);
-        },
-        cancelOnError: true,
-      );
+  /// The current song cannot be played: move on instead of showing a dead end.
+  Future<void> _giveUpOnCurrent(Song song, FailureKind kind) async {
+    final tok = _tok;
+    if (kind != FailureKind.permanent && !await _net.isOnline()) {
+      if (_tok != tok) return;
+      _handleOffline(song, tok, resumeAt: _player.position);
+      return;
+    }
+    if (_tok != tok) return;
 
-      await comp.future;
-      timer.cancel();
-      sub = null;
-
-      if (_tok != tok) {
-        if (sink != null) {
-          try {
-            await sink.close();
-          } catch (_) {}
-        }
-        _del(tmp);
-        return null;
-      }
-
-      debugPrint('[N] flushing $bytes bytes...');
-      await sink!.flush();
-      await sink!.close();
-      sink = null;
-
-      if (bytes < 1024) throw Exception('file too small: $bytes bytes');
-
-      final result = await tmp.rename(dest.path);
-      debugPrint('[N] ✓ saved $bytes bytes → ${result.path}');
-      _index[videoId] =
-          _CE(videoId, bytes, DateTime.now().millisecondsSinceEpoch);
-      _saveIndex();
-      _evict();
-      return result;
-    } on TimeoutException catch (e) {
-      debugPrint('[N] dl timeout: $e');
-      sub?.cancel();
-      if (sink != null) {
-        try {
-          await sink.close();
-        } catch (_) {}
-      }
-      _del(tmp);
-      rethrow;
-    } on RequestLimitExceededException catch (e) {
-      debugPrint('[N] dl rate limit: $e');
-      sub?.cancel();
-      if (sink != null) {
-        try {
-          await sink.close();
-        } catch (_) {}
-      }
-      _del(tmp);
-      rethrow;
-    } catch (e, st) {
-      debugPrint('[N] dl error: $e\n$st');
-      sub?.cancel();
-      if (sink != null) {
-        try {
-          await sink.close();
-        } catch (_) {}
-      }
-      _del(tmp);
-      rethrow;
+    _consecutiveFailures++;
+    final canSkip =
+        _queue.length > 1 && _consecutiveFailures < min(_queue.length, 5);
+    if (canSkip && _advance(forced: true)) {
+      _notices.add('Skipped "${song.title}" — unavailable');
+      _midPlayRetries = 0;
+      _requestLoad(_queue[_idx]);
+      _queueChanged.add(null);
+    } else {
+      _notices.add('Could not play "${song.title}"');
+      _setError();
     }
   }
 
-  void _del(File? f) {
-    try {
-      f?.deleteSync();
-    } catch (_) {}
+  /// No network. Keep the music going from downloaded songs if any exist in
+  /// the queue; otherwise wait quietly and resume this song when we are back.
+  void _handleOffline(Song song, int tok, {Duration? resumeAt}) {
+    _offline.add(true);
+    final cache = _cache;
+    if (cache != null && _queue.length > 1) {
+      for (var step = 1; step < _queue.length; step++) {
+        final i = (_idx + step) % _queue.length;
+        if (cache.contains(_queue[i].videoId)) {
+          nlog('[N] offline → playing downloaded "${_queue[i].title}"');
+          _notices.add('Offline — playing downloaded songs');
+          _idx = i;
+          _resetFailureCounters();
+          _requestLoad(_queue[i]);
+          _queueChanged.add(null);
+          return;
+        }
+      }
+    }
+
+    nlog('[N] offline → waiting for connection');
+    _notices.add('No connection — will resume when back online');
+    _setError();
+    unawaited(() async {
+      final back = await _net.waitUntilOnline(isCancelled: () => _tok != tok);
+      if (!back || _tok != tok) return;
+      nlog('[N] back online → resuming "${song.title}"');
+      _offline.add(false);
+      _resetFailureCounters();
+      _requestLoad(song, resumeAt: resumeAt);
+    }());
+  }
+
+  void _setError() {
+    playbackState.add(playbackState.value
+        .copyWith(processingState: AudioProcessingState.error, playing: false));
   }
 
   // ── Next-song prefetch ────────────────────────────────────────────────────
-  //
-  // Two-phase approach:
-  //   Phase 1 (5s after current song starts): fetch manifest URL only.
-  //            Stored in _manifestCache — makes the next skip near-instant.
-  //   Phase 2 (immediately after Phase 1): download the file in background.
-  //            If already disk-cached, skip both phases.
-  //
-  // The 5s delay ensures the current song's manifest fetch + stream start
-  // completes first, so we never fire concurrent manifest requests (which
-  // triggers YouTube rate limiting).
-
+  // Runs only when the user is not actively changing songs, and never competes
+  // with the current song's download for bandwidth: it waits for that to finish.
+  //   1. resolve the next song's stream (shared/de-duplicated with any play)
+  //   2. download it fully into the disk cache
   void _scheduleNextPrefetch(int ptok) {
     if (_queue.length < 2) return;
     final next = _queue[(_idx + 1) % _queue.length];
-    if (_isCached(next.videoId)) {
-      debugPrint('[N] next song already disk-cached, skipping prefetch');
-      return;
-    }
-    final manifestAlreadyCached = _manifestCache[next.videoId];
-    if (manifestAlreadyCached != null && !manifestAlreadyCached.isExpired) {
-      // Manifest already in memory — just kick off the background download.
-      debugPrint('[N] next manifest already cached, scheduling bg download');
-      Future.delayed(const Duration(seconds: 5), () async {
-        if (_tok != ptok) return;
-        if (_isCached(next.videoId)) return;
-        try {
-          await _download(manifestAlreadyCached.info, next.videoId, ptok);
-          if (_tok == ptok) debugPrint('[N] prefetch download done: ${next.title}');
-        } catch (e) {
-          debugPrint('[N] prefetch download err: $e');
-        }
-      });
-      return;
-    }
+    if (next.isLocal) return; // already on the phone
+    final cache = _cache;
+    if (cache == null || cache.contains(next.videoId)) return;
+    if (_resolver.globalCooldownSeconds > 0) return; // do not add load
 
-    debugPrint('[N] prefetch queued (5s): ${next.title}');
-    Future.delayed(const Duration(seconds: 5), () async {
-      if (_tok != ptok) return;
-      if (_isCached(next.videoId)) return;
+    unawaited(() async {
+      // Let the current song finish downloading first, then wait a moment.
+      await _acquirer.activeSettled();
+      await Future<void>.delayed(const Duration(seconds: 2));
+      if (_tok != ptok || _runner.isBusy) return;
+      if (cache.contains(next.videoId)) return;
 
-      // Phase 1: Fetch and cache the manifest URL.
-      debugPrint('[N] prefetch manifest start: ${next.title}');
-      AudioStreamInfo? info;
-      try {
-        // Use a special "prefetch token" check: we pass ptok so the fetch
-        // aborts if the user skips. _getInfo already checks _tok == tok.
-        info = await _getInfo(next.videoId, ptok);
-      } catch (e) {
-        debugPrint('[N] prefetch manifest err: $e');
-        return;
-      }
-      if (info == null || _tok != ptok) return;
-      debugPrint('[N] prefetch manifest done: ${next.title}');
-      // _manifestCache is now populated by _getInfo — next play is instant.
-
-      // Phase 2: Download to disk in background.
-      if (_isCached(next.videoId)) return;
-      try {
-        await _download(info, next.videoId, ptok);
-        if (_tok == ptok) debugPrint('[N] prefetch download done: ${next.title}');
-      } catch (e) {
-        debugPrint('[N] prefetch download err: $e');
-      }
-    });
+      nlog('[N] prefetch: ${next.title}');
+      final ok = await _acquirer.prefetch(next.videoId, protect: _protectedIds);
+      if (ok && _tok == ptok) nlog('[N] prefetch done: ${next.title}');
+    }());
   }
+
+  // ── Self-test ─────────────────────────────────────────────────────────────
+
+  /// Runs the real song pipeline once for a known video and reports each stage.
+  Future<List<SelfTestStep>> selfTest() => runSelfTest(
+        acquirer: _acquirer,
+        cache: () => _cache,
+        ensureCache: _ensureCache,
+      );
 
   // ── Cache management ──────────────────────────────────────────────────────
 
   Future<void> clearCache() async {
-    try {
-      for (final f in _cacheDir!.listSync().whereType<File>()) {
-        f.deleteSync();
-      }
-      _index.clear();
-      _manifestCache.clear();
-    } catch (_) {}
+    _resolver.clear();
+    await _cache?.clear(protect: _protectedIds);
   }
 
   // ── AudioHandler overrides ────────────────────────────────────────────────
 
   @override
-  Future<void> play() async => _player.play();
+  Future<void> play() async {
+    // just_audio's play() completes only when playback pauses/ends; don't await.
+    unawaited(_player.play());
+  }
 
   @override
-  Future<void> pause() async => _player.pause();
+  Future<void> pause() => _player.pause();
 
   @override
-  Future<void> seek(Duration p) async => _player.seek(p);
+  Future<void> seek(Duration position) {
+    final total = _player.duration;
+    var target = position < Duration.zero ? Duration.zero : position;
+    if (total != null && target > total) target = total;
+    return _player.seek(target);
+  }
 
   @override
   Future<void> stop() async {
     _tok++;
-    await _player.stop();
+    _runner.cancel();
+    _retryTimer?.cancel();
+    _acquirer.cancelAll();
+    try {
+      await _player.stop();
+    } catch (_) {}
     playbackState.add(playbackState.value.copyWith(
         processingState: AudioProcessingState.idle, playing: false));
   }
 
-  @override
-  Future<void> skipToNext() async {
-    if (_queue.isEmpty) return;
-    switch (_playMode) {
+  /// Stops and forgets the current song (the user deleted it): afterwards
+  /// nothing is playing, queued or shown in the notification.
+  Future<void> stopAndForget() async {
+    await stop();
+    _current = null;
+    _queue = [];
+    _idx = 0;
+    mediaItem.add(null);
+    queue.add(const []);
+    _queueChanged.add(null);
+    nlog('[N] current song removed: stopped and cleared');
+  }
+
+  /// Moves [_idx] to the next song according to [_playMode].
+  /// Returns false when there is nothing to advance to (end of a sequential queue).
+  /// [forced] is used after a failure: repeat-one must not retry a dead song forever.
+  bool _advance({bool forced = false}) {
+    if (_queue.isEmpty) return false;
+    var mode = _playMode;
+    if (forced && mode == PlayMode.repeatOne) mode = PlayMode.repeatAll;
+    switch (mode) {
       case PlayMode.repeatOne:
-        // Stay on the same song — just reload from the top.
-        await _load(_queue[_idx]);
-        break;
+        return true;
       case PlayMode.shuffle:
-        // Pick a random index different from the current one.
         if (_queue.length > 1) {
           int next;
           do {
@@ -745,36 +667,98 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
           } while (next == _idx);
           _idx = next;
         }
-        await _load(_queue[_idx]);
-        break;
+        return true;
       case PlayMode.sequential:
-        // Advance but stop at the end — do not wrap.
         if (_idx < _queue.length - 1) {
           _idx++;
-          await _load(_queue[_idx]);
-        } else {
-          // End of queue — stop playback entirely.
-          debugPrint('[N] sequential: end of queue, stopping');
-          await stop();
+          return true;
         }
-        break;
+        return false;
       case PlayMode.repeatAll:
-      default:
         _idx = (_idx + 1) % _queue.length;
-        await _load(_queue[_idx]);
-        break;
+        return true;
+    }
+  }
+
+  // Skips only move the index and queue a load. Ten rapid taps move the index
+  // ten times but cause a single load of the final song.
+  @override
+  Future<void> skipToNext() async {
+    if (_queue.isEmpty) return;
+    _resetFailureCounters();
+    if (_advance()) {
+      _requestLoad(_queue[_idx]);
+      _queueChanged.add(null);
+    } else {
+      nlog('[N] sequential: end of queue, stopping');
+      await stop();
     }
   }
 
   @override
   Future<void> skipToPrevious() async {
     if (_queue.isEmpty) return;
+    _resetFailureCounters();
     _idx = (_idx - 1 + _queue.length) % _queue.length;
-    await _load(_queue[_idx]);
+    _requestLoad(_queue[_idx]);
+    _queueChanged.add(null);
+  }
+
+  // ── Queue editing (keeps the real playback queue in sync with the UI) ─────
+
+  /// [newIndex] is the position after the item has been removed (as the UI
+  /// already adjusts it for ReorderableListView).
+  void reorderQueue(int oldIndex, int newIndex) {
+    if (oldIndex < 0 || oldIndex >= _queue.length) return;
+    final current = _current;
+    final item = _queue.removeAt(oldIndex);
+    _queue.insert(newIndex.clamp(0, _queue.length), item);
+    if (current != null) {
+      final i = _queue.indexOf(current);
+      if (i >= 0) _idx = i;
+    }
+    _publishQueue();
+  }
+
+  void removeFromQueue(int index) {
+    if (index < 0 || index >= _queue.length) return;
+    final removingCurrent = index == _idx;
+    _queue.removeAt(index);
+
+    if (_queue.isEmpty) {
+      _idx = 0;
+      _publishQueue();
+      unawaited(stop());
+      return;
+    }
+    if (index < _idx) {
+      _idx--;
+    } else if (removingCurrent) {
+      _idx = _idx.clamp(0, _queue.length - 1); // next song slides into this slot
+    }
+    _publishQueue();
+    if (removingCurrent) {
+      _resetFailureCounters();
+      _requestLoad(_queue[_idx]);
+    }
+  }
+
+  void _publishQueue() {
+    queue.add(_queue
+        .map((s) => MediaItem(
+              id: s.videoId,
+              title: s.title,
+              artist: s.artist,
+              artUri:
+                  s.thumbnailUrl.startsWith('http') ? Uri.tryParse(s.thumbnailUrl) : null,
+            ))
+        .toList());
+    _queueChanged.add(null);
   }
 
   void _broadcast(PlaybackEvent e) {
-    final playing = _player.playing;
+    final switching = _switching;
+    final playing = !switching && _player.playing;
     playbackState.add(playbackState.value.copyWith(
       controls: [
         MediaControl.skipToPrevious,
@@ -787,7 +771,9 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
         MediaAction.skipToPrevious,
       },
       androidCompactActionIndices: const [0, 1, 2],
-      processingState: const {
+      processingState: switching
+          ? AudioProcessingState.loading
+          : const {
         ProcessingState.idle: AudioProcessingState.idle,
         ProcessingState.loading: AudioProcessingState.loading,
         ProcessingState.buffering: AudioProcessingState.buffering,
@@ -795,7 +781,7 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
         ProcessingState.completed: AudioProcessingState.completed,
       }[_player.processingState]!,
       playing: playing,
-      updatePosition: _player.position,
+      updatePosition: switching ? Duration.zero : _player.position,
       bufferedPosition: _player.bufferedPosition,
       speed: _player.speed,
       queueIndex: _idx,
@@ -804,14 +790,13 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
 
   @override
   Future<void> onTaskRemoved() async {
-    _tok++;
-    await _player.stop();
-    await _player.dispose();
-    _yt.close();
-    try {
-      for (final f in _cacheDir!.listSync().whereType<File>()) {
-        if (f.path.endsWith('.tmp')) f.deleteSync();
-      }
-    } catch (_) {}
+    // The user swiped the app away. Stop cleanly but do NOT dispose the player
+    // or the YouTube client: Android may keep this process (and handler) alive
+    // and the next launch would then reuse a dead one.
+    _runner.cancel();
+    _retryTimer?.cancel();
+    _acquirer.cancelAll();
+    await _cache?.flush();
+    await stop();
   }
 }

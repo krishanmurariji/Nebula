@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:just_audio/just_audio.dart';
 import 'package:audio_service/audio_service.dart';
 import '../models/song.dart';
 import '../services/audio_handler.dart';
@@ -12,22 +11,20 @@ class NebulaPlayerState {
   final Song? pendingSong;   // Set instantly on tap — drives UI before audio confirms
   final NebulaPlayerStatus status;
   final String? error;
-  final Duration position;
-  final Duration duration;
   final List<Song> queue;
   final int queueIndex;
   final int cooldownSeconds; // Seconds until auto-retry fires (0 = not counting down)
+  final String? notice;      // Transient message, e.g. "Skipped unavailable song"
 
   const NebulaPlayerState({
     this.song,
     this.pendingSong,
     this.status = NebulaPlayerStatus.idle,
     this.error,
-    this.position = Duration.zero,
-    this.duration = Duration.zero,
     this.queue = const [],
     this.queueIndex = 0,
     this.cooldownSeconds = 0,
+    this.notice,
   });
 
   /// The song to display — pendingSong wins so UI updates instantly on tap
@@ -40,38 +37,63 @@ class NebulaPlayerState {
     NebulaPlayerStatus? status,
     String? error,
     bool clearError = false,
-    Duration? position,
-    Duration? duration,
     List<Song>? queue,
     int? queueIndex,
     int? cooldownSeconds,
+    String? notice,
+    bool clearNotice = false,
   }) =>
       NebulaPlayerState(
         song: song ?? this.song,
         pendingSong: clearPending ? null : (pendingSong ?? this.pendingSong),
         status: status ?? this.status,
         error: clearError ? null : (error ?? this.error),
-        position: position ?? this.position,
-        duration: duration ?? this.duration,
         queue: queue ?? this.queue,
         queueIndex: queueIndex ?? this.queueIndex,
         cooldownSeconds: cooldownSeconds ?? this.cooldownSeconds,
+        notice: clearNotice ? null : (notice ?? this.notice),
       );
 }
 
 class PlayerNotifier extends StateNotifier<NebulaPlayerState> {
   final NebulaAudioHandler _handler;
   Timer? _countdownTimer;
+  Timer? _noticeTimer;
+  final List<StreamSubscription<dynamic>> _subs = [];
+
+  // True once a rate-limit countdown has actually been shown. Auto-retry fires
+  // only after such a countdown, and only once per failure, so a song that
+  // keeps failing can never turn into a tight retry loop (the handler already
+  // does its own bounded retries and skipping).
+  bool _sawCooldown = false;
 
   PlayerNotifier(this._handler) : super(const NebulaPlayerState()) {
-    _handler.playbackState.listen(_onPlayback);
-    _handler.player.positionStream.listen(
-        (pos) => state = state.copyWith(position: pos));
-    _handler.player.durationStream.listen(
-        (dur) { if (dur != null) state = state.copyWith(duration: dur); });
+    _subs.add(_handler.playbackState.listen(_onPlayback));
+    _subs.add(_handler.queueChanges.listen((_) => _syncQueue()));
+    _subs.add(_handler.notices.listen(_showNotice));
+  }
+
+  void _syncQueue() {
+    if (!mounted) return;
+    state = state.copyWith(
+      song: _handler.currentSong,
+      clearPending: true, // the handler now owns what is current
+      queue: _handler.songQueue,
+      queueIndex: _handler.songQueueIndex,
+    );
+  }
+
+  void _showNotice(String msg) {
+    if (!mounted) return;
+    state = state.copyWith(notice: msg);
+    _noticeTimer?.cancel();
+    _noticeTimer = Timer(const Duration(seconds: 4), () {
+      if (mounted) state = state.copyWith(clearNotice: true);
+    });
   }
 
   void _onPlayback(PlaybackState ps) {
+    if (!mounted) return;
     NebulaPlayerStatus st;
     switch (ps.processingState) {
       case AudioProcessingState.loading:
@@ -123,9 +145,15 @@ class PlayerNotifier extends StateNotifier<NebulaPlayerState> {
     final secs = _handler.globalCooldownSeconds;
     state = state.copyWith(cooldownSeconds: secs);
 
-    if (secs == 0 && state.status == NebulaPlayerStatus.error) {
+    if (secs > 0) {
+      _sawCooldown = true;
+    } else if (_sawCooldown && state.status == NebulaPlayerStatus.error) {
+      // Rate limit has expired: retry exactly once.
+      _sawCooldown = false;
       _stopCooldownCountdown();
       retryCurrentSong();
+    } else if (state.status != NebulaPlayerStatus.error) {
+      _stopCooldownCountdown();
     }
   }
 
@@ -149,21 +177,21 @@ class PlayerNotifier extends StateNotifier<NebulaPlayerState> {
       queue: q,
       queueIndex: idx < 0 ? 0 : idx,
       clearError: true,
-      position: Duration.zero,
-      duration: Duration.zero,
       cooldownSeconds: 0,
     );
 
+    _sawCooldown = false;
     try {
       await _handler.playSong(song, queue: q, index: idx < 0 ? 0 : idx);
     } catch (e) {
+      // The handler reports failures through playbackState; this is only a
+      // last-resort guard against an unexpected exception.
       if (mounted) {
         state = state.copyWith(
           clearPending: true,
           status: NebulaPlayerStatus.error,
-          error: 'Could not play. Retrying automatically…',
+          error: 'Could not play this song.',
         );
-        _startCooldownCountdown();
       }
     }
   }
@@ -175,6 +203,13 @@ class PlayerNotifier extends StateNotifier<NebulaPlayerState> {
         queue: state.queue.isNotEmpty ? state.queue : null);
   }
 
+  /// The playing song was deleted: stop it and show nothing as playing.
+  Future<void> stopAndClear() async {
+    _stopCooldownCountdown();
+    await _handler.stopAndForget();
+    if (mounted) state = const NebulaPlayerState();
+  }
+
   Future<void> togglePlay() async {
     if (state.status == NebulaPlayerStatus.playing) {
       await _handler.pause();
@@ -183,44 +218,19 @@ class PlayerNotifier extends StateNotifier<NebulaPlayerState> {
     }
   }
 
+  /// [newIndex] is the position after removal (the UI already adjusts it).
   Future<void> reorderQueue(int oldIndex, int newIndex) async {
-    final newQueue = [...state.queue];
-    final item = newQueue.removeAt(oldIndex);
-    newQueue.insert(newIndex, item);
-    
-    state = state.copyWith(queue: newQueue);
-    
-    final mediaItems = newQueue.map((song) => MediaItem(
-      id: song.videoId,
-      title: song.title,
-      artist: song.artist,
-      artUri: Uri.parse(song.thumbnailUrl),
-    )).toList();
-
-    await _handler.updateQueue(mediaItems);
+    _handler.reorderQueue(oldIndex, newIndex);
+    _syncQueue();
   }
 
-  // --- NEW METHOD ADDED HERE ---
   Future<void> removeFromQueue(int index) async {
-    if (index < 0 || index >= state.queue.length) return;
-
-    final newQueue = List<Song>.from(state.queue);
-    newQueue.removeAt(index);
-
-    state = state.copyWith(queue: newQueue);
-
-    final mediaItems = newQueue.map((song) => MediaItem(
-      id: song.videoId,
-      title: song.title,
-      artist: song.artist,
-      artUri: Uri.parse(song.thumbnailUrl),
-    )).toList();
-
-    await _handler.updateQueue(mediaItems);
+    _handler.removeFromQueue(index);
+    _syncQueue();
   }
 
   Future<void> setVolume(double volume) async {
-    await _handler.player.setVolume(volume);
+    await _handler.player.setVolume(volume.isNaN ? 1.0 : volume.clamp(0.0, 1.0));
   }
 
   Future<void> skipNext()       async => _handler.skipToNext();
@@ -229,10 +239,63 @@ class PlayerNotifier extends StateNotifier<NebulaPlayerState> {
 
   @override
   void dispose() {
+    for (final s in _subs) {
+      s.cancel();
+    }
+    _noticeTimer?.cancel();
     _countdownTimer?.cancel();
     super.dispose();
   }
 }
+
+/// Playback position and total length. Kept OUT of [NebulaPlayerState] on
+/// purpose: it changes several times a second, and putting it in the main
+/// state made every widget that watches the player rebuild constantly.
+class PlaybackProgress {
+  final Duration position;
+  final Duration duration;
+  const PlaybackProgress(this.position, this.duration);
+  static const zero = PlaybackProgress(Duration.zero, Duration.zero);
+
+  /// 0.0 – 1.0
+  double get fraction => duration.inMilliseconds > 0
+      ? (position.inMilliseconds / duration.inMilliseconds).clamp(0.0, 1.0)
+      : 0.0;
+}
+
+final playbackProgressProvider =
+    StreamProvider.autoDispose<PlaybackProgress>((ref) {
+  final player = ref.watch(audioHandlerProvider).player;
+  final controller = StreamController<PlaybackProgress>();
+  var position = player.position;
+  Duration duration = player.duration ?? Duration.zero;
+
+  void emit() {
+    if (!controller.isClosed) {
+      controller.add(PlaybackProgress(position, duration));
+    }
+  }
+
+  final subs = <StreamSubscription<dynamic>>[
+    player.positionStream.listen((p) {
+      position = p;
+      emit();
+    }),
+    // null means "new song, length unknown yet" → reset to zero.
+    player.durationStream.listen((d) {
+      duration = d ?? Duration.zero;
+      emit();
+    }),
+  ];
+  ref.onDispose(() {
+    for (final s in subs) {
+      s.cancel();
+    }
+    controller.close();
+  });
+  emit();
+  return controller.stream;
+});
 
 final playerProvider =
     StateNotifierProvider<PlayerNotifier, NebulaPlayerState>((ref) {

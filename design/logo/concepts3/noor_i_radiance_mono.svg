@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024"><defs>
+<radialGradient id="bg" cx=".5" cy=".42" r=".8"><stop offset="0" stop-color="#0C4A42"/><stop offset="1" stop-color="#05211F"/></radialGradient>
+<linearGradient id="lt" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFF6DA"/><stop offset="1" stop-color="#FFD27A"/></linearGradient>
+<radialGradient id="orb" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#FFFFFF"/><stop offset=".3" stop-color="#FFF1C4"/><stop offset=".65" stop-color="#FFD27A" stop-opacity=".55"/><stop offset="1" stop-color="#FFD27A" stop-opacity="0"/></radialGradient>
+<radialGradient id="halo" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#FFE3A0" stop-opacity=".5"/><stop offset="1" stop-color="#FFE3A0" stop-opacity="0"/></radialGradient>
+<filter id="blur" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="14"/></filter>
+</defs><circle cx="512" cy="512" r="150" fill="none" stroke="#fff" stroke-width="26" opacity="1" stroke-linecap="round"/><circle cx="512" cy="512" r="235" fill="none" stroke="#fff" stroke-width="20" opacity="1" stroke-linecap="round"/><circle cx="512" cy="512" r="320" fill="none" stroke="#fff" stroke-width="14" opacity="1" stroke-linecap="round"/><circle cx="512" cy="512" r="70" fill="#fff"/></svg>

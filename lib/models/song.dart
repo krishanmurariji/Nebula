@@ -5,37 +5,23 @@ class Song {
   final String thumbnailUrl;
   final bool isOfficial;
 
+  /// For a song stored on the phone: its `content://` address in Android's
+  /// media library. Null for YouTube songs.
+  final String? localUri;
+
   const Song({
     required this.videoId,
     required this.title,
     required this.artist,
     required this.thumbnailUrl,
     this.isOfficial = false,
+    this.localUri,
   });
 
-  factory Song.fromJson(Map<String, dynamic> json) {
-    final snippet = json['snippet'] as Map<String, dynamic>? ?? {};
-    String videoId = '';
-    if (json['id'] is Map) {
-      videoId = (json['id'] as Map)['videoId'] as String? ?? '';
-    } else {
-      videoId = json['id'] as String? ?? '';
-    }
-    final thumbs = snippet['thumbnails'] as Map<String, dynamic>? ?? {};
-    final high   = thumbs['high'] as Map<String, dynamic>?
-                ?? thumbs['default'] as Map<String, dynamic>? ?? {};
-    final title        = snippet['title'] as String? ?? 'Unknown';
-    final channelTitle = snippet['channelTitle'] as String? ?? '';
-    return Song(
-      videoId:      videoId,
-      title:        title,
-      artist:       channelTitle,
-      thumbnailUrl: high['url'] as String? ?? '',
-      isOfficial:   _detectOfficial(title, channelTitle),
-    );
-  }
+  /// A song file on the phone (played directly, never from YouTube).
+  bool get isLocal => localUri != null;
 
-  static bool _detectOfficial(String title, String channel) {
+  static bool detectOfficial(String title, String channel) {
     final t = title.toLowerCase();
     final c = channel.toLowerCase();
     if (c.endsWith('- topic') || c.contains('vevo')) return true;
@@ -47,15 +33,29 @@ class Song {
   Map<String, dynamic> toMap() => {
     'videoId': videoId, 'title': title, 'artist': artist,
     'thumbnailUrl': thumbnailUrl, 'isOfficial': isOfficial,
+    if (localUri != null) 'localUri': localUri,
   };
 
-  factory Song.fromMap(Map<String, dynamic> m) => Song(
-    videoId:      m['videoId']      as String? ?? '',
-    title:        m['title']        as String? ?? 'Unknown',
-    artist:       m['artist']       as String? ?? '',
-    thumbnailUrl: m['thumbnailUrl'] as String? ?? '',
-    isOfficial:   m['isOfficial']   as bool?   ?? false,
-  );
+  /// Tolerant on purpose: this reads data saved by older versions and
+  /// anything on disk can be corrupted, so wrong types never throw.
+  factory Song.fromMap(Map<dynamic, dynamic> m) {
+    String str(Object? v, String fallback) => v is String ? v : fallback;
+    return Song(
+      videoId:      str(m['videoId'], ''),
+      title:        str(m['title'], 'Unknown'),
+      artist:       str(m['artist'], ''),
+      thumbnailUrl: str(m['thumbnailUrl'], ''),
+      isOfficial:   m['isOfficial'] is bool ? m['isOfficial'] as bool : false,
+      // Only Android media-library addresses are accepted for phone files.
+      localUri: m['localUri'] is String &&
+              (m['localUri'] as String).startsWith('content://media/')
+          ? m['localUri'] as String
+          : null,
+    );
+  }
+
+  /// True when this can actually be played / cached.
+  bool get isPlayable => RegExp(r'^[A-Za-z0-9_-]{6,64}$').hasMatch(videoId);
 
   @override bool operator ==(Object o) =>
       identical(this, o) || (o is Song && videoId == o.videoId);
