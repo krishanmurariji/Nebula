@@ -13,10 +13,15 @@ import '../providers/library_provider.dart';
 import '../providers/player_provider.dart';
 import '../theme/noor_palette.dart';
 import '../theme/noor_song_card.dart';
+import 'song_details_panel.dart';
 
 /// Which song row has its actions open (only one at a time). Holds the
 /// row's private token; null when none is open.
 final openSongRowProvider = StateProvider<int?>((ref) => null);
+
+/// Which expandable song (search results) is showing its details; null
+/// when none. Expanding one folds the others.
+final expandedSongProvider = StateProvider<String?>((ref) => null);
 
 /// Accepts a horizontal drag only when it starts towards the left, so a
 /// rightward swipe still reaches whatever is behind the list.
@@ -60,7 +65,12 @@ class NoorSongRow extends ConsumerStatefulWidget {
     this.current = false,
     this.playing = false,
     this.loading = false,
+    this.expandable = false,
   });
+
+  /// Search results: a tap on the card (not its play button) grows it to
+  /// show the song's details, and a tap folds it again.
+  final bool expandable;
 
   final Song song;
   final VoidCallback onTap;
@@ -427,99 +437,157 @@ class _NoorSongRowState extends ConsumerState<NoorSongRow>
     }
     _lastKeyboard = keyboard;
 
+    final expanded = widget.expandable &&
+        ref.watch(expandedSongProvider) == widget.song.videoId;
+
     return PopScope(
       canPop: _stage == _Stage.closed,
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop) _back();
       },
-      child: LayoutBuilder(builder: (context, box) {
-        _width = box.maxWidth;
-        final body = max(0.0, _width - 28); // the card without its margins
-        return AnimatedBuilder(
-          animation: Listenable.merge([_slide, _namingCtrl]),
-          builder: (context, card) {
-            final v = Curves.easeOutCubic.transform(_slide.value);
-            final n = _namingCtrl.value;
-            // Open: the card keeps 40%; naming: just its record.
-            final open = body * (1 - _kActionsShare * v);
-            final cardBody = open + (NoorSongCard.height - open) * n;
-            final actionsLeft = 14 + cardBody + 8;
-            return SizedBox(
-              height: NoorSongCard.height + 10,
-              child: Stack(
-                children: [
-                  if (_slide.value > 0)
-                    Positioned(
-                      key: const ValueKey('actions'),
-                      left: actionsLeft,
-                      right: 14,
-                      top: 5,
-                      bottom: 5,
-                      child: Opacity(
-                        opacity: Curves.easeIn
-                            .transform((_slide.value * 1.4).clamp(0.0, 1.0)),
-                        child: _actions(t, liked),
+      child: !widget.expandable
+          ? _row(t, liked, needsNet)
+          : AnimatedSize(
+              duration: const Duration(milliseconds: 320),
+              curve: Curves.easeOutCubic,
+              alignment: Alignment.topCenter,
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 240),
+                layoutBuilder: (cur, prev) => Stack(
+                  alignment: Alignment.topCenter,
+                  children: [
+                    // The one leaving keeps its own height and is clipped
+                    // while the size animates.
+                    for (final p in prev)
+                      Positioned.fill(
+                        child: ClipRect(
+                          child: OverflowBox(
+                            alignment: Alignment.topCenter,
+                            minHeight: 0,
+                            maxHeight: double.infinity,
+                            child: p,
+                          ),
+                        ),
                       ),
-                    ),
-                  Positioned(
-                    // Keyed so the card (and the drag on it) survives the
-                    // actions appearing before it in this stack.
-                    key: const ValueKey('card'),
-                    left: 0,
-                    top: 0,
-                    bottom: 0,
-                    width: cardBody + 28,
-                    child: card!,
-                  ),
-                ],
+                    if (cur != null) cur,
+                  ],
+                ),
+                child: expanded
+                    ? SongDetailsPanel(
+                        key: const ValueKey('details'),
+                        song: widget.song,
+                        artist: widget.artist,
+                        official: widget.badge == 'Official',
+                        current: widget.current,
+                        playing: widget.playing,
+                        loading: widget.loading,
+                        onPlayPause: widget.onPlayPause ?? widget.onTap,
+                        onCollapse: _toggleExpanded,
+                      )
+                    : KeyedSubtree(
+                        key: const ValueKey('row'),
+                        child: _row(t, liked, needsNet)),
               ),
-            );
-          },
-          child: RawGestureDetector(
-            gestures: {
-              _LeftSwipeRecognizer:
-                  GestureRecognizerFactoryWithHandlers<_LeftSwipeRecognizer>(
-                () => _LeftSwipeRecognizer(debugOwner: this),
+            ),
+    );
+  }
+
+  void _toggleExpanded() {
+    HapticFeedback.selectionClick();
+    final c = ref.read(expandedSongProvider.notifier);
+    c.state = c.state == widget.song.videoId ? null : widget.song.videoId;
+  }
+
+  Widget _row(NoorTheme t, bool liked, bool needsNet) {
+    return LayoutBuilder(builder: (context, box) {
+      _width = box.maxWidth;
+      final body = max(0.0, _width - 28); // the card without its margins
+      return AnimatedBuilder(
+        animation: Listenable.merge([_slide, _namingCtrl]),
+        builder: (context, card) {
+          final v = Curves.easeOutCubic.transform(_slide.value);
+          final n = _namingCtrl.value;
+          // Open: the card keeps 40%; naming: just its record.
+          final open = body * (1 - _kActionsShare * v);
+          final cardBody = open + (NoorSongCard.height - open) * n;
+          final actionsLeft = 14 + cardBody + 8;
+          return SizedBox(
+            height: NoorSongCard.height + 10,
+            child: Stack(
+              children: [
+                if (_slide.value > 0)
+                  Positioned(
+                    key: const ValueKey('actions'),
+                    left: actionsLeft,
+                    right: 14,
+                    top: 5,
+                    bottom: 5,
+                    child: Opacity(
+                      opacity: Curves.easeIn
+                          .transform((_slide.value * 1.4).clamp(0.0, 1.0)),
+                      child: _actions(t, liked),
+                    ),
+                  ),
+                Positioned(
+                  // Keyed so the card (and the drag on it) survives the
+                  // actions appearing before it in this stack.
+                  key: const ValueKey('card'),
+                  left: 0,
+                  top: 0,
+                  bottom: 0,
+                  width: cardBody + 28,
+                  child: card!,
+                ),
+              ],
+            ),
+          );
+        },
+        child: RawGestureDetector(
+          gestures: {
+            _LeftSwipeRecognizer:
+                GestureRecognizerFactoryWithHandlers<_LeftSwipeRecognizer>(
+              () => _LeftSwipeRecognizer(debugOwner: this),
+              (r) => r
+                ..onUpdate = _dragUpdate
+                ..onEnd = _dragEnd,
+            ),
+            // While open, a swipe either way moves the card.
+            if (_stage == _Stage.open)
+              HorizontalDragGestureRecognizer:
+                  GestureRecognizerFactoryWithHandlers<
+                      HorizontalDragGestureRecognizer>(
+                () => HorizontalDragGestureRecognizer(debugOwner: this),
                 (r) => r
                   ..onUpdate = _dragUpdate
                   ..onEnd = _dragEnd,
               ),
-              // While open, a swipe either way moves the card.
-              if (_stage == _Stage.open)
-                HorizontalDragGestureRecognizer:
-                    GestureRecognizerFactoryWithHandlers<
-                        HorizontalDragGestureRecognizer>(
-                  () => HorizontalDragGestureRecognizer(debugOwner: this),
-                  (r) => r
-                    ..onUpdate = _dragUpdate
-                    ..onEnd = _dragEnd,
-                ),
-            },
-            child: AnimatedOpacity(
-              opacity: needsNet ? 0.45 : 1,
-              duration: const Duration(milliseconds: 250),
-              child: NoorSongCard(
-                thumbnailUrl: widget.song.thumbnailUrl,
-                title: widget.song.title,
-                artist: widget.artist ?? widget.song.artist,
-                badge: widget.badge,
-                liked: liked,
-                current: widget.current,
-                playing: widget.playing,
-                loading: widget.loading,
-                // While the actions show, a tap on the card puts it back.
-                onTap: _stage != _Stage.closed
-                    ? _back
-                    : (needsNet ? _needsInternet : widget.onTap),
-                onPlayPause: needsNet ? _needsInternet : widget.onPlayPause,
-                onToggleLike: _stage == _Stage.closed ? _toggleLike : null,
-                onLongPress: _stage == _Stage.closed ? _open : null,
-              ),
+          },
+          child: AnimatedOpacity(
+            opacity: needsNet ? 0.45 : 1,
+            duration: const Duration(milliseconds: 250),
+            child: NoorSongCard(
+              thumbnailUrl: widget.song.thumbnailUrl,
+              title: widget.song.title,
+              artist: widget.artist ?? widget.song.artist,
+              badge: widget.badge,
+              liked: liked,
+              current: widget.current,
+              playing: widget.playing,
+              loading: widget.loading,
+              // While the actions show, a tap on the card puts it back.
+              onTap: _stage != _Stage.closed
+                  ? _back
+                  : widget.expandable
+                      ? _toggleExpanded
+                      : (needsNet ? _needsInternet : widget.onTap),
+              onPlayPause: needsNet ? _needsInternet : widget.onPlayPause,
+              onToggleLike: _stage == _Stage.closed ? _toggleLike : null,
+              onLongPress: _stage == _Stage.closed ? _open : null,
             ),
           ),
-        );
-      }),
-    );
+        ),
+      );
+    });
   }
 
   /// The actions floating to the right of the shrunk card: like, add to

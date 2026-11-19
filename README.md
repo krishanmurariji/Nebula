@@ -66,9 +66,11 @@
 | Where | Gesture | What happens |
 | --- | --- | --- |
 | Any song card | Tap | Play (or pause the song that is playing) |
+| Search result | Tap the card | It grows to show the full thumbnail and title, channel, views, likes, date, and singer / lyrics / music when the upload names them; tap again to fold. The play button plays |
 | Any song card | Double tap | Like or unlike, with a heart that turns red (or white) |
 | Any song card | Swipe left, or long press | Show **Like**, **Add to playlist** and **Delete** beside the card |
 | Home slider | Swipe or tap a side card | Open that list |
+| Home | Swipe down (or pull the list down) | Home sinks away and search drops in |
 | Home, a playlist card | Long press | Delete the playlist (its songs stay in Favorites and History) |
 | Bottom player | Swipe left / right | Next / previous song |
 | Player record | Swipe left / right | Next / previous song, with the record swap |
@@ -151,7 +153,7 @@ Rapid skipping is safe: `LatestWinsRunner` keeps only the newest request, and ev
 
 - **Client fallback.** YouTube refuses some app clients from time to time; the resolver tries each one in turn and backs off from a client that is rate limited (`youtube_clients.dart` is the file to refresh when YouTube changes).
 - **One download, two uses.** `ProgressiveDownload` feeds the player and the disk cache from a single request.
-- **Offline first.** Every song played is kept in an LRU disk cache (written to a temporary name and renamed, so a crash never leaves half a song). Those songs make up **My Music**.
+- **Offline first.** Every song played is kept in an LRU disk cache (written to a temporary name and renamed, so a crash never leaves half a song), so History, Favorites and playlists play without internet. **My Music** is the phone's own music files (read from Android's media library with your permission), not the songs Noor saved.
 - **Honest failures.** Errors are sorted into "ignore", "retry" and "skip"; a song that cannot play never leaves a dead end, and the bottom player says what is happening.
 - **Diagnosable on the phone.** Settings has a **Playback Log** (with tokens removed) and optional **Backup Sources** (your own Piped or Invidious servers).
 

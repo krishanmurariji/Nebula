@@ -7,6 +7,10 @@ import 'package:nebula_music_player/providers/library_provider.dart';
 import 'package:nebula_music_player/providers/player_provider.dart';
 import 'package:nebula_music_player/providers/search_provider.dart';
 import 'package:nebula_music_player/screens/search_screen.dart';
+import 'package:nebula_music_player/services/song_details.dart';
+import 'package:nebula_music_player/theme/noor_play_pause.dart';
+import 'package:nebula_music_player/widgets/song_details_panel.dart';
+import 'package:nebula_music_player/widgets/song_row.dart';
 import 'package:nebula_music_player/widgets/search_filter_bar.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -165,15 +169,23 @@ void main() {
 
   group('the whole search screen', () {
     late FakePlayer player;
+    late _Details details;
+
+    /// The play button on the card showing [title].
+    Finder playOf(String title) => find.descendant(
+        of: find.ancestor(of: find.text(title), matching: find.byType(NoorSongRow)),
+        matching: find.byType(NoorPlayPauseButton));
 
     Future<void> open(WidgetTester t, {required List<Song> results}) async {
       t.view.physicalSize = const Size(411, 915);
       t.view.devicePixelRatio = 1.0;
       addTearDown(t.view.reset);
       player = FakePlayer();
+      details = _Details();
       await t.pumpWidget(ProviderScope(
         overrides: [
           playerProvider.overrideWith((ref) => player),
+          songDetailsSourceProvider.overrideWithValue(details),
           searchProvider.overrideWith((ref) => StubSearch(
               ref, SearchState(results: results, status: SearchStatus.loaded, query: 'q'))),
         ],
@@ -238,7 +250,7 @@ void main() {
       SharedPreferences.setMockInitialValues({'nebula_history': jsonEncode(recent)});
       await open(t, results: sample);
       await t.pump(const Duration(milliseconds: 100)); // the saved history loads
-      await t.tap(find.text('Real Song (Official Audio)'));
+      await t.tap(playOf('Real Song (Official Audio)'));
       await t.pump(const Duration(milliseconds: 400)); // a tap waits out a possible double tap
       expect(player.queues.single.map((s) => s.title),
           ['Real Song (Official Audio)', 'Played Before 1', 'Played Before 2']);
@@ -246,7 +258,7 @@ void main() {
 
     testWidgets('with no history the queue is just the chosen song', (t) async {
       await open(t, results: sample);
-      await t.tap(find.text('Real Song (Official Audio)'));
+      await t.tap(playOf('Real Song (Official Audio)'));
       await t.pump(const Duration(milliseconds: 400));
       expect(player.queues.single.map((s) => s.title), ['Real Song (Official Audio)']);
     });
@@ -301,12 +313,94 @@ void main() {
       expect(find.text('No results found'), findsOneWidget);
     });
 
-    testWidgets('tapping a result plays it without leaving the page', (t) async {
+    testWidgets('the play button plays a result without leaving the page', (t) async {
       await open(t, results: sample);
-      await t.tap(find.text('Real Song (Official Audio)'));
+      await t.tap(playOf('Real Song (Official Audio)'));
       await t.pump(const Duration(milliseconds: 400));
       expect(player.queues, hasLength(1));
       expect(find.byType(SearchPanel), findsOneWidget);
+      expect(find.byType(SongDetailsPanel), findsNothing);
+    });
+
+    Future<void> settle(WidgetTester t) async {
+      for (var i = 0; i < 8; i++) {
+        await t.pump(const Duration(milliseconds: 100));
+      }
+    }
+
+    testWidgets('tapping the card grows it with the details; it does not play', (t) async {
+      await open(t, results: sample);
+      await t.tap(find.text('Real Song (Official Audio)'));
+      await settle(t);
+      expect(player.queues, isEmpty);
+      expect(find.byType(SongDetailsPanel), findsOneWidget);
+      expect(find.text('Label Channel'), findsOneWidget);
+      expect(find.text('12M views'), findsOneWidget);
+      expect(find.text('340K likes'), findsOneWidget);
+      expect(find.text('Arijit Singh'), findsOneWidget); // Singer
+      expect(find.text('Amitabh Bhattacharya'), findsOneWidget); // Lyrics
+      expect(find.text('Pritam'), findsOneWidget); // Music
+      expect(details.calls, 1);
+      expect(t.takeException(), isNull);
+    });
+
+    testWidgets('a tap on the details folds the card back', (t) async {
+      await open(t, results: sample);
+      await t.tap(find.text('Real Song (Official Audio)'));
+      await settle(t);
+      await t.tap(find.text('Label Channel'));
+      await settle(t);
+      expect(find.byType(SongDetailsPanel), findsNothing);
+      expect(player.queues, isEmpty);
+    });
+
+    testWidgets('only one card is open at a time', (t) async {
+      await open(t, results: sample);
+      await t.tap(find.text('Real Song (Official Audio)'));
+      await settle(t);
+      await t.tap(find.text('Fan upload (Lyrics)'));
+      await settle(t);
+      expect(find.byType(SongDetailsPanel), findsOneWidget);
+      expect(find.text('Fan upload (Lyrics)'), findsOneWidget);
+    });
+
+    testWidgets('the play button inside the open card plays it', (t) async {
+      await open(t, results: sample);
+      await t.tap(find.text('Real Song (Official Audio)'));
+      await settle(t);
+      await t.tap(find.descendant(
+          of: find.byType(SongDetailsPanel), matching: find.byType(NoorPlayPauseButton)));
+      await t.pump(const Duration(milliseconds: 100));
+      expect(player.queues.single.first.title, 'Real Song (Official Audio)');
+    });
+
+    testWidgets('details that cannot be loaded say so and offer to try again', (t) async {
+      await open(t, results: sample);
+      details.fail = true;
+      await t.tap(find.text('Real Song (Official Audio)'));
+      await settle(t);
+      expect(find.text('The details could not be loaded right now.'), findsOneWidget);
+      details.fail = false;
+      await t.tap(find.text('Try again'));
+      await settle(t);
+      expect(find.text('12M views'), findsOneWidget);
     });
   });
+}
+
+class _Details implements SongDetailsSource {
+  int calls = 0;
+  bool fail = false;
+  @override
+  Future<SongDetails?> fetch(String videoId) async {
+    calls++;
+    if (fail) return null;
+    return SongDetails(
+      videoId: videoId,
+      channel: 'Label Channel',
+      views: 12000000,
+      likes: 340000,
+      description: 'Singer: Arijit Singh\nLyrics: Amitabh Bhattacharya\nMusic: Pritam',
+    );
+  }
 }

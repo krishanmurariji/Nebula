@@ -69,6 +69,81 @@ class SongDetails {
         if (duration != null && duration! > Duration.zero) clock(duration!),
       ].join('  ·  ');
 
+  /// Who made the song, read from the description lines labels usually
+  /// write ("Singer: Arijit Singh", "Lyrics - Amitabh Bhattacharya",
+  /// "Music by Pritam"), plus YouTube's own music tags. In a fixed order:
+  /// Singer, Lyrics, Music, Starring, Album, Label. Only what is found.
+  List<(String, String)> get credits {
+    final found = parseCredits(description);
+    if ((artistName ?? '').trim().isNotEmpty) {
+      found.putIfAbsent('Singer', () => artistName!.trim());
+    }
+    if ((albumName ?? '').trim().isNotEmpty) {
+      found.putIfAbsent('Album', () => albumName!.trim());
+    }
+    return [
+      for (final k in creditOrder)
+        if (found[k] != null) (k, found[k]!),
+    ];
+  }
+
+  static const creditOrder = [
+    'Singer', 'Lyrics', 'Music', 'Starring', 'Album', 'Label'
+  ];
+
+  // Longest phrases first: "music director" must win over "music".
+  static RegExp _key(String alts) =>
+      RegExp('^(?:$alts)(?![A-Za-z])', caseSensitive: false);
+  static final _creditKeys = <String, RegExp>{
+    'Singer': _key(
+        r'playback singers?|sung by|singers?|vocalists?|vocals?|voice|artists?'),
+    'Lyrics': _key(
+        r'lyrics written by|lyrics by|lyricists?|lyrics|written by|penned by|words|geet'),
+    'Music': _key(
+        r'music composed by|music directors?|music by|composed by|composers?|music|sangeet'),
+    'Starring': _key(r'star cast|starring|cast|featuring|feat\.?|ft\.?'),
+    'Album': _key(r'album|movie|film'),
+    'Label': _key(r'record label|music label|music on|label'),
+  };
+
+
+  /// Reads "Key: value" style credit lines from a video description. The
+  /// first line found for each kind wins; links and over-long values are
+  /// ignored so a paragraph is never mistaken for a credit.
+  static Map<String, String> parseCredits(String description) {
+    final out = <String, String>{};
+    for (var raw in description.split(RegExp(r'[\r\n]+'))) {
+      // Drop leading bullets, emoji and other decoration.
+      var line = raw.replaceFirst(RegExp(r'^[^A-Za-z]+'), '').trim();
+      if (line.isEmpty || line.length > 120) continue;
+      for (final e in _creditKeys.entries) {
+        if (out.containsKey(e.key)) continue;
+        final m = e.value.firstMatch(line);
+        if (m == null) continue;
+        var rest = line.substring(m.end).trim();
+        // "Music by Pritam" has no separator; "Music : Pritam" has one.
+        final sep = RegExp(r'^(?:[:：\-–—|=]+|by\b)\s*', caseSensitive: false)
+            .firstMatch(rest);
+        // "Music by Pritam", "Music on T-Series", "feat. X" need none.
+        final k = m.group(0)!.toLowerCase();
+        final open = k.endsWith('by') || k.endsWith(' on') ||
+            k.startsWith('feat') || k.startsWith('ft');
+        if (sep == null && !open) continue;
+        if (sep != null) rest = rest.substring(sep.end).trim();
+        rest = rest.replaceAll(RegExp(r'\s+'), ' ');
+        if (rest.isEmpty ||
+            rest.length > 70 ||
+            rest.contains('http') ||
+            rest.contains('www.')) {
+          continue;
+        }
+        out[e.key] = rest;
+        break;
+      }
+    }
+    return out;
+  }
+
   bool get hasMusicTags =>
       (songName ?? '').isNotEmpty ||
       (artistName ?? '').isNotEmpty ||
@@ -115,6 +190,7 @@ final songDetailsSourceProvider =
     Provider<SongDetailsSource>((ref) => YoutubeSongDetailsSource());
 
 /// Details for one song, fetched once and kept for the session.
+/// (A failed fetch gives null; invalidate the entry to try again.)
 final songDetailsProvider =
     FutureProvider.family<SongDetails?, String>((ref, videoId) async {
   if (videoId.isEmpty) return null;

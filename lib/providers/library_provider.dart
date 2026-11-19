@@ -291,25 +291,14 @@ final libraryReadyProvider = FutureProvider<bool>((ref) async {
 final isOnDeviceProvider = Provider<bool Function(String videoId)>((ref) => (_) => false);
 
 /// My Music: the music files on the phone (read from Android's media
-/// library once access is given), then every song Noor has fully saved for
-/// offline listening (from history, favorites and playlists).
+/// library once access is given).
 final myMusicProvider = Provider<List<Song>>((ref) {
-  final onDevice = ref.watch(isOnDeviceProvider);
+  // Only the phone's own music (files Android's media library knows).
+  // Songs Noor saved while playing stay in History, Favorites and
+  // playlists; they are not "phone music" and are not repeated here.
   final seen = <String>{};
-  final out = <Song>[];
-  for (final s in ref.watch(localMusicProvider).songs) {
-    if (seen.add(s.videoId)) out.add(s);
-  }
-  void take(Iterable<Song> l) {
-    for (final s in l) {
-      if (seen.add(s.videoId) && !s.isLocal && onDevice(s.videoId)) out.add(s);
-    }
-  }
-
-  take(ref.watch(historyProvider));
-  take(ref.watch(likedProvider));
-  for (final p in ref.watch(playlistProvider)) {
-    take(p.songs);
-  }
-  return out;
+  return [
+    for (final s in ref.watch(localMusicProvider).songs)
+      if (seen.add(s.videoId)) s,
+  ];
 });

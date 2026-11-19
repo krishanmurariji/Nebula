@@ -178,6 +178,8 @@ class _Results extends ConsumerWidget {
         return NoorSongRow(
           key: ValueKey('search_${s.videoId}'),
           song: s,
+          // Tap the card for its details; the play button plays.
+          expandable: true,
           artist: s.artist
               .replaceAll(RegExp(r' - topic', caseSensitive: false), '')
               .trim(),

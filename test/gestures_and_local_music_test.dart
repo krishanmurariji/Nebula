@@ -106,7 +106,7 @@ void main() {
       expect(n.state.songs.single.thumbnailUrl, 'localart://7');
     });
 
-    test('My Music lists the phone songs first', () async {
+    test('My Music lists only the phone songs, not songs Noor saved', () async {
       SharedPreferences.setMockInitialValues({});
       final n = LocalMusicNotifier(autoLoad: false);
       await n.refresh();
@@ -116,7 +116,7 @@ void main() {
       ]);
       addTearDown(c.dispose);
       await c.read(historyProvider.notifier).add(songs[1]);
-      expect(c.read(myMusicProvider).map((x) => x.title), ['Phone Song', 'Beta']);
+      expect(c.read(myMusicProvider).map((x) => x.title), ['Phone Song']);
     });
 
     test('a library that cannot be read never throws', () async {
@@ -137,12 +137,12 @@ void main() {
       expect(find.byType(TextField), findsOneWidget);
     });
 
-    testWidgets('swipe up on the top of Home opens the player', (t) async {
+    testWidgets('swipe up on the top of Home no longer opens the player', (t) async {
       await openHome(t,
           player: NebulaPlayerState(song: songs[0], status: NebulaPlayerStatus.playing));
       await t.fling(find.text('My History'), const Offset(0, -300), 1200);
       await settle(t, 8);
-      expect(find.byType(PlayerScreen), findsOneWidget);
+      expect(find.byType(PlayerScreen), findsNothing);
     });
 
     testWidgets('swipe up does nothing when no song is playing', (t) async {

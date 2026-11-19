@@ -66,4 +66,51 @@ void main() {
     expect(await c.read(songDetailsProvider('').future), isNull);
     expect(src.calls, 0);
   });
+
+  group('credits from the description', () {
+    test('reads the usual label lines, in a fixed order', () {
+      const d = '''
+Presenting the official video of Kesariya.
+🎵 Song: Kesariya
+🎤 Singer: Arijit Singh
+✍️ Lyrics - Amitabh Bhattacharya
+• Music Director : Pritam
+Starring: Ranbir Kapoor, Alia Bhatt
+Music Label: Sony Music India
+Subscribe: https://example.com/sub
+''';
+      final c = SongDetails(videoId: 'x', channel: 'c', description: d).credits;
+      expect(c, [
+        ('Singer', 'Arijit Singh'),
+        ('Lyrics', 'Amitabh Bhattacharya'),
+        ('Music', 'Pritam'),
+        ('Starring', 'Ranbir Kapoor, Alia Bhatt'),
+        ('Label', 'Sony Music India'),
+      ]);
+    });
+
+    test('"by" and "on" lines need no colon', () {
+      final m = SongDetails.parseCredits(
+          'Music by Vishal-Shekhar\nLyrics written by Kumaar\nMusic on T-Series');
+      expect(m['Music'], 'Vishal-Shekhar');
+      expect(m['Lyrics'], 'Kumaar');
+      expect(m['Label'], 'T-Series');
+    });
+
+    test('links, paragraphs and look-alike words are not credits', () {
+      final m = SongDetails.parseCredits('''
+Music: https://spotify.example/abc
+Musical journey through the hills of the north, a long sentence that goes on.
+Singers who inspired this cover are many and we thank all of them for it.
+Cast your vote below!
+''');
+      expect(m, isEmpty);
+    });
+
+    test("YouTube's own music tags fill in what the description lacks", () {
+      const d = SongDetails(
+          videoId: 'x', channel: 'c', artistName: 'Shreya Ghoshal', albumName: 'Devdas');
+      expect(d.credits, [('Singer', 'Shreya Ghoshal'), ('Album', 'Devdas')]);
+    });
+  });
 }

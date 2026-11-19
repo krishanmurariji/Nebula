@@ -58,6 +58,13 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
   int _idx = 0;
   int _tok = 0;
 
+  /// The load token while a new song is being prepared (from the tap until
+  /// its audio source is set). Meanwhile the player may still report the
+  /// previous song as "playing"; those events must not reach the UI as the
+  /// new song playing, or the loading feedback vanishes at once.
+  int? _loadingTok;
+  bool get _switching => _loadingTok != null && _loadingTok == _tok;
+
   // Current play mode — changed by the UI via setPlayMode().
   PlayMode _playMode = PlayMode.repeatAll;
 
@@ -287,6 +294,7 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
   /// request and publishes the new song to the UI immediately.
   void _requestLoad(Song song, {Duration? resumeAt, int attempt = 0}) {
     final tok = ++_tok;
+    _loadingTok = tok;
     _retryTimer?.cancel();
     // Stop moving bytes for whatever the user just left behind.
     _acquirer.cancelAll();
@@ -333,6 +341,7 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
         await _player.setAudioSource(AudioSource.uri(Uri.parse(song.localUri!)),
             initialPosition: req.resumeAt);
         if (!live()) return;
+        _loadingTok = null;
         unawaited(_player.play().catchError((Object e) {
           if (live()) _onPlayerError(e);
         }));
@@ -359,6 +368,7 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
 
       await _player.setAudioSource(source, initialPosition: req.resumeAt);
       if (!live()) return;
+      _loadingTok = null;
 
       // IMPORTANT: play() only completes when playback pauses or ends, so it
       // must NOT be awaited here or the worker would be blocked for the whole
@@ -376,6 +386,7 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
     } catch (e, st) {
       _acquirer.cancelActive();
       if (!live()) return; // superseded: whatever happened is irrelevant now
+      _loadingTok = null; // failure handling below reports its own state
       if (e is DownloadFailure) {
         nlog('[N] download failed: $e');
         unawaited(_handleDownloadFailure(req, e));
@@ -746,7 +757,8 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
   }
 
   void _broadcast(PlaybackEvent e) {
-    final playing = _player.playing;
+    final switching = _switching;
+    final playing = !switching && _player.playing;
     playbackState.add(playbackState.value.copyWith(
       controls: [
         MediaControl.skipToPrevious,
@@ -759,7 +771,9 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
         MediaAction.skipToPrevious,
       },
       androidCompactActionIndices: const [0, 1, 2],
-      processingState: const {
+      processingState: switching
+          ? AudioProcessingState.loading
+          : const {
         ProcessingState.idle: AudioProcessingState.idle,
         ProcessingState.loading: AudioProcessingState.loading,
         ProcessingState.buffering: AudioProcessingState.buffering,
@@ -767,7 +781,7 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
         ProcessingState.completed: AudioProcessingState.completed,
       }[_player.processingState]!,
       playing: playing,
-      updatePosition: _player.position,
+      updatePosition: switching ? Duration.zero : _player.position,
       bufferedPosition: _player.bufferedPosition,
       speed: _player.speed,
       queueIndex: _idx,
