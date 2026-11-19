@@ -34,8 +34,8 @@ Song neighbourOf(
   required List<Song> liked,
   required List<Song> history,
 }) {
-  final list =
-      contextListFor(song, playlists: playlists, liked: liked, history: history);
+  final list = contextListFor(song,
+      playlists: playlists, liked: liked, history: history);
   final i = list.indexWhere((s) => s.videoId == song.videoId);
   if (i < 0 || list.length < 2) return song;
   final n = list.length;

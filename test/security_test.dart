@@ -6,10 +6,10 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'package:nebula_music_player/services/app_log.dart';
-import 'package:nebula_music_player/services/audio_cache.dart';
-import 'package:nebula_music_player/services/fallback_sources.dart';
-import 'package:nebula_music_player/services/progressive_download.dart';
+import 'package:noor/services/app_log.dart';
+import 'package:noor/services/audio_cache.dart';
+import 'package:noor/services/fallback_sources.dart';
+import 'package:noor/services/progressive_download.dart';
 
 void main() {
   group('AudioCache: untrusted ids can never escape the cache folder', () {

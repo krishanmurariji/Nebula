@@ -4,7 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
-import 'package:nebula_music_player/main.dart' as app;
+import 'package:noor/theme/noor_search_button.dart';
+import 'package:noor/main.dart' as app;
 
 import 'helpers.dart';
 
@@ -13,7 +14,7 @@ void main() {
 
   testWidgets('airplane mode: offline pill, offline search, My Music', (t) async {
     app.main();
-    expect(await waitFor(t, find.text('Search'), timeout: const Duration(seconds: 90)),
+    expect(await waitFor(t, find.byType(NoorSearchButton), timeout: const Duration(seconds: 90)),
         isTrue, reason: 'Home did not appear');
 
     expect(
@@ -68,7 +69,7 @@ void main() {
       report('my music: phone song NOT listed');
     }
 
-    await t.tap(find.text('Search'));
+    await t.tap(find.byType(NoorSearchButton));
     await idle(t, const Duration(seconds: 1));
     await t.enterText(find.byType(TextField).first, 'rain');
     await t.testTextInput.receiveAction(TextInputAction.search);

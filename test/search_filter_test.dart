@@ -2,16 +2,17 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:nebula_music_player/models/song.dart';
-import 'package:nebula_music_player/providers/library_provider.dart';
-import 'package:nebula_music_player/providers/player_provider.dart';
-import 'package:nebula_music_player/providers/search_provider.dart';
-import 'package:nebula_music_player/screens/search_screen.dart';
-import 'package:nebula_music_player/services/song_details.dart';
-import 'package:nebula_music_player/theme/noor_play_pause.dart';
-import 'package:nebula_music_player/widgets/song_details_panel.dart';
-import 'package:nebula_music_player/widgets/song_row.dart';
-import 'package:nebula_music_player/widgets/search_filter_bar.dart';
+import 'package:noor/models/song.dart';
+import 'package:noor/providers/library_provider.dart';
+import 'package:noor/providers/player_provider.dart';
+import 'package:noor/providers/search_provider.dart';
+import 'package:noor/screens/search_screen.dart';
+import 'package:noor/services/song_details.dart';
+import 'package:noor/theme/noor_play_pause.dart';
+import 'package:noor/widgets/song_details_panel.dart';
+import 'package:noor/widgets/song_row.dart';
+import 'package:noor/widgets/search_filter_bar.dart';
+import 'package:noor/widgets/search_filter_menu.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 Song song(String id, String title, {bool official = false}) => Song(
@@ -194,9 +195,13 @@ void main() {
       await t.pump(const Duration(milliseconds: 100));
     }
 
+    /// Opens the filter pop-up (the settings button's, while searching)
+    /// and picks [option].
     Future<void> chooseFilter(WidgetTester t, String option) async {
-      await t.tap(find.text(option));
+      showSearchFilters(t.element(find.byType(SearchPanel)));
       await t.pump(const Duration(milliseconds: 300));
+      await t.tap(find.text(option));
+      await t.pump(const Duration(milliseconds: 400));
     }
 
     testWidgets('best match is the default: everything, ranked', (t) async {
@@ -299,7 +304,7 @@ void main() {
       ));
       await t.pump(const Duration(milliseconds: 100));
       expect(find.text('Extra'), findsNothing);
-      await t.tap(find.text('All'));
+      await chooseFilter(t, 'All');
       for (var i = 0; i < 5; i++) {
         await t.pump(const Duration(milliseconds: 100));
       }

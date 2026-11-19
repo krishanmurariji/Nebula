@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'noor_disc.dart';
+import 'noor_gap_border.dart';
 import 'noor_palette.dart';
 import 'noor_play_pause.dart';
 
@@ -28,6 +29,8 @@ TextStyle noorArtistStyle(Color color, {double size = 12}) => TextStyle(
 ///
 /// * tap the card: [onTap] (plays the song);
 /// * tap the button: [onPlayPause] (toggles this song);
+/// * the outline has a dot at the top centre; while the song loads, the dot
+///   in the play button's ring goes round (the card itself stays still);
 /// * double tap the card: [onToggleLike] with a heart animation (an empty
 ///   heart turns red when liked; a red heart turns empty when unliked).
 class NoorSongCard extends StatefulWidget {
@@ -194,94 +197,84 @@ class _NoorSongCardState extends State<NoorSongCard>
               scale: _pressed ? 0.975 : 1,
               duration: const Duration(milliseconds: 110),
               curve: Curves.easeOut,
-              child: Container(
-                height: NoorSongCard.height,
-                decoration: BoxDecoration(
-                  color: w.current ? t.wash.withOpacity(0.06) : t.bg,
-                  borderRadius: BorderRadius.circular(kNoorCardRadius),
-                  border: Border.all(color: t.ac, width: w.current ? 1.2 : 0.8),
-                ),
-                // Narrow (actions open): no play button. Tiny (naming a
-                // playlist): just the record.
-                child: LayoutBuilder(builder: (context, box) {
-                  final compact = box.maxWidth < 230;
-                  if (box.maxWidth < 120) {
-                    return Center(
-                      child: RotationTransition(
-                        turns: _spin,
-                        child: NoorDisc(
-                            url: w.thumbnailUrl,
-                            size: min(NoorSongCard._disc, box.maxWidth - 8)),
-                      ),
-                    );
-                  }
-                  return Row(
-                    children: [
-                      const SizedBox(width: 6),
-                      RotationTransition(
-                        turns: _spin,
-                        child: NoorDisc(
-                            url: w.thumbnailUrl, size: NoorSongCard._disc),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(w.title,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: noorSongTitleStyle(t.ac)),
-                            const SizedBox(height: 2),
-                            if (w.loading)
-                              _Pulse(
-                                child: Text('Loading…',
-                                    maxLines: 1, style: noorArtistStyle(t.ac)),
-                              )
-                            else
-                              Text(
-                                  w.badge == null
-                                      ? w.artist
-                                      : '${w.artist}  ·  ${w.badge}',
+              // The outline: a dot at the top centre with a gap each side.
+              child: CustomPaint(
+                foregroundPainter: NoorGapBorderPainter(
+                    color: t.ac,
+                    width: w.current ? 1.2 : 0.8,
+                    radius: kNoorCardRadius),
+                child: Container(
+                  height: NoorSongCard.height,
+                  decoration: BoxDecoration(
+                    color: w.current ? t.wash.withOpacity(0.06) : t.bg,
+                    borderRadius: BorderRadius.circular(kNoorCardRadius),
+                  ),
+                  // Narrow (actions open): no play button. Tiny (naming a
+                  // playlist): just the record.
+                  child: LayoutBuilder(builder: (context, box) {
+                    final compact = box.maxWidth < 230;
+                    if (box.maxWidth < 120) {
+                      return Center(
+                        child: RotationTransition(
+                          turns: _spin,
+                          child: NoorDisc(
+                              url: w.thumbnailUrl,
+                              size: min(NoorSongCard._disc, box.maxWidth - 8)),
+                        ),
+                      );
+                    }
+                    return Row(
+                      children: [
+                        const SizedBox(width: 6),
+                        RotationTransition(
+                          turns: _spin,
+                          child: NoorDisc(
+                              url: w.thumbnailUrl, size: NoorSongCard._disc),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(w.title,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
-                                  style: noorArtistStyle(t.mute)),
-                          ],
+                                  style: noorSongTitleStyle(t.ac)),
+                              const SizedBox(height: 2),
+                              if (w.loading)
+                                _Pulse(
+                                  child: Text('Loading…',
+                                      maxLines: 1,
+                                      style: noorArtistStyle(t.ac)),
+                                )
+                              else
+                                Text(
+                                    w.badge == null
+                                        ? w.artist
+                                        : '${w.artist}  ·  ${w.badge}',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: noorArtistStyle(t.mute)),
+                            ],
+                          ),
                         ),
-                      ),
-                      if (!compact) ...[
-                        const SizedBox(width: 8),
-                        NoorPlayPauseButton(
-                          playing: w.current && w.playing,
-                          loading: w.loading,
-                          onTap: w.onPlayPause ?? w.onTap,
-                        ),
+                        if (!compact) ...[
+                          const SizedBox(width: 8),
+                          NoorPlayPauseButton(
+                            playing: w.current && w.playing,
+                            loading: w.loading,
+                            onTap: w.onPlayPause ?? w.onTap,
+                          ),
+                        ],
+                        const SizedBox(width: 12),
                       ],
-                      const SizedBox(width: 12),
-                    ],
-                  );
-                }),
+                    );
+                  }),
+                ),
               ),
             ),
           ),
-          // While the song loads, a thin line runs along the card's bottom.
-          if (w.loading)
-            Positioned(
-              left: 24,
-              right: 24,
-              bottom: 1,
-              child: IgnorePointer(
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(2),
-                  child: LinearProgressIndicator(
-                    minHeight: 2,
-                    color: t.ac,
-                    backgroundColor: t.ac.withOpacity(0.12),
-                  ),
-                ),
-              ),
-            ),
           _burst(t),
         ],
       ),

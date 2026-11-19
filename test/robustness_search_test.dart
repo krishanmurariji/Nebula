@@ -2,10 +2,10 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:nebula_music_player/models/song.dart';
-import 'package:nebula_music_player/providers/connection_provider.dart';
-import 'package:nebula_music_player/providers/search_provider.dart';
-import 'package:nebula_music_player/services/youtube_search_service.dart';
+import 'package:noor/models/song.dart';
+import 'package:noor/providers/connection_provider.dart';
+import 'package:noor/providers/search_provider.dart';
+import 'package:noor/services/youtube_search_service.dart';
 
 class FakeSearch implements YoutubeSearchService {
   final Map<String, Completer<List<Song>>> pending = {};

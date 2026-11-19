@@ -1,11 +1,14 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'noor_gap_border.dart';
 import 'noor_palette.dart';
 
 /// Round play / pause button with the "two bars" morph: while playing it
 /// shows two upright bars (pause); when paused the bars swing together into a
-/// play arrow. The ring and bars use the Noor accent with a thin stroke.
+/// play arrow. The thin ring has a gap at the top with a dot in it; while a
+/// song loads the dot (and its gap) goes round, and settles back at the top
+/// when loading ends.
 class NoorPlayPauseButton extends StatefulWidget {
   const NoorPlayPauseButton({
     super.key,
@@ -20,7 +23,7 @@ class NoorPlayPauseButton extends StatefulWidget {
   final VoidCallback? onTap;
   final double size;
 
-  /// Shows a thin spinner in the ring while a song is being prepared.
+  /// The ring's dot goes round while a song is being prepared.
   final bool loading;
 
   @override
@@ -28,7 +31,33 @@ class NoorPlayPauseButton extends StatefulWidget {
 }
 
 class _NoorPlayPauseButtonState extends State<NoorPlayPauseButton>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
+  /// Where the ring's dot is, in turns from the top.
+  late final AnimationController _turn = AnimationController(
+      vsync: this, duration: const Duration(milliseconds: 1100));
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.loading) _turn.repeat();
+  }
+
+  void _syncTurn() {
+    if (widget.loading) {
+      if (!_turn.isAnimating) _turn.repeat();
+    } else if (_turn.isAnimating || _turn.value != 0) {
+      // Finish the turn and come to rest at the top.
+      final left = 1 - _turn.value;
+      _turn
+          .animateTo(1,
+              duration: Duration(milliseconds: (250 + 700 * left).round()),
+              curve: Curves.easeOutCubic)
+          .whenComplete(() {
+        if (mounted && !widget.loading) _turn.value = 0;
+      });
+    }
+  }
+
   late final AnimationController _c = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 400),
@@ -41,10 +70,12 @@ class _NoorPlayPauseButtonState extends State<NoorPlayPauseButton>
     if (old.playing != widget.playing) {
       widget.playing ? _c.forward() : _c.reverse();
     }
+    if (old.loading != widget.loading) _syncTurn();
   }
 
   @override
   void dispose() {
+    _turn.dispose();
     _c.dispose();
     super.dispose();
   }
@@ -66,24 +97,21 @@ class _NoorPlayPauseButtonState extends State<NoorPlayPauseButton>
             alignment: Alignment.center,
             children: [
               Container(
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: t.bg,
-                  border: Border.all(color: t.ac, width: 1),
+                decoration: BoxDecoration(shape: BoxShape.circle, color: t.bg),
+              ),
+              AnimatedBuilder(
+                animation: _turn,
+                builder: (_, __) => CustomPaint(
+                  size: Size(s, s),
+                  painter: NoorGapRingPainter(color: t.ac, turn: _turn.value),
                 ),
               ),
-              if (widget.loading)
-                SizedBox(
-                  width: s - 6,
-                  height: s - 6,
-                  child: CircularProgressIndicator(strokeWidth: 1.2, color: t.ac),
-                ),
               AnimatedBuilder(
                 animation: _c,
                 builder: (_, __) => CustomPaint(
                   size: Size(s, s),
-                  painter: _BarsPainter(
-                      Curves.easeInOut.transform(_c.value), t.ac),
+                  painter:
+                      _BarsPainter(Curves.easeInOut.transform(_c.value), t.ac),
                 ),
               ),
             ],
@@ -119,7 +147,8 @@ class _BarsPainter extends CustomPainter {
       canvas.rotate(rot);
       canvas.drawRRect(
           RRect.fromRectAndRadius(
-              Rect.fromCenter(center: Offset.zero, width: 3 * k, height: 20 * k),
+              Rect.fromCenter(
+                  center: Offset.zero, width: 3 * k, height: 20 * k),
               Radius.circular(1.5 * k)),
           paint);
       canvas.restore();

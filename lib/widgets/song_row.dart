@@ -1,4 +1,5 @@
 import 'dart:async';
+import '../providers/gesture_settings_provider.dart';
 import 'dart:math';
 
 import 'package:flutter/gestures.dart';
@@ -544,13 +545,17 @@ class _NoorSongRowState extends ConsumerState<NoorSongRow>
         },
         child: RawGestureDetector(
           gestures: {
-            _LeftSwipeRecognizer:
-                GestureRecognizerFactoryWithHandlers<_LeftSwipeRecognizer>(
-              () => _LeftSwipeRecognizer(debugOwner: this),
-              (r) => r
-                ..onUpdate = _dragUpdate
-                ..onEnd = _dragEnd,
-            ),
+            // "Swipe a song left" can be switched off in Settings; a long
+            // press still opens the actions.
+            if (_stage != _Stage.closed ||
+                ref.watch(gestureOnProvider(NoorGesture.songCardSwipe)))
+              _LeftSwipeRecognizer:
+                  GestureRecognizerFactoryWithHandlers<_LeftSwipeRecognizer>(
+                () => _LeftSwipeRecognizer(debugOwner: this),
+                (r) => r
+                  ..onUpdate = _dragUpdate
+                  ..onEnd = _dragEnd,
+              ),
             // While open, a swipe either way moves the card.
             if (_stage == _Stage.open)
               HorizontalDragGestureRecognizer:

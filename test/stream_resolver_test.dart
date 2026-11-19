@@ -1,8 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:nebula_music_player/services/playback_failure.dart';
-import 'package:nebula_music_player/services/stream_resolver.dart';
+import 'package:noor/services/playback_failure.dart';
+import 'package:noor/services/stream_resolver.dart';
 
 class RequestLimitExceededException implements Exception {}
 

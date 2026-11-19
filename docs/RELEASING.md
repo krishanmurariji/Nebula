@@ -8,7 +8,7 @@ marked latest). No release tag is ever reused, so this works with GitHub's
 
 | What | Link (replace `OWNER/REPO`) |
 |---|---|
-| Newest build | `https://github.com/OWNER/REPO/releases/latest/download/nebula.apk` |
+| Newest build | `https://github.com/OWNER/REPO/releases/latest/download/noor.apk` |
 | Every build | `https://github.com/OWNER/REPO/releases` |
 
 Open the link on the phone, download, install. Or install
@@ -25,19 +25,19 @@ throwaway key and the phone refuses the update ("signature mismatch").
 
    ```powershell
    & "C:\Program Files\Android\Android Studio\jbr\bin\keytool.exe" -genkeypair -v `
-     -keystore nebula-release.jks -keyalg RSA -keysize 2048 -validity 10000 -alias nebula
+     -keystore noor-release.jks -keyalg RSA -keysize 2048 -validity 10000 -alias noor
    ```
 
    Pick strong passwords and remember them.
 
-2. **Back up `nebula-release.jks` and the passwords somewhere safe** (not in the
+2. **Back up `noor-release.jks` and the passwords somewhere safe** (not in the
    repo). If you lose them you can never publish an update that installs over
    the old app.
 
 3. Put the file into a secret:
 
    ```powershell
-   [Convert]::ToBase64String([IO.File]::ReadAllBytes("nebula-release.jks")) | Set-Clipboard
+   [Convert]::ToBase64String([IO.File]::ReadAllBytes("noor-release.jks")) | Set-Clipboard
    ```
 
 4. GitHub → repo → **Settings → Secrets and variables → Actions → New
@@ -47,7 +47,7 @@ throwaway key and the phone refuses the update ("signature mismatch").
    |---|---|
    | `ANDROID_KEYSTORE_BASE64` | the base64 text from step 3 |
    | `ANDROID_KEYSTORE_PASSWORD` | the keystore password |
-   | `ANDROID_KEY_ALIAS` | `nebula` |
+   | `ANDROID_KEY_ALIAS` | `noor` |
    | `ANDROID_KEY_PASSWORD` | the key password |
 
 Until the secrets exist, branch builds still work (debug key, with a warning in
@@ -74,8 +74,8 @@ Create `android/key.properties` (git-ignored) pointing at your `.jks`:
 ```properties
 storePassword=...
 keyPassword=...
-keyAlias=nebula
-storeFile=C:/path/to/nebula-release.jks
+keyAlias=noor
+storeFile=C:/path/to/noor-release.jks
 ```
 
 then `flutter build apk --release`.

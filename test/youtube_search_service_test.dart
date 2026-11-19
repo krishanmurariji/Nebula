@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:nebula_music_player/models/song.dart';
-import 'package:nebula_music_player/services/youtube_search_service.dart';
+import 'package:noor/models/song.dart';
+import 'package:noor/services/youtube_search_service.dart';
 
 void main() {
   group('looksLikeSong', () {

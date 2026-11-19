@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:nebula_music_player/services/app_log.dart';
-import 'package:nebula_music_player/services/connectivity_probe.dart';
+import 'package:noor/services/app_log.dart';
+import 'package:noor/services/connectivity_probe.dart';
 
 void main() {
   group('ConnectivityProbe', () {

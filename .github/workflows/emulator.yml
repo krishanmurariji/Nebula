@@ -62,11 +62,12 @@ jobs:
             adb logcat -c || true
             mkdir -p build
             python3 -c "import wave;w=wave.open('build/tone.wav','wb');w.setnchannels(1);w.setsampwidth(2);w.setframerate(8000);w.writeframes(bytes(16000*40));w.close()" || true
-            adb push build/tone.wav "/sdcard/Music/Noor Test Tone.wav" || true
+            # Shared storage is not writable for a while after boot: retry.
+            for i in $(seq 1 30); do adb shell mkdir -p /sdcard/Music 2>/dev/null; adb push build/tone.wav "/sdcard/Music/Noor Test Tone.wav" && break; sleep 3; done
             adb shell content call --method scan_volume --uri content://media --arg external_primary || true
             timeout 900 flutter drive --driver=test_driver/integration_test.dart --target=integration_test/online_test.dart -d emulator-5554 2>&1 | tee build/online.log
             adb shell cmd connectivity airplane-mode enable
-            (for i in $(seq 1 240); do adb shell pm grant com.nebula.nebula_music_player android.permission.READ_MEDIA_AUDIO 2>/dev/null && adb shell pm grant com.nebula.nebula_music_player android.permission.POST_NOTIFICATIONS 2>/dev/null && echo "granted at ${i}s"; sleep 1; done) > build/grants.log 2>&1 &
+            (for i in $(seq 1 240); do adb shell pm grant com.noor.music android.permission.READ_MEDIA_AUDIO 2>/dev/null && adb shell pm grant com.noor.music android.permission.POST_NOTIFICATIONS 2>/dev/null && echo "granted at ${i}s"; sleep 1; done) > build/grants.log 2>&1 &
             timeout 600 flutter drive --driver=test_driver/integration_test.dart --target=integration_test/offline_test.dart -d emulator-5554 2>&1 | tee build/offline.log
             adb shell cmd connectivity airplane-mode disable
             adb logcat -d > build/logcat.txt || true

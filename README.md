@@ -3,8 +3,8 @@
 <img src="docs/readme/hero.svg" alt="Noor: a royal, minimal music player" width="100%">
 
 <p>
-  <a href="https://github.com/krishanmurariji/Nebula/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/krishanmurariji/Nebula/actions/workflows/ci.yml/badge.svg"></a>
-  <a href="https://github.com/krishanmurariji/Nebula/actions/workflows/android-release.yml"><img alt="Android APK" src="https://github.com/krishanmurariji/Nebula/actions/workflows/android-release.yml/badge.svg"></a>
+  <a href="https://github.com/krishanmurariji/Noor/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/krishanmurariji/Noor/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="https://github.com/krishanmurariji/Noor/actions/workflows/android-release.yml"><img alt="Android APK" src="https://github.com/krishanmurariji/Noor/actions/workflows/android-release.yml/badge.svg"></a>
   <img alt="Flutter 3.47" src="https://img.shields.io/badge/Flutter-3.47-8E4A27?style=for-the-badge&logo=flutter&logoColor=white&labelColor=2B1A12">
   <img alt="Riverpod 2" src="https://img.shields.io/badge/Riverpod-2-8E4A27?style=for-the-badge&labelColor=2B1A12">
   <img alt="Android" src="https://img.shields.io/badge/Android-APK-8E4A27?style=for-the-badge&logo=android&logoColor=white&labelColor=2B1A12">
@@ -72,12 +72,14 @@
 | Home slider | Swipe or tap a side card | Open that list |
 | Home | Swipe down (or pull the list down) | Home sinks away and search drops in |
 | Search box | Type | Your recent searches (clock) and YouTube's suggestions drop down; tap one to search it, tap ↖ to put it in the box and keep typing, swipe a recent one away to forget it |
-| Home, a playlist card | Long press | Delete the playlist (its songs stay in Favorites and History) |
+| Home slider | Hold a card | Arrange the cards: drag to reorder; drop a playlist on the bin to delete it (its songs stay in Favorites and History) |
 | Bottom player | Swipe left / right | Next / previous song: the next card slides in beside it; let go early or drag back to cancel |
 | Player record | Swipe left / right | Next / previous song: the next record slides in under your finger; let go early or drag back to cancel |
 | Player | Swipe down | The song's details drop from the top |
 | Player | Swipe up | Up next rises from the bottom |
 | Anywhere | Back | Closes one layer at a time (menu, actions, search) |
+
+Every swipe that has a button or tap doing the same can be switched off in **Settings → Gestures**. The settings button beside search opens Settings on Home, and the result filters (Best match / Official only / All) while searching.
 
 **Which song comes next?** The list the song belongs to: its playlist first (a song lives in one playlist), then My Favorites, then My History. With nothing else to play, the same song plays again.
 
@@ -175,7 +177,7 @@ Rapid skipping is safe: `LatestWinsRunner` keeps only the newest request, and ev
 ## 📁 Repository map
 
 ```text
-Nebula/
+Noor/
 ├─ lib/
 │  ├─ screens/      home (slider, lists, search), player, up next, mini player, settings, playback log
 │  ├─ widgets/      song_row (swipe actions, playlist circle), search filter bar
@@ -195,7 +197,7 @@ Nebula/
 
 The newest build of the app, made by GitHub Actions:
 
-**[⬇ nebula.apk (newest build)](https://github.com/krishanmurariji/Nebula/releases/latest/download/nebula.apk)**
+**[⬇ noor.apk (newest build)](https://github.com/krishanmurariji/Noor/releases/latest/download/noor.apk)**
 
 Open the link on the phone and install. If Android says the signature does not match, uninstall the old Noor first (see [Troubleshooting](#-troubleshooting)). To be offered every new build automatically, add this repository to [Obtainium](https://github.com/ImranR98/Obtainium).
 
@@ -204,8 +206,8 @@ Open the link on the phone and install. If Android says the signature does not m
 ## 🚀 Run from source
 
 ```bash
-git clone https://github.com/krishanmurariji/Nebula.git
-cd Nebula
+git clone https://github.com/krishanmurariji/Noor.git
+cd Noor
 flutter pub get
 flutter run
 ```
@@ -270,7 +272,7 @@ flowchart LR
   PUB -- tag --> REL["Versioned release"]
 ```
 
-- Every push to `master` or a `claude/**` branch publishes a release `build-<number>` and marks it **latest**, so `releases/latest/download/nebula.apk` always gives the newest APK. This works with GitHub's *immutable releases* setting on, because no release tag is ever reused.
+- Every push to `master` or a `claude/**` branch publishes a release `build-<number>` and marks it **latest**, so `releases/latest/download/noor.apk` always gives the newest APK. This works with GitHub's *immutable releases* setting on, because no release tag is ever reused.
 - A tag such as `v1.2.0` publishes a permanent release, and refuses to publish without the signing key.
 - One-time signing setup, step by step: [`docs/RELEASING.md`](docs/RELEASING.md).
 

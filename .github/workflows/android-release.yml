@@ -6,7 +6,7 @@ name: Android APK
 #   manual "Run workflow"       → same as a branch push
 #
 # Stable download link for the phone / the future website:
-#   https://github.com/<owner>/<repo>/releases/latest/download/nebula.apk   (newest build)
+#   https://github.com/<owner>/<repo>/releases/latest/download/noor.apk   (newest build)
 
 on:
   push:
@@ -69,12 +69,12 @@ jobs:
             echo "::warning::No signing secrets: building with a throwaway debug key. Installing this APK over a previous build will fail until you uninstall the old app. See docs/RELEASING.md."
             exit 0
           fi
-          echo "$KEYSTORE_B64" | base64 -d > "$GITHUB_WORKSPACE/android/nebula-release.jks"
+          echo "$KEYSTORE_B64" | base64 -d > "$GITHUB_WORKSPACE/android/noor-release.jks"
           {
             echo "storePassword=$STORE_PASSWORD"
             echo "keyPassword=$KEY_PASSWORD"
             echo "keyAlias=$KEY_ALIAS"
-            echo "storeFile=$GITHUB_WORKSPACE/android/nebula-release.jks"
+            echo "storeFile=$GITHUB_WORKSPACE/android/noor-release.jks"
           } > "$GITHUB_WORKSPACE/android/key.properties"
           echo "signed=true" >> "$GITHUB_OUTPUT"
 
@@ -93,20 +93,24 @@ jobs:
 
       - name: Build release APK
         run: |
+          # The app shows these in Settings → About (version, build, commit).
           flutter build apk --release \
             --build-name="${{ steps.ver.outputs.name }}" \
-            --build-number="${{ steps.ver.outputs.number }}"
-          cp build/app/outputs/flutter-apk/app-release.apk nebula.apk
-          sha256sum nebula.apk | tee nebula.apk.sha256
-          ls -lh nebula.apk
+            --build-number="${{ steps.ver.outputs.number }}" \
+            --dart-define=NOOR_VERSION="${{ steps.ver.outputs.name }}" \
+            --dart-define=NOOR_BUILD="${{ steps.ver.outputs.number }}" \
+            --dart-define=NOOR_COMMIT="${GITHUB_SHA::7}"
+          cp build/app/outputs/flutter-apk/app-release.apk noor.apk
+          sha256sum noor.apk | tee noor.apk.sha256
+          ls -lh noor.apk
 
       - name: Keep the APK as a workflow artifact
         uses: actions/upload-artifact@v4
         with:
-          name: nebula-apk
+          name: noor-apk
           path: |
-            nebula.apk
-            nebula.apk.sha256
+            noor.apk
+            noor.apk.sha256
           retention-days: 14
 
       # ── Publish ────────────────────────────────────────────────────────────
@@ -115,8 +119,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" nebula.apk nebula.apk.sha256 \
-            --title "Nebula ${GITHUB_REF_NAME}" \
+          gh release create "$GITHUB_REF_NAME" noor.apk noor.apk.sha256 \
+            --title "Noor ${GITHUB_REF_NAME}" \
             --generate-notes \
             --verify-tag
 
@@ -131,19 +135,19 @@ jobs:
             echo "Newest build from \`${GITHUB_REF_NAME}\` @ \`${SHORT}\` (build #${{ steps.ver.outputs.number }})."
             echo
             if [ "$SIGNED" = "true" ]; then
-              echo "Signed with the Nebula release key: installs as an update over earlier builds."
+              echo "Signed with the Noor release key: installs as an update over earlier builds."
             else
-              echo "**Signed with a throwaway debug key.** Uninstall any earlier Nebula before installing this one."
+              echo "**Signed with a throwaway debug key.** Uninstall any earlier Noor (or Nebula) before installing this one."
             fi
             echo
-            echo "SHA-256: \`$(cut -d' ' -f1 nebula.apk.sha256)\`"
+            echo "SHA-256: \`$(cut -d' ' -f1 noor.apk.sha256)\`"
           } > notes.md
           # Each build is its own release (build-<number>), marked "latest", so
-          #   https://github.com/<owner>/<repo>/releases/latest/download/nebula.apk
+          #   https://github.com/<owner>/<repo>/releases/latest/download/noor.apk
           # always serves the newest APK. This works with "immutable releases"
           # turned on (a release tag can never be reused, so none is).
           TAG="build-${{ steps.ver.outputs.number }}"
-          gh release create "$TAG" nebula.apk nebula.apk.sha256 \
+          gh release create "$TAG" noor.apk noor.apk.sha256 \
             --latest \
             --target "$GITHUB_SHA" \
             --title "Noor build #${{ steps.ver.outputs.number }} (${SHORT})" \

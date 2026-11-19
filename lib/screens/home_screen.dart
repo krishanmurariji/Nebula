@@ -1,4 +1,5 @@
 import 'dart:math';
+import '../providers/gesture_settings_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -7,15 +8,17 @@ import '../providers/player_provider.dart';
 import '../providers/library_provider.dart';
 import '../providers/last_played_provider.dart';
 import '../providers/local_music_provider.dart';
+import '../providers/home_order_provider.dart';
 import '../providers/theme_provider.dart';
 import 'mini_player.dart';
 import 'search_screen.dart';
+import 'settings_screen.dart';
+import '../widgets/search_filter_menu.dart';
 import '../providers/search_provider.dart';
 import '../theme/noor_palette.dart';
 import '../theme/noor_artwork.dart';
 import '../theme/noor_song_card.dart';
 import '../theme/ripple_ring_clipper.dart';
-import '../theme/noor_widgets.dart';
 import '../widgets/song_row.dart';
 import '../widgets/offline_pill.dart';
 import '../theme/noor_watermark.dart';
@@ -33,23 +36,28 @@ class HomeCategory {
   final List<Song> songs;
 }
 
-/// The Home slider: My Favorites, My History and My Music are always there
-/// (even when empty); every playlist follows.
+/// The Home slider: My History, My Favorites and My Music are always there
+/// (even when empty); every playlist follows. [order] is the user's own
+/// arrangement (hold a card and drag), if any.
 List<HomeCategory> homeCategories({
   required List<Song> liked,
   required List<Song> history,
   required List<Song> onDevice,
   required List<Playlist> playlists,
+  List<String> order = const [],
 }) {
   final seen = <String>{};
   final distinctHistory = history.where((s) => seen.add(s.videoId)).toList();
-  return [
-    HomeCategory('fav', 'My Favorites', liked),
+  return applyHomeOrder<HomeCategory>([
     HomeCategory('hist', 'My History', distinctHistory),
+    HomeCategory('fav', 'My Favorites', liked),
     HomeCategory('music', 'My Music', onDevice),
     for (final p in playlists) HomeCategory(p.id, p.name, p.songs),
-  ];
+  ], (c) => c.id, order);
 }
+
+/// The three cards that are always there (the rest are playlists).
+const kFixedHomeCards = {'hist', 'fav', 'music'};
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -81,6 +89,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     Future.delayed(const Duration(milliseconds: 280), () {
       if (mounted && _searching) _queryFocus.requestFocus();
     });
+  }
+
+  void _openSettings() {
+    HapticFeedback.selectionClick();
+    Navigator.of(context)
+        .push(MaterialPageRoute(builder: (_) => const SettingsScreen()));
   }
 
   void _closeSearch() {
@@ -125,14 +139,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   /// Swipe down on the (non-scrolling) top of Home opens search. (The
   /// player opens from the bottom card: tap it or swipe it up.)
   void _onTopVerticalSwipe(DragEndDetails d) {
+    if (!_swipeSearchOn) return;
     if ((d.primaryVelocity ?? 0) > 300) _openSearch();
   }
+
+  /// "Swipe down on Home opens search" (Settings → Gestures).
+  bool get _swipeSearchOn =>
+      ref.read(gestureOnProvider(NoorGesture.homeSwipeDownSearch));
 
   /// Pulling the song list down past its top opens search.
   bool _onListScroll(ScrollNotification n) {
     if (n is ScrollUpdateNotification &&
         n.dragDetails != null &&
         n.metrics.pixels < -80 &&
+        _swipeSearchOn &&
         !_pullFired &&
         !_searching) {
       _pullFired = true;
@@ -177,6 +197,210 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     }
   }
 
+  // ── Arranging the slider ───────────────────────────────────────────────
+
+  /// True while the cards are laid out side by side to be dragged.
+  bool _arranging = false;
+
+  /// The order being arranged (ids), saved when a drag ends.
+  List<String> _arrangeOrder = const [];
+
+  /// The card being dragged, if any.
+  String? _draggingId;
+
+  void _startArranging(List<HomeCategory> cats) {
+    HapticFeedback.mediumImpact();
+    setState(() {
+      _arranging = true;
+      _arrangeOrder = [for (final c in cats) c.id];
+    });
+  }
+
+  void _stopArranging() {
+    setState(() {
+      _arranging = false;
+      _draggingId = null;
+    });
+  }
+
+  /// Moves [id] to where [target] is, as the dragged card passes over it.
+  void _moveCard(String id, String target) {
+    final from = _arrangeOrder.indexOf(id);
+    final to = _arrangeOrder.indexOf(target);
+    if (from < 0 || to < 0 || from == to) return;
+    HapticFeedback.selectionClick();
+    setState(() {
+      _arrangeOrder = [..._arrangeOrder]
+        ..removeAt(from)
+        ..insert(to, id);
+    });
+  }
+
+  void _dragEnded() {
+    setState(() => _draggingId = null);
+    ref.read(homeOrderProvider.notifier).set(_arrangeOrder);
+  }
+
+  Future<void> _dropOnBin(HomeCategory c) async {
+    setState(() => _draggingId = null);
+    await _confirmDeletePlaylist(c);
+    if (!mounted) return;
+    final left = _arrangeOrder.where((id) => id != c.id).toList();
+    if (ref.read(playlistProvider).every((p) => p.id != c.id)) {
+      setState(() => _arrangeOrder = left);
+      ref.read(homeOrderProvider.notifier).set(left);
+    }
+  }
+
+  /// The slider while arranging: every card side by side. Hold one and
+  /// drag it; a playlist can also be dropped on the bin that appears.
+  Widget _arrangeArea(List<HomeCategory> cats, NoorTheme t) {
+    final byId = {for (final c in cats) c.id: c};
+    final order = [
+      for (final id in _arrangeOrder)
+        if (byId.containsKey(id)) id,
+      for (final c in cats)
+        if (!_arrangeOrder.contains(c.id)) c.id,
+    ];
+    final draggingPlaylist =
+        _draggingId != null && !kFixedHomeCards.contains(_draggingId);
+
+    Widget tile(HomeCategory c, {bool lifted = false}) => SizedBox(
+          width: 86,
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            SizedBox(
+              width: 76,
+              height: 96,
+              child: Transform.scale(
+                scale: lifted ? 1.08 : 1,
+                child: _CategoryCard(
+                    icon: _iconFor(c.id), artUrl: _artFor(c), active: true),
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(c.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                    color: t.ac, fontSize: 11.5, fontWeight: FontWeight.w600)),
+          ]),
+        );
+
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _stopArranging();
+      },
+      child: SizedBox(
+        height: 196,
+        child: Column(children: [
+          SizedBox(
+            height: 130,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+              children: [
+                for (final id in order)
+                  DragTarget<String>(
+                    key: ValueKey('arrange_$id'),
+                    onWillAcceptWithDetails: (d) {
+                      _moveCard(d.data, id);
+                      return d.data != id;
+                    },
+                    builder: (context, _, __) => LongPressDraggable<String>(
+                      data: id,
+                      delay: const Duration(milliseconds: 180),
+                      hapticFeedbackOnStart: true,
+                      onDragStarted: () => setState(() => _draggingId = id),
+                      onDragEnd: (_) => _dragEnded(),
+                      onDraggableCanceled: (_, __) => _dragEnded(),
+                      feedback: Material(
+                          type: MaterialType.transparency,
+                          child: tile(byId[id]!, lifted: true)),
+                      childWhenDragging:
+                          Opacity(opacity: 0.25, child: tile(byId[id]!)),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 3),
+                        child: tile(byId[id]!),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          SizedBox(
+            height: 62,
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 200),
+              child: draggingPlaylist
+                  // The bin: only for playlists.
+                  ? DragTarget<String>(
+                      key: const ValueKey('bin'),
+                      onWillAcceptWithDetails: (d) =>
+                          !kFixedHomeCards.contains(d.data),
+                      onAcceptWithDetails: (d) {
+                        final c = byId[d.data];
+                        if (c != null) _dropOnBin(c);
+                      },
+                      builder: (context, hover, _) => AnimatedContainer(
+                        duration: const Duration(milliseconds: 160),
+                        margin: const EdgeInsets.fromLTRB(24, 6, 24, 6),
+                        padding: const EdgeInsets.symmetric(horizontal: 14),
+                        decoration: BoxDecoration(
+                          color: hover.isNotEmpty ? t.ac : t.bg,
+                          borderRadius: BorderRadius.circular(26),
+                          border: Border.all(color: t.ac, width: 1),
+                        ),
+                        alignment: Alignment.center,
+                        child: Row(mainAxisSize: MainAxisSize.min, children: [
+                          Icon(Icons.delete_outline_rounded,
+                              color: hover.isNotEmpty ? t.bg : t.ac),
+                          const SizedBox(width: 8),
+                          Flexible(
+                            child: Text('Drop here to delete the playlist',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                    color: hover.isNotEmpty ? t.bg : t.ac,
+                                    fontWeight: FontWeight.w600)),
+                          ),
+                        ]),
+                      ),
+                    )
+                  : Padding(
+                      key: const ValueKey('hint'),
+                      padding: const EdgeInsets.fromLTRB(20, 6, 14, 6),
+                      child: Row(children: [
+                        Expanded(
+                          child: Text(
+                              'Hold a card and drag it. Drop a playlist on the bin to delete it.',
+                              style: TextStyle(
+                                  color: t.mute, fontSize: 12, height: 1.3)),
+                        ),
+                        const SizedBox(width: 10),
+                        TextButton(
+                          onPressed: _stopArranging,
+                          style: TextButton.styleFrom(
+                            foregroundColor: t.ac,
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(20),
+                                side: BorderSide(color: t.ac, width: 0.8)),
+                            padding: const EdgeInsets.symmetric(horizontal: 18),
+                          ),
+                          child: const Text('Done',
+                              style: TextStyle(fontWeight: FontWeight.w700)),
+                        ),
+                      ]),
+                    ),
+            ),
+          ),
+        ]),
+      ),
+    );
+  }
+
   void _play(Song song, List<Song> queue) {
     HapticFeedback.lightImpact();
     final ps = ref.read(playerProvider);
@@ -207,7 +431,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         liked: liked,
         history: history,
         onDevice: onDevice,
-        playlists: playlists);
+        playlists: playlists,
+        order: ref.watch(homeOrderProvider));
 
     // Start on the first card that has songs; keep the user's own choice.
     var index = cats.indexWhere((c) => c.id == _selectedId);
@@ -252,13 +477,25 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     height: 44,
                     child: Row(
                       children: [
-                        const NoorWordmark(height: 30),
-                        const SizedBox(width: 12),
+                        const NoorLogo(),
+                        const SizedBox(width: 10),
                         Expanded(child: _searchField(t)),
                         const SizedBox(width: 8),
                         NoorSearchButton(
                             open: _searching,
                             onTap: _searching ? _closeSearch : _openSearch),
+                        const SizedBox(width: 8),
+                        // Home: Settings. While searching: the result filters.
+                        Builder(
+                            builder: (b) => NoorSettingsButton(
+                                label:
+                                    _searching ? 'Search filters' : 'Settings',
+                                onTap: () => _searching
+                                    ? (() {
+                                        _queryFocus.unfocus();
+                                        showSearchFilters(context, anchor: b);
+                                      })()
+                                    : _openSettings())),
                       ],
                     ),
                   ),
@@ -322,81 +559,91 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                   // ── Slider ────────────────────────────────────────────────
                                   // The top of Home does not scroll, so it takes the swipe
                                   // down that opens search.
-                                  GestureDetector(
-                                    behavior: HitTestBehavior.translucent,
-                                    onVerticalDragEnd: _onTopVerticalSwipe,
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        SizedBox(
-                                          height: 168,
-                                          child: GestureDetector(
-                                            onHorizontalDragEnd: (d) {
-                                              final v = d.primaryVelocity ?? 0;
-                                              if (v < -200) {
-                                                if (index < cats.length - 1) {
-                                                  _select(cats[index + 1].id);
+                                  if (_arranging)
+                                    _arrangeArea(cats, t)
+                                  else
+                                    GestureDetector(
+                                      behavior: HitTestBehavior.translucent,
+                                      onVerticalDragEnd: _onTopVerticalSwipe,
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          SizedBox(
+                                            height: 168,
+                                            child: GestureDetector(
+                                              onHorizontalDragEnd: (d) {
+                                                final v =
+                                                    d.primaryVelocity ?? 0;
+                                                if (v < -200) {
+                                                  if (index < cats.length - 1) {
+                                                    _select(cats[index + 1].id);
+                                                  }
+                                                } else if (v > 200) {
+                                                  if (index > 0) {
+                                                    _select(cats[index - 1].id);
+                                                  } else {
+                                                    // before the first card
+                                                    if (_swipeSearchOn)
+                                                      _openSearch();
+                                                  }
                                                 }
-                                              } else if (v > 200) {
-                                                if (index > 0) {
-                                                  _select(cats[index - 1].id);
-                                                } else {
-                                                  _openSearch(); // before the first card
-                                                }
-                                              }
-                                            },
-                                            child: ListView.builder(
-                                              scrollDirection: Axis.horizontal,
-                                              physics:
-                                                  const NeverScrollableScrollPhysics(),
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                      horizontal: 12),
-                                              itemCount: cats.length,
-                                              itemBuilder: (context, i) {
-                                                final active = i == index;
-                                                final adjacent =
-                                                    (i - index).abs() == 1;
-                                                return GestureDetector(
-                                                  onTap: () =>
-                                                      _select(cats[i].id),
-                                                  onLongPress: () =>
-                                                      _confirmDeletePlaylist(
-                                                          cats[i]),
-                                                  child: AnimatedContainer(
-                                                    duration: const Duration(
-                                                        milliseconds: 500),
-                                                    curve: Curves.easeOutCubic,
-                                                    width: active
-                                                        ? activeWidth
-                                                        : (adjacent ? 48 : 0),
-                                                    margin: EdgeInsets.symmetric(
-                                                        horizontal:
-                                                            (active || adjacent)
-                                                                ? 6
-                                                                : 0,
-                                                        vertical: 8),
-                                                    child: (active || adjacent)
-                                                        ? _CategoryCard(
-                                                            icon: _iconFor(
-                                                                cats[i].id),
-                                                            artUrl: _artFor(
-                                                                cats[i]),
-                                                            active: active)
-                                                        : const SizedBox
-                                                            .shrink(),
-                                                  ),
-                                                );
                                               },
+                                              child: ListView.builder(
+                                                scrollDirection:
+                                                    Axis.horizontal,
+                                                physics:
+                                                    const NeverScrollableScrollPhysics(),
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                        horizontal: 12),
+                                                itemCount: cats.length,
+                                                itemBuilder: (context, i) {
+                                                  final active = i == index;
+                                                  final adjacent =
+                                                      (i - index).abs() == 1;
+                                                  return GestureDetector(
+                                                    onTap: () =>
+                                                        _select(cats[i].id),
+                                                    // Hold: arrange the cards (and
+                                                    // drop a playlist on the bin).
+                                                    onLongPress: () =>
+                                                        _startArranging(cats),
+                                                    child: AnimatedContainer(
+                                                      duration: const Duration(
+                                                          milliseconds: 500),
+                                                      curve:
+                                                          Curves.easeOutCubic,
+                                                      width: active
+                                                          ? activeWidth
+                                                          : (adjacent ? 48 : 0),
+                                                      margin: EdgeInsets.symmetric(
+                                                          horizontal: (active ||
+                                                                  adjacent)
+                                                              ? 6
+                                                              : 0,
+                                                          vertical: 8),
+                                                      child: (active ||
+                                                              adjacent)
+                                                          ? _CategoryCard(
+                                                              icon: _iconFor(
+                                                                  cats[i].id),
+                                                              artUrl: _artFor(
+                                                                  cats[i]),
+                                                              active: active)
+                                                          : const SizedBox
+                                                              .shrink(),
+                                                    ),
+                                                  );
+                                                },
+                                              ),
                                             ),
                                           ),
-                                        ),
-                                        NoorLinedLabel(current.title),
-                                        const SizedBox(height: 8),
-                                      ],
+                                          NoorLinedLabel(current.title),
+                                          const SizedBox(height: 8),
+                                        ],
+                                      ),
                                     ),
-                                  ),
 
                                   // ── Songs (ring-wipe reveal when the card changes) ─────────
                                   Expanded(

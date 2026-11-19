@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:nebula_music_player/services/playback_failure.dart';
+import 'package:noor/services/playback_failure.dart';
 
 class VideoUnavailableException implements Exception {}
 

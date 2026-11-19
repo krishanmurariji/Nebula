@@ -1,8 +1,8 @@
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:nebula_music_player/services/playback_failure.dart';
-import 'package:nebula_music_player/services/self_test.dart';
+import 'package:noor/services/playback_failure.dart';
+import 'package:noor/services/self_test.dart';
 
 import 'support/acquirer_rig.dart';
 

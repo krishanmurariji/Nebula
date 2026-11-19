@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../providers/gesture_settings_provider.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/song.dart';
@@ -8,6 +9,7 @@ import '../providers/player_provider.dart';
 import '../providers/queue_rules.dart';
 import '../screens/player_screen.dart';
 import '../theme/noor_disc.dart';
+import '../theme/noor_gap_border.dart';
 import '../theme/noor_palette.dart';
 import '../theme/noor_play_pause.dart';
 import '../theme/noor_song_card.dart';
@@ -146,7 +148,9 @@ class _MiniPlayerState extends ConsumerState<MiniPlayer>
     }
 
     final subtitle = loading
-        ? 'Loading…'
+        ? (ps.cooldownSeconds > 0
+            ? 'YouTube busy · plays in ${ps.cooldownSeconds}s'
+            : 'Loading…')
         : isError
             ? (ps.cooldownSeconds > 0
                 ? 'Retry in ${ps.cooldownSeconds}s…'
@@ -169,12 +173,23 @@ class _MiniPlayerState extends ConsumerState<MiniPlayer>
               HapticFeedback.mediumImpact();
               ref.read(likedProvider.notifier).toggle(song);
             },
-            onHorizontalDragUpdate: _dragUpdate,
-            onHorizontalDragEnd: (d) => _dragEnd(d, song),
+            // Each gesture can be switched off in Settings (the buttons
+            // and a tap still do the same).
+            onHorizontalDragUpdate:
+                ref.watch(gestureOnProvider(NoorGesture.bottomCardSwipe))
+                    ? _dragUpdate
+                    : null,
+            onHorizontalDragEnd:
+                ref.watch(gestureOnProvider(NoorGesture.bottomCardSwipe))
+                    ? (d) => _dragEnd(d, song)
+                    : null,
             // Swipe up: the full player.
-            onVerticalDragEnd: (d) {
-              if ((d.primaryVelocity ?? 0) < -300) _openPlayer();
-            },
+            onVerticalDragEnd:
+                ref.watch(gestureOnProvider(NoorGesture.bottomCardSwipeUp))
+                    ? (d) {
+                        if ((d.primaryVelocity ?? 0) < -300) _openPlayer();
+                      }
+                    : null,
             child: AnimatedBuilder(
               animation: _dx,
               builder: (context, card) {
@@ -202,88 +217,93 @@ class _MiniPlayerState extends ConsumerState<MiniPlayer>
                   ],
                 );
               },
-              child: Container(
-                height: height,
-                decoration: BoxDecoration(
-                  color: t.bg,
-                  borderRadius: BorderRadius.circular(kNoorCardRadius),
-                  border: Border.all(color: t.ac, width: 1),
-                  boxShadow: [
-                    BoxShadow(
-                        color: t.ac.withOpacity(0.10),
-                        blurRadius: 18,
-                        offset: const Offset(0, 6)),
-                  ],
-                ),
-                child: Row(
-                  children: [
-                    // Record + tone arm. Paused: the record sits half outside
-                    // the card's left end.
-                    SizedBox(
-                      width: 78,
-                      height: height,
-                      child: Stack(
-                        clipBehavior: Clip.none,
-                        children: [
-                          AnimatedPositioned(
-                            duration: const Duration(milliseconds: 550),
-                            curve: Curves.easeInOutCubic,
-                            left: playing ? 5 : -disc / 2,
-                            top: (height - 2 - disc) / 2,
-                            child: RotationTransition(
-                              turns: _spin,
-                              child:
-                                  NoorDisc(url: song.thumbnailUrl, size: disc),
-                            ),
-                          ),
-                          Positioned(
-                            top: 2,
-                            left: 40,
-                            child: AnimatedRotation(
-                              turns: playing
-                                  ? 0.0
-                                  : 0.12, // lifts up, off the record
-                              duration: const Duration(milliseconds: 500),
-                              curve: Curves.easeOutBack,
-                              alignment: Alignment.topRight,
-                              child: SizedBox(
-                                width: 26,
-                                height: 36,
-                                child: CustomPaint(painter: _ArmPainter(t.ac)),
+              child: CustomPaint(
+                  foregroundPainter: NoorGapBorderPainter(
+                      color: t.ac, radius: kNoorCardRadius, gap: 0, dot: 0),
+                  child: Container(
+                    height: height,
+                    decoration: BoxDecoration(
+                      color: t.bg,
+                      borderRadius: BorderRadius.circular(kNoorCardRadius),
+                      boxShadow: [
+                        BoxShadow(
+                            color: t.ac.withOpacity(0.10),
+                            blurRadius: 18,
+                            offset: const Offset(0, 6)),
+                      ],
+                    ),
+                    child: Row(
+                      children: [
+                        // Record + tone arm. Paused: the record sits half outside
+                        // the card's left end.
+                        SizedBox(
+                          width: 78,
+                          height: height,
+                          child: Stack(
+                            clipBehavior: Clip.none,
+                            children: [
+                              AnimatedPositioned(
+                                duration: const Duration(milliseconds: 550),
+                                curve: Curves.easeInOutCubic,
+                                left: playing ? 5 : -disc / 2,
+                                top: (height - 2 - disc) / 2,
+                                child: RotationTransition(
+                                  turns: _spin,
+                                  child: NoorDisc(
+                                      url: song.thumbnailUrl, size: disc),
+                                ),
                               ),
-                            ),
+                              Positioned(
+                                top: 2,
+                                left: 40,
+                                child: AnimatedRotation(
+                                  turns: playing
+                                      ? 0.0
+                                      : 0.12, // lifts up, off the record
+                                  duration: const Duration(milliseconds: 500),
+                                  curve: Curves.easeOutBack,
+                                  alignment: Alignment.topRight,
+                                  child: SizedBox(
+                                    width: 26,
+                                    height: 36,
+                                    child:
+                                        CustomPaint(painter: _ArmPainter(t.ac)),
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
-                        ],
-                      ),
-                    ),
-                    Expanded(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          AnimatedSwitcher(
-                            duration: const Duration(milliseconds: 250),
-                            child: Text(song.title,
-                                key: ValueKey(song.videoId),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: noorSongTitleStyle(t.ac, size: 19)),
+                        ),
+                        Expanded(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              AnimatedSwitcher(
+                                duration: const Duration(milliseconds: 250),
+                                child: Text(song.title,
+                                    key: ValueKey(song.videoId),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: noorSongTitleStyle(t.ac, size: 19)),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(subtitle,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: noorArtistStyle(t.mute)),
+                            ],
                           ),
-                          const SizedBox(height: 2),
-                          Text(subtitle,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: noorArtistStyle(t.mute)),
-                        ],
-                      ),
+                        ),
+                        const SizedBox(width: 8),
+                        NoorPlayPauseButton(
+                            playing: playing,
+                            loading: loading,
+                            onTap: playPause),
+                        const SizedBox(width: 12),
+                      ],
                     ),
-                    const SizedBox(width: 8),
-                    NoorPlayPauseButton(
-                        playing: playing, loading: loading, onTap: playPause),
-                    const SizedBox(width: 12),
-                  ],
-                ),
-              ),
+                  )),
             ),
           );
         }),
@@ -305,49 +325,52 @@ class _PeekCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = NoorTheme.of(context);
     return IgnorePointer(
-      child: Container(
-        height: height,
-        decoration: BoxDecoration(
-          color: t.bg,
-          borderRadius: BorderRadius.circular(kNoorCardRadius),
-          border: Border.all(color: t.ac, width: 1),
-        ),
-        child: Row(
-          children: [
-            SizedBox(
-              width: 78,
-              height: height,
-              child: Stack(clipBehavior: Clip.none, children: [
-                Positioned(
-                  left: -disc / 2,
-                  top: (height - 2 - disc) / 2,
-                  child: NoorDisc(url: song.thumbnailUrl, size: disc),
+      child: CustomPaint(
+          foregroundPainter: NoorGapBorderPainter(
+              color: t.ac, radius: kNoorCardRadius, gap: 0, dot: 0),
+          child: Container(
+            height: height,
+            decoration: BoxDecoration(
+              color: t.bg,
+              borderRadius: BorderRadius.circular(kNoorCardRadius),
+            ),
+            child: Row(
+              children: [
+                SizedBox(
+                  width: 78,
+                  height: height,
+                  child: Stack(clipBehavior: Clip.none, children: [
+                    Positioned(
+                      left: -disc / 2,
+                      top: (height - 2 - disc) / 2,
+                      child: NoorDisc(url: song.thumbnailUrl, size: disc),
+                    ),
+                  ]),
                 ),
-              ]),
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(song.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: noorSongTitleStyle(t.ac, size: 19)),
+                      const SizedBox(height: 2),
+                      Text(song.artist,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: noorArtistStyle(t.mute)),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                NoorPlayPauseButton(
+                    playing: false, loading: false, onTap: () {}),
+                const SizedBox(width: 12),
+              ],
             ),
-            Expanded(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(song.title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: noorSongTitleStyle(t.ac, size: 19)),
-                  const SizedBox(height: 2),
-                  Text(song.artist,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: noorArtistStyle(t.mute)),
-                ],
-              ),
-            ),
-            const SizedBox(width: 8),
-            NoorPlayPauseButton(playing: false, loading: false, onTap: () {}),
-            const SizedBox(width: 12),
-          ],
-        ),
-      ),
+          )),
     );
   }
 }

@@ -1,6 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:nebula_music_player/services/song_details.dart';
+import 'package:noor/services/song_details.dart';
 
 class _Fake implements SongDetailsSource {
   int calls = 0;

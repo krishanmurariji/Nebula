@@ -11,7 +11,8 @@ import '../services/app_log.dart';
 enum LocalAccess { unknown, granted, denied, blocked, unsupported }
 
 class LocalMusicState {
-  const LocalMusicState({this.access = LocalAccess.unknown, this.songs = const []});
+  const LocalMusicState(
+      {this.access = LocalAccess.unknown, this.songs = const []});
   final LocalAccess access;
   final List<Song> songs;
 }
@@ -86,7 +87,8 @@ class LocalMusicNotifier extends StateNotifier<LocalMusicState>
 
     final audio = await status(Permission.audio);
     final storage = await status(Permission.storage);
-    nlog('[N] local music: access audio=${audio?.name} storage=${storage?.name}');
+    nlog(
+        '[N] local music: access audio=${audio?.name} storage=${storage?.name}');
     return (audio?.isGranted ?? false) ||
         (audio?.isLimited ?? false) ||
         (storage?.isGranted ?? false);
@@ -141,7 +143,8 @@ class LocalMusicNotifier extends StateNotifier<LocalMusicState>
     } catch (e) {
       nlog('[N] local music: could not read the library: $e');
       if (mounted) {
-        state = LocalMusicState(access: LocalAccess.granted, songs: state.songs);
+        state =
+            LocalMusicState(access: LocalAccess.granted, songs: state.songs);
       }
     }
   }
@@ -160,7 +163,8 @@ Future<Uint8List?> localArtwork(String url) async {
   Uint8List? bytes;
   if (id != null) {
     try {
-      bytes = await localMusicChannel.invokeMethod<Uint8List>('art', {'id': id});
+      bytes =
+          await localMusicChannel.invokeMethod<Uint8List>('art', {'id': id});
     } catch (_) {/* no art */}
   }
   if (_artCache.length > 300) _artCache.clear();

@@ -2,7 +2,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:nebula_music_player/services/audio_cache.dart';
+import 'package:noor/services/audio_cache.dart';
 
 Uint8List _bytes(int n) => Uint8List(n);
 

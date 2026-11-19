@@ -8,13 +8,15 @@ enum NebulaPlayerStatus { idle, loading, playing, paused, error }
 
 class NebulaPlayerState {
   final Song? song;
-  final Song? pendingSong;   // Set instantly on tap — drives UI before audio confirms
+  final Song?
+      pendingSong; // Set instantly on tap — drives UI before audio confirms
   final NebulaPlayerStatus status;
   final String? error;
   final List<Song> queue;
   final int queueIndex;
-  final int cooldownSeconds; // Seconds until auto-retry fires (0 = not counting down)
-  final String? notice;      // Transient message, e.g. "Skipped unavailable song"
+  final int
+      cooldownSeconds; // Seconds until auto-retry fires (0 = not counting down)
+  final String? notice; // Transient message, e.g. "Skipped unavailable song"
 
   const NebulaPlayerState({
     this.song,
@@ -65,7 +67,6 @@ class PlayerNotifier extends StateNotifier<NebulaPlayerState> {
   // only after such a countdown, and only once per failure, so a song that
   // keeps failing can never turn into a tight retry loop (the handler already
   // does its own bounded retries and skipping).
-  bool _sawCooldown = false;
 
   PlayerNotifier(this._handler) : super(const NebulaPlayerState()) {
     _subs.add(_handler.playbackState.listen(_onPlayback));
@@ -101,9 +102,8 @@ class PlayerNotifier extends StateNotifier<NebulaPlayerState> {
         st = NebulaPlayerStatus.loading;
         break;
       case AudioProcessingState.ready:
-        st = ps.playing
-            ? NebulaPlayerStatus.playing
-            : NebulaPlayerStatus.paused;
+        st =
+            ps.playing ? NebulaPlayerStatus.playing : NebulaPlayerStatus.paused;
         break;
       case AudioProcessingState.error:
         st = NebulaPlayerStatus.error;
@@ -113,11 +113,13 @@ class PlayerNotifier extends StateNotifier<NebulaPlayerState> {
     }
 
     final handlerSong = _handler.currentSong ?? state.song;
-    final isNowActive = st == NebulaPlayerStatus.playing ||
-        st == NebulaPlayerStatus.paused;
+    final isNowActive =
+        st == NebulaPlayerStatus.playing || st == NebulaPlayerStatus.paused;
 
-    if (st == NebulaPlayerStatus.error) {
-      _startCooldownCountdown();
+    // Rate limited: count the seconds down, whether the song failed or is
+    // waiting to start by itself.
+    if (st == NebulaPlayerStatus.error || _handler.isWaitingForYoutube) {
+      if (_countdownTimer == null) _startCooldownCountdown();
     } else {
       _stopCooldownCountdown();
     }
@@ -145,14 +147,11 @@ class PlayerNotifier extends StateNotifier<NebulaPlayerState> {
     final secs = _handler.globalCooldownSeconds;
     state = state.copyWith(cooldownSeconds: secs);
 
-    if (secs > 0) {
-      _sawCooldown = true;
-    } else if (_sawCooldown && state.status == NebulaPlayerStatus.error) {
-      // Rate limit has expired: retry exactly once.
-      _sawCooldown = false;
-      _stopCooldownCountdown();
-      retryCurrentSong();
-    } else if (state.status != NebulaPlayerStatus.error) {
+    // Only shows the countdown: the audio handler itself starts the waiting
+    // song when YouTube's pause ends (and after giving up, play retries).
+    if (secs <= 0 ||
+        (state.status != NebulaPlayerStatus.error &&
+            !_handler.isWaitingForYoutube)) {
       _stopCooldownCountdown();
     }
   }
@@ -166,7 +165,7 @@ class PlayerNotifier extends StateNotifier<NebulaPlayerState> {
   // ── Public actions ────────────────────────────────────────────────────────
 
   Future<void> playSong(Song song, {List<Song>? queue}) async {
-    final q   = queue ?? [song];
+    final q = queue ?? [song];
     final idx = q.indexOf(song);
 
     _stopCooldownCountdown();
@@ -180,7 +179,6 @@ class PlayerNotifier extends StateNotifier<NebulaPlayerState> {
       cooldownSeconds: 0,
     );
 
-    _sawCooldown = false;
     try {
       await _handler.playSong(song, queue: q, index: idx < 0 ? 0 : idx);
     } catch (e) {
@@ -199,8 +197,7 @@ class PlayerNotifier extends StateNotifier<NebulaPlayerState> {
   Future<void> retryCurrentSong() async {
     final song = state.displaySong;
     if (song == null) return;
-    await playSong(song,
-        queue: state.queue.isNotEmpty ? state.queue : null);
+    await playSong(song, queue: state.queue.isNotEmpty ? state.queue : null);
   }
 
   /// The playing song was deleted: stop it and show nothing as playing.
@@ -230,11 +227,12 @@ class PlayerNotifier extends StateNotifier<NebulaPlayerState> {
   }
 
   Future<void> setVolume(double volume) async {
-    await _handler.player.setVolume(volume.isNaN ? 1.0 : volume.clamp(0.0, 1.0));
+    await _handler.player
+        .setVolume(volume.isNaN ? 1.0 : volume.clamp(0.0, 1.0));
   }
 
-  Future<void> skipNext()       async => _handler.skipToNext();
-  Future<void> skipPrevious()   async => _handler.skipToPrevious();
+  Future<void> skipNext() async => _handler.skipToNext();
+  Future<void> skipPrevious() async => _handler.skipToPrevious();
   Future<void> seek(Duration d) async => _handler.seek(d);
 
   @override

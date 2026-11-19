@@ -4,7 +4,7 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'package:nebula_music_player/services/webview_js_solver.dart';
+import 'package:noor/services/webview_js_solver.dart';
 import 'package:youtube_explode_dart/src/reverse_engineering/challenges/js_challenge.dart';
 
 class FakeHost implements JsHost {

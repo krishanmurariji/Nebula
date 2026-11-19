@@ -202,7 +202,6 @@ class _BackupSourcesDialogState extends State<_BackupSourcesDialog> {
   }
 }
 
-
 /// Runs the network check and shows a plain-language verdict. Results are also
 /// written to the log so they can be copied together with everything else.
 Future<void> _showNetworkCheck(BuildContext context) async {
@@ -255,12 +254,12 @@ Future<void> _showNetworkCheck(BuildContext context) async {
         ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close')),
+        TextButton(
+            onPressed: () => Navigator.pop(ctx), child: const Text('Close')),
       ],
     ),
   );
 }
-
 
 /// Runs the whole song pipeline on a known video and shows each stage.
 Future<void> _showSelfTest(BuildContext context, WidgetRef ref) async {
@@ -319,7 +318,8 @@ Future<void> _showSelfTest(BuildContext context, WidgetRef ref) async {
         ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close')),
+        TextButton(
+            onPressed: () => Navigator.pop(ctx), child: const Text('Close')),
       ],
     ),
   );

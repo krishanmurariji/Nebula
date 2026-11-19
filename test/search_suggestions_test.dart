@@ -3,17 +3,18 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:nebula_music_player/models/song.dart';
-import 'package:nebula_music_player/providers/connection_provider.dart';
-import 'package:nebula_music_player/providers/search_provider.dart';
-import 'package:nebula_music_player/providers/search_suggestions_provider.dart';
-import 'package:nebula_music_player/screens/home_screen.dart';
-import 'package:nebula_music_player/services/youtube_search_service.dart';
-import 'package:nebula_music_player/widgets/search_suggestions.dart';
+import 'package:noor/models/song.dart';
+import 'package:noor/providers/connection_provider.dart';
+import 'package:noor/providers/search_provider.dart';
+import 'package:noor/providers/search_suggestions_provider.dart';
+import 'package:noor/screens/home_screen.dart';
+import 'package:noor/services/youtube_search_service.dart';
+import 'package:noor/theme/noor_search_button.dart';
+import 'package:noor/widgets/search_suggestions.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'search_filter_test.dart' show FakePlayer;
-import 'package:nebula_music_player/providers/player_provider.dart';
+import 'package:noor/providers/player_provider.dart';
 
 class _Service implements YoutubeSearchService {
   final searched = <String>[];
@@ -145,7 +146,7 @@ void main() {
       ));
       container = ProviderScope.containerOf(t.element(find.byType(HomeScreen)));
       await settle(t);
-      await t.tap(find.text('Search'));
+      await t.tap(find.byType(NoorSearchButton));
       await settle(t);
     }
 

@@ -10,10 +10,10 @@ import '../theme/noor_song_card.dart';
 import '../theme/noor_widgets.dart';
 import '../theme/noor_watermark.dart';
 import '../widgets/search_filter_bar.dart';
+import '../widgets/search_filter_menu.dart';
 import '../widgets/search_suggestions.dart';
 import '../widgets/song_row.dart';
 import '../widgets/offline_pill.dart';
-import 'settings_screen.dart';
 import 'mini_player.dart';
 import '../theme/noor_search_button.dart';
 
@@ -47,7 +47,6 @@ class SearchPanel extends ConsumerWidget {
     final filter = ref.watch(searchFilterProvider);
     ref.watch(historyProvider); // keep it loaded: it becomes the queue
 
-    final official = search.results.where((s) => s.isOfficial).length;
     final label = switch (search.status) {
       SearchStatus.idle => 'Search',
       SearchStatus.loading => 'Searching…',
@@ -60,30 +59,10 @@ class SearchPanel extends ConsumerWidget {
         },
     };
 
-    final offline = search.status == SearchStatus.offline;
     final panel = Column(
       children: [
-        if (offline)
-          const Align(
-              alignment: Alignment.centerRight,
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(0, 2, 14, 6),
-                child: _SettingsButton(),
-              ))
-        else
-          SearchFilterBar(
-            filter: filter,
-            onChanged: (f) {
-              HapticFeedback.selectionClick();
-              ref.read(searchFilterProvider.notifier).set(f);
-            },
-            totalCount: search.results.length,
-            allCount: search.all.isEmpty ? null : search.all.length,
-            officialCount: official,
-            isDark: t.isDark,
-            trailing: const _SettingsButton(),
-          ),
-        const SizedBox(height: 6),
+        // The filters live in the pop-up of the settings button above.
+        const SizedBox(height: 2),
         NoorLinedLabel(label),
         const SizedBox(height: 6),
         Expanded(child: _body(context, ref, t, search, filter)),
@@ -228,39 +207,6 @@ class _Results extends ConsumerWidget {
   }
 }
 
-/// A small gear in an empty ring, beside the search filters: opens Settings.
-class _SettingsButton extends StatelessWidget {
-  const _SettingsButton();
-
-  @override
-  Widget build(BuildContext context) {
-    final t = NoorTheme.of(context);
-    return Semantics(
-      container: true,
-      button: true,
-      label: 'Settings',
-      excludeSemantics: true,
-      child: GestureDetector(
-        onTap: () {
-          HapticFeedback.selectionClick();
-          FocusScope.of(context).unfocus();
-          Navigator.of(context)
-              .push(MaterialPageRoute(builder: (_) => const SettingsScreen()));
-        },
-        child: Container(
-          width: 40,
-          height: 40,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            border: Border.all(color: t.ac, width: 0.8),
-          ),
-          child: Icon(Icons.settings_outlined, size: 19, color: t.ac),
-        ),
-      ),
-    );
-  }
-}
-
 /// Search as a page of its own, opened from the player's Search button, so
 /// back (or Cancel) returns to the player rather than to Home.
 class SearchPage extends ConsumerStatefulWidget {
@@ -310,8 +256,8 @@ class _SearchPageState extends ConsumerState<SearchPage> {
             child: SizedBox(
               height: 44,
               child: Row(children: [
-                const NoorWordmark(height: 30),
-                const SizedBox(width: 12),
+                const NoorLogo(),
+                const SizedBox(width: 10),
                 Expanded(
                   child: Container(
                     height: 40,
@@ -347,6 +293,14 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                 const SizedBox(width: 8),
                 NoorSearchButton(
                     open: true, onTap: () => Navigator.of(context).maybePop()),
+                const SizedBox(width: 8),
+                Builder(
+                    builder: (b) => NoorSettingsButton(
+                        label: 'Search filters',
+                        onTap: () {
+                          _focus.unfocus();
+                          showSearchFilters(context, anchor: b);
+                        })),
               ]),
             ),
           ),

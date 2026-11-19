@@ -1,4 +1,5 @@
 import 'dart:math';
+import '../providers/gesture_settings_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -16,6 +17,7 @@ import '../theme/noor_song_card.dart';
 import '../theme/noor_turntable.dart';
 import '../theme/noor_widgets.dart';
 import 'search_screen.dart';
+import 'settings_screen.dart';
 import '../widgets/offline_pill.dart';
 import 'upnext_screen.dart';
 
@@ -360,6 +362,8 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
   Widget build(BuildContext context) {
     final ps = ref.watch(playerProvider);
     final song = ps.displaySong;
+    // "Swipe the record" can be switched off in Settings → Gestures.
+    final swipeOn = ref.watch(gestureOnProvider(NoorGesture.playerRecordSwipe));
     final t = NoorTheme.of(context);
     final liked = song != null && ref.watch(isLikedProvider(song.videoId));
     final playlists = ref.watch(playlistProvider);
@@ -375,7 +379,9 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
     final bottomPad = MediaQuery.of(context).padding.bottom;
 
     final status = loading || _swapping
-        ? 'Loading…'
+        ? (loading && ps.cooldownSeconds > 0
+            ? 'YouTube is busy for your network · plays in ${ps.cooldownSeconds}s'
+            : 'Loading…')
         : isError
             ? (ps.cooldownSeconds > 0
                 ? 'Retry in ${ps.cooldownSeconds}s…'
@@ -410,9 +416,14 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
                     child: SizedBox(
                       height: 44,
                       child: Row(children: [
-                        const NoorWordmark(height: 30),
+                        const NoorLogo(),
                         const Spacer(),
                         NoorSearchButton(open: false, onTap: _goSearch),
+                        const SizedBox(width: 8),
+                        NoorSettingsButton(
+                            onTap: () => Navigator.of(context).push(
+                                MaterialPageRoute(
+                                    builder: (_) => const SettingsScreen()))),
                       ]),
                     ),
                   ),
@@ -428,9 +439,9 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
                           onDoubleTap: song == null
                               ? null
                               : () => _toggleLike(song, liked),
-                          onHorizontalDragStart: _dragStart,
-                          onHorizontalDragUpdate: _dragUpdate,
-                          onHorizontalDragEnd: _dragEnd,
+                          onHorizontalDragStart: swipeOn ? _dragStart : null,
+                          onHorizontalDragUpdate: swipeOn ? _dragUpdate : null,
+                          onHorizontalDragEnd: swipeOn ? _dragEnd : null,
                           onHorizontalDragCancel: () {
                             if (_dragging) {
                               _dragging = false;

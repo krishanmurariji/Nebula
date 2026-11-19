@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:nebula_music_player/app.dart';
-import 'package:nebula_music_player/models/song.dart';
-import 'package:nebula_music_player/widgets/song_tile.dart';
+import 'package:noor/app.dart';
+import 'package:noor/models/song.dart';
+import 'package:noor/widgets/song_tile.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// A spread of real device sizes (logical pixels) and font scales.
