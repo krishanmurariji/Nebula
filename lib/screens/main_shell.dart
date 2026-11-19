@@ -22,7 +22,6 @@ class MainShell extends ConsumerStatefulWidget {
 }
 
 class _MainShellState extends ConsumerState<MainShell> {
-
   @override
   void initState() {
     super.initState();

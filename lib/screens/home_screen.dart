@@ -1,4 +1,5 @@
 import 'dart:math';
+import '../providers/gesture_settings_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -132,14 +133,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   /// Swipe down on the (non-scrolling) top of Home opens search. (The
   /// player opens from the bottom card: tap it or swipe it up.)
   void _onTopVerticalSwipe(DragEndDetails d) {
+    if (!_swipeSearchOn) return;
     if ((d.primaryVelocity ?? 0) > 300) _openSearch();
   }
+
+  /// "Swipe down on Home opens search" (Settings → Gestures).
+  bool get _swipeSearchOn =>
+      ref.read(gestureOnProvider(NoorGesture.homeSwipeDownSearch));
 
   /// Pulling the song list down past its top opens search.
   bool _onListScroll(ScrollNotification n) {
     if (n is ScrollUpdateNotification &&
         n.dragDetails != null &&
         n.metrics.pixels < -80 &&
+        _swipeSearchOn &&
         !_pullFired &&
         !_searching) {
       _pullFired = true;
@@ -270,7 +277,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         // Home: Settings. While searching: the result filters.
                         Builder(
                             builder: (b) => NoorSettingsButton(
-                                label: _searching ? 'Search filters' : 'Settings',
+                                label:
+                                    _searching ? 'Search filters' : 'Settings',
                                 onTap: () => _searching
                                     ? (() {
                                         _queryFocus.unfocus();
@@ -360,7 +368,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                                 if (index > 0) {
                                                   _select(cats[index - 1].id);
                                                 } else {
-                                                  _openSearch(); // before the first card
+                                                  // before the first card
+                                                  if (_swipeSearchOn)
+                                                    _openSearch();
                                                 }
                                               }
                                             },

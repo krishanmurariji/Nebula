@@ -37,14 +37,15 @@ Song? _parseSong(Map<dynamic, dynamic> m) {
 }
 
 /// Keeps a copy of unreadable data instead of silently overwriting it.
-Future<void> _backupCorrupt(SharedPreferences p, String key, String? raw) async {
+Future<void> _backupCorrupt(
+    SharedPreferences p, String key, String? raw) async {
   if (raw == null) return;
   await p.setString('${key}_corrupt_backup', raw);
 }
 
-const _kLiked     = 'nebula_liked';
+const _kLiked = 'nebula_liked';
 const _kPlaylists = 'nebula_playlists';
-const _kHistory   = 'nebula_history';
+const _kHistory = 'nebula_history';
 
 // ── Liked ──────────────────────────────────────────────────────────────────
 final likedProvider =
@@ -76,7 +77,8 @@ class LikedNotifier extends StateNotifier<List<Song>> {
 
   Future<void> _save() async {
     final p = await SharedPreferences.getInstance();
-    await p.setString(_kLiked, json.encode(state.map((s) => s.toMap()).toList()));
+    await p.setString(
+        _kLiked, json.encode(state.map((s) => s.toMap()).toList()));
   }
 
   Future<void> toggle(Song song) async {
@@ -106,20 +108,22 @@ class Playlist {
       Playlist(id: id, name: name ?? this.name, songs: songs ?? this.songs);
 
   Map<String, dynamic> toMap() => {
-    'id': id, 'name': name, 'songs': songs.map((s) => s.toMap()).toList(),
-  };
+        'id': id,
+        'name': name,
+        'songs': songs.map((s) => s.toMap()).toList(),
+      };
 
   factory Playlist.fromMap(Map<dynamic, dynamic> m) => Playlist(
-    id: m['id'] is String ? m['id'] as String : '',
-    name: m['name'] is String ? m['name'] as String : 'Untitled',
-    songs: m['songs'] is List
-        ? (m['songs'] as List)
-            .whereType<Map>()
-            .map(Song.fromMap)
-            .where((s) => s.videoId.isNotEmpty)
-            .toList()
-        : const [],
-  );
+        id: m['id'] is String ? m['id'] as String : '',
+        name: m['name'] is String ? m['name'] as String : 'Untitled',
+        songs: m['songs'] is List
+            ? (m['songs'] as List)
+                .whereType<Map>()
+                .map(Song.fromMap)
+                .where((s) => s.videoId.isNotEmpty)
+                .toList()
+            : const [],
+      );
 }
 
 /// At most this many playlists (the add-to-playlist radial menu holds 10).
@@ -159,8 +163,8 @@ class PlaylistNotifier extends StateNotifier<List<Playlist>> {
 
   Future<void> _save() async {
     final p = await SharedPreferences.getInstance();
-    await p.setString(_kPlaylists,
-        json.encode(state.map((pl) => pl.toMap()).toList()));
+    await p.setString(
+        _kPlaylists, json.encode(state.map((pl) => pl.toMap()).toList()));
   }
 
   bool get isFull => state.length >= kMaxPlaylists;
@@ -177,7 +181,9 @@ class PlaylistNotifier extends StateNotifier<List<Playlist>> {
         id: '${DateTime.now().microsecondsSinceEpoch}',
         name: name.trim().isEmpty
             ? 'New Playlist'
-            : (name.trim().length > 60 ? name.trim().substring(0, 60) : name.trim()));
+            : (name.trim().length > 60
+                ? name.trim().substring(0, 60)
+                : name.trim()));
     state = [...state, pl];
     await _save();
     return pl;
@@ -213,7 +219,8 @@ class PlaylistNotifier extends StateNotifier<List<Playlist>> {
     await _save();
   }
 
-  Future<void> reorderSong(String playlistId, int oldIndex, int newIndex) async {
+  Future<void> reorderSong(
+      String playlistId, int oldIndex, int newIndex) async {
     state = state.map((p) {
       if (p.id != playlistId) return p;
       if (oldIndex < 0 || oldIndex >= p.songs.length) return p;
@@ -225,14 +232,14 @@ class PlaylistNotifier extends StateNotifier<List<Playlist>> {
     await _save();
   }
 
-  bool contains(String playlistId, String videoId) =>
-      state.where((p) => p.id == playlistId)
-           .any((p) => p.songs.any((s) => s.videoId == videoId));
+  bool contains(String playlistId, String videoId) => state
+      .where((p) => p.id == playlistId)
+      .any((p) => p.songs.any((s) => s.videoId == videoId));
 }
 
 // ── History ────────────────────────────────────────────────────────────────
-final historyProvider =
-    StateNotifierProvider<HistoryNotifier, List<Song>>((ref) => HistoryNotifier());
+final historyProvider = StateNotifierProvider<HistoryNotifier, List<Song>>(
+    (ref) => HistoryNotifier());
 
 class HistoryNotifier extends StateNotifier<List<Song>> {
   HistoryNotifier() : super([]) {
@@ -247,7 +254,9 @@ class HistoryNotifier extends StateNotifier<List<Song>> {
     final loaded = decodeList<Song>(raw, _parseSong,
         onCorrupt: (_) => _backupCorrupt(p, _kHistory, raw));
     if (!mounted) return;
-    state = [...state, ...loaded.where((s) => !state.contains(s))].take(30).toList();
+    state = [...state, ...loaded.where((s) => !state.contains(s))]
+        .take(30)
+        .toList();
   }
 
   Future<void> _save() async {
@@ -257,7 +266,9 @@ class HistoryNotifier extends StateNotifier<List<Song>> {
   }
 
   Future<void> add(Song song) async {
-    state = [song, ...state.where((s) => s.videoId != song.videoId)].take(30).toList();
+    state = [song, ...state.where((s) => s.videoId != song.videoId)]
+        .take(30)
+        .toList();
     await _save();
   }
 
@@ -274,7 +285,6 @@ class HistoryNotifier extends StateNotifier<List<Song>> {
   }
 }
 
-
 /// True once liked songs, playlists and history have been read from the
 /// device. Until then Home must not claim "nothing here yet".
 final libraryReadyProvider = FutureProvider<bool>((ref) async {
@@ -288,7 +298,8 @@ final libraryReadyProvider = FutureProvider<bool>((ref) async {
 
 /// Answers "is this song saved on the device?". Replaced in main.dart by the
 /// audio handler's disk cache; the default says no (tests, start-up).
-final isOnDeviceProvider = Provider<bool Function(String videoId)>((ref) => (_) => false);
+final isOnDeviceProvider =
+    Provider<bool Function(String videoId)>((ref) => (_) => false);
 
 /// My Music: the music files on the phone (read from Android's media
 /// library once access is given).

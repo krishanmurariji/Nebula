@@ -89,8 +89,10 @@ final connectionProvider =
       start: !Platform.environment.containsKey('FLUTTER_TEST'));
   // Playback's own view of the network.
   try {
-    final sub = ref.read(audioHandlerProvider).offlineChanges.listen(
-        (offline) => offline ? n.reportFailure() : n.reportSuccess());
+    final sub = ref
+        .read(audioHandlerProvider)
+        .offlineChanges
+        .listen((offline) => offline ? n.reportFailure() : n.reportSuccess());
     ref.onDispose(sub.cancel);
   } catch (_) {/* no audio handler (tests) */}
   return n;

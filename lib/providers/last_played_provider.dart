@@ -55,5 +55,5 @@ class LastPlayedNotifier extends StateNotifier<Song?> {
   }
 }
 
-final lastPlayedProvider =
-    StateNotifierProvider<LastPlayedNotifier, Song?>((ref) => LastPlayedNotifier());
+final lastPlayedProvider = StateNotifierProvider<LastPlayedNotifier, Song?>(
+    (ref) => LastPlayedNotifier());

@@ -207,7 +207,6 @@ class _Results extends ConsumerWidget {
   }
 }
 
-
 /// Search as a page of its own, opened from the player's Search button, so
 /// back (or Cancel) returns to the player rather than to Home.
 class SearchPage extends ConsumerStatefulWidget {

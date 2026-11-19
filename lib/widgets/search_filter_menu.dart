@@ -48,10 +48,10 @@ class _FilterMenu extends ConsumerWidget {
     final filter = ref.watch(searchFilterProvider);
     final mq = MediaQuery.of(context);
     final top = anchor != null ? anchor!.bottom + 8 : mq.padding.top + 66;
-    final right =
-        anchor != null ? mq.size.width - anchor!.right : 14.0;
+    final right = anchor != null ? mq.size.width - anchor!.right : 14.0;
 
-    Widget option(SearchFilter f, String label, String hint, IconData icon, int count) {
+    Widget option(
+        SearchFilter f, String label, String hint, IconData icon, int count) {
       final on = filter == f;
       return InkWell(
         borderRadius: BorderRadius.circular(18),
@@ -75,7 +75,8 @@ class _FilterMenu extends ConsumerWidget {
                         style: TextStyle(
                             color: t.ac,
                             fontSize: 15,
-                            fontWeight: on ? FontWeight.w700 : FontWeight.w600)),
+                            fontWeight:
+                                on ? FontWeight.w700 : FontWeight.w600)),
                     Text(hint, style: TextStyle(color: t.mute, fontSize: 11.5)),
                   ],
                 ),
@@ -83,7 +84,9 @@ class _FilterMenu extends ConsumerWidget {
               const SizedBox(width: 8),
               Text('$count',
                   style: TextStyle(
-                      color: t.mute, fontSize: 13, fontWeight: FontWeight.w600)),
+                      color: t.mute,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600)),
               const SizedBox(width: 10),
               // A ring that fills when chosen.
               AnimatedContainer(
@@ -99,7 +102,8 @@ class _FilterMenu extends ConsumerWidget {
                   duration: const Duration(milliseconds: 180),
                   opacity: on ? 1 : 0,
                   child: DecoratedBox(
-                      decoration: BoxDecoration(shape: BoxShape.circle, color: t.ac)),
+                      decoration:
+                          BoxDecoration(shape: BoxShape.circle, color: t.ac)),
                 ),
               ),
             ],
@@ -134,13 +138,26 @@ class _FilterMenu extends ConsumerWidget {
                     child: Text('Show results',
                         style: noorSongTitleStyle(t.ac, size: 20)),
                   ),
-                  option(SearchFilter.bestMatch, 'Best match', 'Noor’s ranking, best first',
-                      Icons.auto_awesome_outlined, search.results.length),
-                  option(SearchFilter.officialOnly, 'Official only',
-                      'Labels, Topic and artist channels', Icons.verified_outlined, official),
-                  option(SearchFilter.all, 'All', 'Everything, in YouTube’s order',
+                  option(
+                      SearchFilter.bestMatch,
+                      'Best match',
+                      'Noor’s ranking, best first',
+                      Icons.auto_awesome_outlined,
+                      search.results.length),
+                  option(
+                      SearchFilter.officialOnly,
+                      'Official only',
+                      'Labels, Topic and artist channels',
+                      Icons.verified_outlined,
+                      official),
+                  option(
+                      SearchFilter.all,
+                      'All',
+                      'Everything, in YouTube’s order',
                       Icons.list_rounded,
-                      search.all.isEmpty ? search.results.length : search.all.length),
+                      search.all.isEmpty
+                          ? search.results.length
+                          : search.all.length),
                 ],
               ),
             ),

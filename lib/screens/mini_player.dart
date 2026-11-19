@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../providers/gesture_settings_provider.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/song.dart';
@@ -172,12 +173,23 @@ class _MiniPlayerState extends ConsumerState<MiniPlayer>
               HapticFeedback.mediumImpact();
               ref.read(likedProvider.notifier).toggle(song);
             },
-            onHorizontalDragUpdate: _dragUpdate,
-            onHorizontalDragEnd: (d) => _dragEnd(d, song),
+            // Each gesture can be switched off in Settings (the buttons
+            // and a tap still do the same).
+            onHorizontalDragUpdate:
+                ref.watch(gestureOnProvider(NoorGesture.bottomCardSwipe))
+                    ? _dragUpdate
+                    : null,
+            onHorizontalDragEnd:
+                ref.watch(gestureOnProvider(NoorGesture.bottomCardSwipe))
+                    ? (d) => _dragEnd(d, song)
+                    : null,
             // Swipe up: the full player.
-            onVerticalDragEnd: (d) {
-              if ((d.primaryVelocity ?? 0) < -300) _openPlayer();
-            },
+            onVerticalDragEnd:
+                ref.watch(gestureOnProvider(NoorGesture.bottomCardSwipeUp))
+                    ? (d) {
+                        if ((d.primaryVelocity ?? 0) < -300) _openPlayer();
+                      }
+                    : null,
             child: AnimatedBuilder(
               animation: _dx,
               builder: (context, card) {

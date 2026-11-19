@@ -21,18 +21,26 @@ class SearchState {
   final String? error;
   final String query;
   const SearchState({
-    this.results = const [], this.all = const [], this.status = SearchStatus.idle,
-    this.error, this.query = '',
+    this.results = const [],
+    this.all = const [],
+    this.status = SearchStatus.idle,
+    this.error,
+    this.query = '',
   });
   SearchState copyWith({
-    List<Song>? results, List<Song>? all, SearchStatus? status, String? error, String? query,
-  }) => SearchState(
-    results: results ?? this.results,
-    all:     all     ?? this.all,
-    status:  status  ?? this.status,
-    error:   error,
-    query:   query   ?? this.query,
-  );
+    List<Song>? results,
+    List<Song>? all,
+    SearchStatus? status,
+    String? error,
+    String? query,
+  }) =>
+      SearchState(
+        results: results ?? this.results,
+        all: all ?? this.all,
+        status: status ?? this.status,
+        error: error,
+        query: query ?? this.query,
+      );
 }
 
 final searchServiceProvider =
@@ -56,7 +64,10 @@ class SearchNotifier extends StateNotifier<SearchState> {
   Future<void> search(String rawQuery) async {
     final query = sanitizeQuery(rawQuery);
     final mine = ++_seq;
-    if (query.isEmpty) { state = const SearchState(); return; }
+    if (query.isEmpty) {
+      state = const SearchState();
+      return;
+    }
     unawaited(_ref.read(searchHistoryProvider.notifier).add(query));
     final net = _ref.read(connectionProvider.notifier);
     if (net.isOffline) {
@@ -65,7 +76,8 @@ class SearchNotifier extends StateNotifier<SearchState> {
       unawaited(net.recheck());
       return;
     }
-    state = state.copyWith(status: SearchStatus.loading, query: query, error: null);
+    state =
+        state.copyWith(status: SearchStatus.loading, query: query, error: null);
     try {
       final r = await _ref.read(searchServiceProvider).searchAll(query);
       if (!mounted || mine != _seq) return;
@@ -97,9 +109,8 @@ class SearchNotifier extends StateNotifier<SearchState> {
   }
 }
 
-final searchProvider =
-    StateNotifierProvider<SearchNotifier, SearchState>((ref) => SearchNotifier(ref));
-
+final searchProvider = StateNotifierProvider<SearchNotifier, SearchState>(
+    (ref) => SearchNotifier(ref));
 
 /// Filters a best-match list. "Official only" keeps just the uploads the
 /// ranking trusts (Topic / VEVO / label / the artist's own channel).

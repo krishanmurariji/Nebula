@@ -93,9 +93,13 @@ jobs:
 
       - name: Build release APK
         run: |
+          # The app shows these in Settings → About (version, build, commit).
           flutter build apk --release \
             --build-name="${{ steps.ver.outputs.name }}" \
-            --build-number="${{ steps.ver.outputs.number }}"
+            --build-number="${{ steps.ver.outputs.number }}" \
+            --dart-define=NOOR_VERSION="${{ steps.ver.outputs.name }}" \
+            --dart-define=NOOR_BUILD="${{ steps.ver.outputs.number }}" \
+            --dart-define=NOOR_COMMIT="${GITHUB_SHA::7}"
           cp build/app/outputs/flutter-apk/app-release.apk noor.apk
           sha256sum noor.apk | tee noor.apk.sha256
           ls -lh noor.apk
