@@ -375,7 +375,9 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
     final bottomPad = MediaQuery.of(context).padding.bottom;
 
     final status = loading || _swapping
-        ? 'Loading…'
+        ? (loading && ps.cooldownSeconds > 0
+            ? 'YouTube is busy for your network · plays in ${ps.cooldownSeconds}s'
+            : 'Loading…')
         : isError
             ? (ps.cooldownSeconds > 0
                 ? 'Retry in ${ps.cooldownSeconds}s…'

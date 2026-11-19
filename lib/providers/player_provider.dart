@@ -65,7 +65,6 @@ class PlayerNotifier extends StateNotifier<NebulaPlayerState> {
   // only after such a countdown, and only once per failure, so a song that
   // keeps failing can never turn into a tight retry loop (the handler already
   // does its own bounded retries and skipping).
-  bool _sawCooldown = false;
 
   PlayerNotifier(this._handler) : super(const NebulaPlayerState()) {
     _subs.add(_handler.playbackState.listen(_onPlayback));
@@ -116,8 +115,10 @@ class PlayerNotifier extends StateNotifier<NebulaPlayerState> {
     final isNowActive = st == NebulaPlayerStatus.playing ||
         st == NebulaPlayerStatus.paused;
 
-    if (st == NebulaPlayerStatus.error) {
-      _startCooldownCountdown();
+    // Rate limited: count the seconds down, whether the song failed or is
+    // waiting to start by itself.
+    if (st == NebulaPlayerStatus.error || _handler.isWaitingForYoutube) {
+      if (_countdownTimer == null) _startCooldownCountdown();
     } else {
       _stopCooldownCountdown();
     }
@@ -145,14 +146,10 @@ class PlayerNotifier extends StateNotifier<NebulaPlayerState> {
     final secs = _handler.globalCooldownSeconds;
     state = state.copyWith(cooldownSeconds: secs);
 
-    if (secs > 0) {
-      _sawCooldown = true;
-    } else if (_sawCooldown && state.status == NebulaPlayerStatus.error) {
-      // Rate limit has expired: retry exactly once.
-      _sawCooldown = false;
-      _stopCooldownCountdown();
-      retryCurrentSong();
-    } else if (state.status != NebulaPlayerStatus.error) {
+    // Only shows the countdown: the audio handler itself starts the waiting
+    // song when YouTube's pause ends (and after giving up, play retries).
+    if (secs <= 0 ||
+        (state.status != NebulaPlayerStatus.error && !_handler.isWaitingForYoutube)) {
       _stopCooldownCountdown();
     }
   }
@@ -180,7 +177,6 @@ class PlayerNotifier extends StateNotifier<NebulaPlayerState> {
       cooldownSeconds: 0,
     );
 
-    _sawCooldown = false;
     try {
       await _handler.playSong(song, queue: q, index: idx < 0 ? 0 : idx);
     } catch (e) {

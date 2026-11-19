@@ -65,6 +65,16 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
   int? _loadingTok;
   bool get _switching => _loadingTok != null && _loadingTok == _tok;
 
+  /// While YouTube is limiting this network, the song the user chose waits
+  /// (shown as loading, with a countdown) and starts by itself when the
+  /// pause ends, instead of failing. Holds that load's token.
+  int? _waitTok;
+  int _waitRounds = 0;
+  static const _maxWaitRounds = 4; // 20 + 40 + 80 + 160 s, then give up
+
+  /// True while the current song is waiting for YouTube's pause to end.
+  bool get isWaitingForYoutube => _waitTok != null && _waitTok == _tok;
+
   // Current play mode — changed by the UI via setPlayMode().
   PlayMode _playMode = PlayMode.repeatAll;
 
@@ -285,6 +295,7 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
   }
 
   void _resetFailureCounters() {
+    _waitRounds = 0;
     _consecutiveFailures = 0;
     _midPlayRetries = 0;
     _mediaRefusals = 0;
@@ -479,6 +490,10 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
     if (kind == FailureKind.rateLimited) {
       // YouTube answered (so we ARE online) but is limiting this network.
       final wait = _resolver.globalCooldownSeconds;
+      if (wait > 0 && _waitRounds < _maxWaitRounds) {
+        _waitFor(req, wait);
+        return;
+      }
       _notices.add('YouTube is limiting requests from your network'
           '${wait > 0 ? ' — retrying in ${wait}s' : ''}');
       _setError();
@@ -557,6 +572,38 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
     }());
   }
 
+  /// Keeps [req]'s song as the one that is loading and starts it by itself
+  /// once YouTube's pause has ended. Tapping another song, stop or pause
+  /// cancels the wait (they all change the token or clear the timer).
+  void _waitFor(_LoadRequest req, int seconds) {
+    _waitRounds++;
+    final tok = req.tok;
+    _waitTok = tok;
+    _loadingTok = tok; // keep reporting "loading" while the player is idle
+    nlog('[N] YouTube busy → "${req.song.title}" waits ${seconds}s, '
+        'then starts by itself (round $_waitRounds)');
+    _notices.add('YouTube is busy for your network. This song starts by '
+        'itself in ${seconds}s.');
+    playbackState.add(playbackState.value.copyWith(
+        processingState: AudioProcessingState.loading, playing: false));
+    _retryTimer?.cancel();
+    _retryTimer = Timer(Duration(seconds: seconds, milliseconds: 300), () {
+      if (_tok != tok || _current != req.song) return;
+      _waitTok = null;
+      nlog('[N] YouTube pause over → starting "${req.song.title}"');
+      _requestLoad(req.song, resumeAt: req.resumeAt);
+    });
+  }
+
+  /// Pause while waiting: stop waiting; the song stays, play retries it.
+  void _cancelWait() {
+    _retryTimer?.cancel();
+    _waitTok = null;
+    _loadingTok = null;
+    nlog('[N] waiting for YouTube cancelled (paused)');
+    _setError();
+  }
+
   void _setError() {
     playbackState.add(playbackState.value
         .copyWith(processingState: AudioProcessingState.error, playing: false));
@@ -608,12 +655,17 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
 
   @override
   Future<void> play() async {
+    // Waiting for YouTube: the song starts by itself when the pause ends.
+    if (isWaitingForYoutube) return;
     // just_audio's play() completes only when playback pauses/ends; don't await.
     unawaited(_player.play());
   }
 
   @override
-  Future<void> pause() => _player.pause();
+  Future<void> pause() async {
+    if (isWaitingForYoutube) return _cancelWait();
+    return _player.pause();
+  }
 
   @override
   Future<void> seek(Duration position) {

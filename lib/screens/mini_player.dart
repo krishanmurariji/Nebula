@@ -146,7 +146,9 @@ class _MiniPlayerState extends ConsumerState<MiniPlayer>
     }
 
     final subtitle = loading
-        ? 'Loading…'
+        ? (ps.cooldownSeconds > 0
+            ? 'YouTube busy · plays in ${ps.cooldownSeconds}s'
+            : 'Loading…')
         : isError
             ? (ps.cooldownSeconds > 0
                 ? 'Retry in ${ps.cooldownSeconds}s…'

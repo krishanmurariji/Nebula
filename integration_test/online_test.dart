@@ -102,7 +102,7 @@ void main() {
       // network, the immediate "Retry in …" (the app does not hammer it).
       final answered = find.byWidgetPredicate((w) =>
           w is Text &&
-          (w.data ?? '').contains(RegExp(r'Loading…|Retry in|limiting|Could not|refused',
+          (w.data ?? '').contains(RegExp(r'Loading…|YouTube busy|Retry in|limiting|Could not|refused',
               caseSensitive: false)));
       expect(await waitFor(t, answered, timeout: const Duration(seconds: 3)),
           isTrue, reason: 'No feedback for the second song');
