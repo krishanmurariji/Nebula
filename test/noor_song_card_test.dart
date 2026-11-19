@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:noor/theme/noor_gap_border.dart';
 import 'package:noor/models/song.dart';
 import 'package:noor/providers/player_provider.dart';
 import 'package:noor/screens/upnext_screen.dart';
@@ -90,18 +91,52 @@ void main() {
     });
   });
 
-  testWidgets('while loading: "Loading…" replaces the artist and a line runs along the card', (t) async {
+  /// Where the play button's dot is, in turns from the top.
+  double dotTurn(WidgetTester t) => t
+      .widgetList<CustomPaint>(find.descendant(
+          of: find.byType(NoorPlayPauseButton), matching: find.byType(CustomPaint)))
+      .map((c) => c.painter)
+      .whereType<NoorGapRingPainter>()
+      .single
+      .turn;
+
+  NoorGapBorderPainter outline(WidgetTester t) => t
+      .widgetList<CustomPaint>(find.byType(CustomPaint))
+      .map((c) => c.foregroundPainter)
+      .whereType<NoorGapBorderPainter>()
+      .single;
+
+  testWidgets('while loading: "Loading…" replaces the artist and the button dot goes round', (t) async {
     await t.pumpWidget(host(NoorSongCard(
         thumbnailUrl: '', title: 'A', artist: 'Artist', loading: true, current: true, onTap: () {})));
     await t.pump(const Duration(milliseconds: 100));
     expect(find.text('Loading…'), findsOneWidget);
     expect(find.text('Artist'), findsNothing);
-    expect(find.byType(LinearProgressIndicator), findsOneWidget);
+    expect(find.byType(LinearProgressIndicator), findsNothing); // no line any more
+    final a = dotTurn(t);
+    await t.pump(const Duration(milliseconds: 300));
+    expect(dotTurn(t), isNot(a)); // moving
+    expect(outline(t).gap, greaterThan(0)); // the card itself stays still
+  });
+
+  testWidgets('when loading ends the dot glides back to the top and stays', (t) async {
+    await t.pumpWidget(host(NoorSongCard(
+        thumbnailUrl: '', title: 'A', artist: 'Artist', loading: true, onTap: () {})));
+    await t.pump(const Duration(milliseconds: 500));
+    expect(dotTurn(t), isNot(0));
     await t.pumpWidget(host(NoorSongCard(
         thumbnailUrl: '', title: 'A', artist: 'Artist', onTap: () {})));
-    await t.pump(const Duration(milliseconds: 100));
-    expect(find.byType(LinearProgressIndicator), findsNothing);
+    for (var i = 0; i < 12; i++) {
+      await t.pump(const Duration(milliseconds: 100));
+    }
+    expect(dotTurn(t), 0);
     expect(find.text('Artist'), findsOneWidget);
+  });
+
+  testWidgets('at rest the dot sits at the top', (t) async {
+    await t.pumpWidget(host(NoorSongCard(thumbnailUrl: '', title: 'A', artist: 'c', onTap: () {})));
+    await t.pump(const Duration(milliseconds: 300));
+    expect(dotTurn(t), 0);
   });
 
   testWidgets('the card dips the moment it is touched', (t) async {
