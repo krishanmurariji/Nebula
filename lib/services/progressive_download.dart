@@ -70,7 +70,8 @@ class ProgressiveDownload {
   void _startWatchdog() {
     final limit = stallTimeout;
     if (limit == null) return;
-    final tick = Duration(milliseconds: (limit.inMilliseconds ~/ 3).clamp(20, 5000));
+    final tick =
+        Duration(milliseconds: (limit.inMilliseconds ~/ 3).clamp(20, 5000));
     var idleFor = Duration.zero;
     _watchdog = Timer.periodic(tick, (t) {
       if (_done || _cancelled || _error != null) {
@@ -87,8 +88,10 @@ class ProgressiveDownload {
         t.cancel();
         _sub?.cancel();
         _sub = null;
-        _fail(TimeoutException('no data for ${limit.inSeconds}s '
-            '(received $_received of $totalBytes bytes)'), StackTrace.current);
+        _fail(
+            TimeoutException('no data for ${limit.inSeconds}s '
+                '(received $_received of $totalBytes bytes)'),
+            StackTrace.current);
       }
     });
   }

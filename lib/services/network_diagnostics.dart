@@ -43,22 +43,27 @@ Future<List<DiagnosticResult>> runNetworkDiagnostics({
       return DiagnosticResult('DNS $host', r.isNotEmpty, t.elapsedMilliseconds,
           r.isNotEmpty ? why : 'resolved to nothing');
     } on TimeoutException {
-      return DiagnosticResult('DNS $host', false, t.elapsedMilliseconds, 'timed out ($why)');
+      return DiagnosticResult(
+          'DNS $host', false, t.elapsedMilliseconds, 'timed out ($why)');
     } catch (_) {
-      return DiagnosticResult('DNS $host', false, t.elapsedMilliseconds, 'lookup failed ($why)');
+      return DiagnosticResult(
+          'DNS $host', false, t.elapsedMilliseconds, 'lookup failed ($why)');
     }
   }
 
   Future<DiagnosticResult> https() async {
     final t = Stopwatch()..start();
     try {
-      final code = await status(Uri.parse('https://www.youtube.com/robots.txt'));
-      return DiagnosticResult('HTTPS youtube.com', code == 200, t.elapsedMilliseconds, 'HTTP $code');
+      final code =
+          await status(Uri.parse('https://www.youtube.com/robots.txt'));
+      return DiagnosticResult('HTTPS youtube.com', code == 200,
+          t.elapsedMilliseconds, 'HTTP $code');
     } on TimeoutException {
-      return DiagnosticResult('HTTPS youtube.com', false, t.elapsedMilliseconds, 'timed out');
-    } catch (e) {
       return DiagnosticResult(
-          'HTTPS youtube.com', false, t.elapsedMilliseconds, e.runtimeType.toString());
+          'HTTPS youtube.com', false, t.elapsedMilliseconds, 'timed out');
+    } catch (e) {
+      return DiagnosticResult('HTTPS youtube.com', false, t.elapsedMilliseconds,
+          e.runtimeType.toString());
     }
   }
 

@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'widgets/noor_toast.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -13,6 +14,7 @@ import 'screens/main_shell.dart';
 
 final GlobalKey<ScaffoldMessengerState> _messengerKey =
     GlobalKey<ScaffoldMessengerState>();
+final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
 
 class NebulaApp extends ConsumerWidget {
   const NebulaApp({super.key});
@@ -29,14 +31,13 @@ class NebulaApp extends ConsumerWidget {
     });
     ref.listen<String?>(playerProvider.select((s) => s.notice), (_, n) {
       if (n == null) return;
-      _messengerKey.currentState
-        ?..hideCurrentSnackBar()
-        ..showSnackBar(SnackBar(
-            content: Text(n), duration: const Duration(seconds: 3)));
+      final overlay = _navigatorKey.currentState?.overlay;
+      if (overlay != null) NoorToast.showIn(overlay, n);
     });
     return MaterialApp(
       title: 'Noor',
       scaffoldMessengerKey: _messengerKey,
+      navigatorKey: _navigatorKey,
       builder: (context, child) =>
           ResponsiveFrame(child: child ?? const SizedBox.shrink()),
       debugShowCheckedModeBanner: false,
@@ -57,9 +58,10 @@ class NebulaApp extends ConsumerWidget {
         canvasColor: t.bg,
         splashFactory: NoSplash.splashFactory,
         highlightColor: Colors.transparent,
-        textTheme: ThemeData(brightness: t.isDark ? Brightness.dark : Brightness.light)
-            .textTheme
-            .apply(bodyColor: t.ac, displayColor: t.ac),
+        textTheme:
+            ThemeData(brightness: t.isDark ? Brightness.dark : Brightness.light)
+                .textTheme
+                .apply(bodyColor: t.ac, displayColor: t.ac),
         colorScheme: ColorScheme(
           brightness: t.isDark ? Brightness.dark : Brightness.light,
           primary: t.ac,
@@ -78,7 +80,6 @@ class NebulaApp extends ConsumerWidget {
         ),
       );
 }
-
 
 /// Widest the app content is allowed to get. The layouts are designed for a
 /// phone; on tablets, unfolded foldables and large windows the content stays

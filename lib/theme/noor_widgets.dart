@@ -5,7 +5,9 @@ import 'noor_palette.dart';
 const String kNoorSerif = 'Cormorant';
 
 TextStyle noorSerif(Color color,
-        {double size = 28, FontWeight weight = FontWeight.w700, double? height}) =>
+        {double size = 28,
+        FontWeight weight = FontWeight.w700,
+        double? height}) =>
     TextStyle(
         fontFamily: kNoorSerif,
         fontSize: size,
@@ -127,8 +129,7 @@ class NoorDivider extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = NoorTheme.of(context);
-    return CustomPaint(
-        size: Size(width, 12), painter: _DividerPainter(t.ac));
+    return CustomPaint(size: Size(width, 12), painter: _DividerPainter(t.ac));
   }
 }
 

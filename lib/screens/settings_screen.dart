@@ -1,4 +1,5 @@
 import 'package:cached_network_image/cached_network_image.dart';
+import '../widgets/noor_toast.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -25,10 +26,10 @@ class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
 
   Future<void> _open(BuildContext context, String url) async {
-    if (!await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication)) {
+    if (!await launchUrl(Uri.parse(url),
+        mode: LaunchMode.externalApplication)) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Could not open the link')));
+        NoorToast.show(context, 'Could not open the link');
       }
     }
   }
@@ -42,7 +43,8 @@ class SettingsScreen extends ConsumerWidget {
         shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(26),
             side: BorderSide(color: t.ac, width: 0.8)),
-        title: Text('Clear your history?', style: noorSongTitleStyle(t.ac, size: 24)),
+        title: Text('Clear your history?',
+            style: noorSongTitleStyle(t.ac, size: 24)),
         content: Text(
             'Every song leaves My History. Favorites, playlists and saved songs stay.',
             style: TextStyle(color: t.mute)),
@@ -60,8 +62,7 @@ class SettingsScreen extends ConsumerWidget {
     if (ok != true) return;
     await ref.read(historyProvider.notifier).clear();
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('History cleared'), behavior: SnackBarBehavior.floating));
+      NoorToast.show(context, 'History cleared');
     }
   }
 
@@ -90,7 +91,8 @@ class SettingsScreen extends ConsumerWidget {
                   ),
                   const SizedBox(width: 14),
                   Expanded(
-                      child: Text('Settings', style: noorSongTitleStyle(t.ac, size: 32))),
+                      child: Text('Settings',
+                          style: noorSongTitleStyle(t.ac, size: 32))),
                   const NoorLogo(),
                 ]),
               ),
@@ -103,7 +105,8 @@ class SettingsScreen extends ConsumerWidget {
                 child: Text(
                     'Turn off any swipe you keep doing by accident. Each one has a button or tap that does the same.',
                     textAlign: TextAlign.center,
-                    style: TextStyle(color: t.mute, fontSize: 12.5, height: 1.35)),
+                    style:
+                        TextStyle(color: t.mute, fontSize: 12.5, height: 1.35)),
               ),
               _Card(children: [
                 for (final g in NoorGesture.values)
@@ -154,9 +157,12 @@ class SettingsScreen extends ConsumerWidget {
                 _Row(
                   icon: Icons.receipt_long_outlined,
                   title: 'Playback log',
-                  subtitle: 'What the player did, to share when something fails',
-                  onTap: () => Navigator.push(context,
-                      MaterialPageRoute(builder: (_) => const PlaybackLogScreen())),
+                  subtitle:
+                      'What the player did, to share when something fails',
+                  onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (_) => const PlaybackLogScreen())),
                 ),
               ]),
               const SizedBox(height: 26),
@@ -175,7 +181,8 @@ class SettingsScreen extends ConsumerWidget {
                         style: TextStyle(color: t.mute, fontSize: 12.5)),
                     const SizedBox(height: 10),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 5),
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(20),
                         border: Border.all(color: t.soft, width: 0.8),
@@ -183,7 +190,9 @@ class SettingsScreen extends ConsumerWidget {
                       child: Text(AppVersion.label,
                           key: const ValueKey('app-version'),
                           style: TextStyle(
-                              color: t.ac, fontSize: 12, fontWeight: FontWeight.w600)),
+                              color: t.ac,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600)),
                     ),
                     const SizedBox(height: 20),
                     Divider(color: t.faint, height: 1),
@@ -216,13 +225,14 @@ class SettingsScreen extends ConsumerWidget {
                       _LinkButton(
                           icon: FontAwesomeIcons.linkedinIn,
                           label: 'LinkedIn',
-                          onTap: () => _open(
-                              context, 'https://www.linkedin.com/in/krishan-murari/')),
+                          onTap: () => _open(context,
+                              'https://www.linkedin.com/in/krishan-murari/')),
                       const SizedBox(width: 8),
                       _LinkButton(
                           icon: FontAwesomeIcons.github,
                           label: 'GitHub',
-                          onTap: () => _open(context, 'https://github.com/krishanmurariji')),
+                          onTap: () => _open(
+                              context, 'https://github.com/krishanmurariji')),
                     ]),
                   ]),
                 ],
@@ -308,7 +318,8 @@ class _Row extends StatelessWidget {
             width: 36,
             height: 36,
             decoration: BoxDecoration(
-                shape: BoxShape.circle, border: Border.all(color: t.ac, width: 0.8)),
+                shape: BoxShape.circle,
+                border: Border.all(color: t.ac, width: 0.8)),
             child: Icon(icon, size: 18, color: t.ac),
           ),
           const SizedBox(width: 14),
@@ -318,7 +329,9 @@ class _Row extends StatelessWidget {
               children: [
                 Text(title,
                     style: TextStyle(
-                        color: t.ac, fontSize: 15, fontWeight: FontWeight.w600)),
+                        color: t.ac,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600)),
                 const SizedBox(height: 2),
                 Text(subtitle, style: TextStyle(color: t.mute, fontSize: 12)),
               ],
@@ -333,7 +346,8 @@ class _Row extends StatelessWidget {
 }
 
 class _LinkButton extends StatelessWidget {
-  const _LinkButton({required this.icon, required this.label, required this.onTap});
+  const _LinkButton(
+      {required this.icon, required this.label, required this.onTap});
   final FaIconData icon;
   final String label;
   final VoidCallback onTap;
@@ -352,7 +366,8 @@ class _LinkButton extends StatelessWidget {
           height: 40,
           alignment: Alignment.center,
           decoration: BoxDecoration(
-              shape: BoxShape.circle, border: Border.all(color: t.ac, width: 0.8)),
+              shape: BoxShape.circle,
+              border: Border.all(color: t.ac, width: 0.8)),
           child: FaIcon(icon, size: 16, color: t.ac),
         ),
       ),

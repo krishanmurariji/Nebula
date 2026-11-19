@@ -132,7 +132,8 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
       ..sort((a, b) => a.bitrate.compareTo(b.bitrate));
     if (usable.isEmpty) return null;
     final info = usable.first;
-    nlog('[N] ✓ manifest ok client=$client ${info.codec.mimeType} @ ${info.bitrate}');
+    nlog(
+        '[N] ✓ manifest ok client=$client ${info.codec.mimeType} @ ${info.bitrate}');
     return ResolvedStream(
       url: info.url,
       totalBytes: info.size.totalBytes,
@@ -161,10 +162,11 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
       LatestWinsRunner<_LoadRequest>(_runLoad);
 
   Timer? _retryTimer;
-  int _consecutiveFailures = 0; // songs in a row that failed (reset on success/user action)
-  int _midPlayRetries = 0;      // mid-song recoveries for the current song
-  int _mediaRefusals = 0;       // distinct clients whose download got HTTP 403
-  int _completedTok = -1;       // guards against double "completed" events
+  int _consecutiveFailures =
+      0; // songs in a row that failed (reset on success/user action)
+  int _midPlayRetries = 0; // mid-song recoveries for the current song
+  int _mediaRefusals = 0; // distinct clients whose download got HTTP 403
+  int _completedTok = -1; // guards against double "completed" events
 
   final StreamController<String> _notices = StreamController.broadcast();
 
@@ -241,11 +243,10 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
     }
   }
 
-  Future<void> _ensureCache() => _cacheReady.future
-      .timeout(const Duration(seconds: 5), onTimeout: () {});
+  Future<void> _ensureCache() =>
+      _cacheReady.future.timeout(const Duration(seconds: 5), onTimeout: () {});
 
-  Set<String> get _protectedIds =>
-      {if (_current != null) _current!.videoId};
+  Set<String> get _protectedIds => {if (_current != null) _current!.videoId};
 
   // ── Public getters ────────────────────────────────────────────────────────
 
@@ -403,14 +404,14 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
         unawaited(_handleDownloadFailure(req, e));
         return;
       }
-      var kind =
-          e is ResolveFailure ? e.kind : classifyPlaybackError(e);
+      var kind = e is ResolveFailure ? e.kind : classifyPlaybackError(e);
       nlog('[N] load failed ($kind): $e\n$st');
       if (kind == FailureKind.cancelled) kind = FailureKind.transient;
       // A phone file that will not play (deleted, unreadable) will not fix
       // itself, and the network has nothing to do with it: skip it.
       if (song.isLocal) kind = FailureKind.permanent;
-      if (usedDiskCache) unawaited(_cache?.remove(song.videoId)); // maybe corrupt
+      if (usedDiskCache)
+        unawaited(_cache?.remove(song.videoId)); // maybe corrupt
       unawaited(_handleLoadFailure(req, kind));
     }
   }
@@ -684,8 +685,8 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
     try {
       await _player.stop();
     } catch (_) {}
-    playbackState.add(playbackState.value.copyWith(
-        processingState: AudioProcessingState.idle, playing: false));
+    playbackState.add(playbackState.value
+        .copyWith(processingState: AudioProcessingState.idle, playing: false));
   }
 
   /// Stops and forgets the current song (the user deleted it): afterwards
@@ -786,7 +787,8 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
     if (index < _idx) {
       _idx--;
     } else if (removingCurrent) {
-      _idx = _idx.clamp(0, _queue.length - 1); // next song slides into this slot
+      _idx =
+          _idx.clamp(0, _queue.length - 1); // next song slides into this slot
     }
     _publishQueue();
     if (removingCurrent) {
@@ -801,8 +803,9 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
               id: s.videoId,
               title: s.title,
               artist: s.artist,
-              artUri:
-                  s.thumbnailUrl.startsWith('http') ? Uri.tryParse(s.thumbnailUrl) : null,
+              artUri: s.thumbnailUrl.startsWith('http')
+                  ? Uri.tryParse(s.thumbnailUrl)
+                  : null,
             ))
         .toList());
     _queueChanged.add(null);
@@ -826,12 +829,12 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
       processingState: switching
           ? AudioProcessingState.loading
           : const {
-        ProcessingState.idle: AudioProcessingState.idle,
-        ProcessingState.loading: AudioProcessingState.loading,
-        ProcessingState.buffering: AudioProcessingState.buffering,
-        ProcessingState.ready: AudioProcessingState.ready,
-        ProcessingState.completed: AudioProcessingState.completed,
-      }[_player.processingState]!,
+              ProcessingState.idle: AudioProcessingState.idle,
+              ProcessingState.loading: AudioProcessingState.loading,
+              ProcessingState.buffering: AudioProcessingState.buffering,
+              ProcessingState.ready: AudioProcessingState.ready,
+              ProcessingState.completed: AudioProcessingState.completed,
+            }[_player.processingState]!,
       playing: playing,
       updatePosition: switching ? Duration.zero : _player.position,
       bufferedPosition: _player.bufferedPosition,

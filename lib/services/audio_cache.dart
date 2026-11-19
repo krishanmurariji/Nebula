@@ -13,7 +13,8 @@ class _Entry {
   final String ext;
   _Entry(this.id, this.size, this.lastUsed, [this.ext = 'mp4']);
 
-  Map<String, dynamic> toJson() => {'id': id, 'sz': size, 'ts': lastUsed, 'ext': ext};
+  Map<String, dynamic> toJson() =>
+      {'id': id, 'sz': size, 'ts': lastUsed, 'ext': ext};
 
   static _Entry? tryParse(Object? j) {
     if (j is! Map) return null;
@@ -44,6 +45,7 @@ class AudioCache {
   bool _ready = false;
 
   File get _indexFile => File('${dir.path}/index.json');
+
   /// The file for [id] (its extension comes from the index; `.mp4` if unknown).
   File fileFor(String id) =>
       File('${dir.path}/$id.${_index[id]?.ext ?? 'mp4'}');
@@ -52,18 +54,18 @@ class AudioCache {
 
   /// Picks the container from the first bytes: EBML header = webm/opus,
   /// anything else is treated as mp4/m4a.
-  static String extensionFor(List<int> bytes) =>
-      bytes.length >= 4 &&
-              bytes[0] == 0x1A &&
-              bytes[1] == 0x45 &&
-              bytes[2] == 0xDF &&
-              bytes[3] == 0xA3
-          ? 'webm'
-          : 'mp4';
+  static String extensionFor(List<int> bytes) => bytes.length >= 4 &&
+          bytes[0] == 0x1A &&
+          bytes[1] == 0x45 &&
+          bytes[2] == 0xDF &&
+          bytes[3] == 0xA3
+      ? 'webm'
+      : 'mp4';
 
   /// The id becomes part of a file name, so only plain YouTube-style ids are
   /// allowed. Anything else (e.g. "../../x") is never read, written or deleted.
-  static bool isSafeId(String id) => RegExp(r'^[A-Za-z0-9_-]{1,64}$').hasMatch(id);
+  static bool isSafeId(String id) =>
+      RegExp(r'^[A-Za-z0-9_-]{1,64}$').hasMatch(id);
 
   int get count => _index.length;
   int get totalBytes => _index.values.fold(0, (s, e) => s + e.size);

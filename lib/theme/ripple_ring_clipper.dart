@@ -10,22 +10,25 @@ class RippleRingClipper extends CustomClipper<Path> {
   @override
   Path getClip(Size size) {
     if (fraction <= 0.0) return Path();
-    if (fraction >= 1.0) return Path()..addRect(Rect.fromLTWH(0, 0, size.width, size.height));
+    if (fraction >= 1.0)
+      return Path()..addRect(Rect.fromLTWH(0, 0, size.width, size.height));
 
     final center = Offset(size.width / 2, 0); // Top-center
-    final double maxRadius = sqrt(size.width * size.width + size.height * size.height);
-    
+    final double maxRadius =
+        sqrt(size.width * size.width + size.height * size.height);
+
     // Exactly mimics the CodePen spacing and sizing
-    const double ringSpacing = 80.0; 
+    const double ringSpacing = 80.0;
     final int numRings = (maxRadius / ringSpacing).ceil() + 1;
-    const double maxStroke = 85.0; // Slightly larger than spacing to ensure they merge
+    const double maxStroke =
+        85.0; // Slightly larger than spacing to ensure they merge
 
     List<List<double>> intervals = [];
 
     // 1. Mathematically calculate all expanding rings
     for (int i = 0; i < numRings; i++) {
       // Stagger the delay just like the CSS transition-delay
-      final double delayFraction = i * (0.4 / numRings); 
+      final double delayFraction = i * (0.4 / numRings);
       double progress = ((fraction - delayFraction) / 0.6).clamp(0.0, 1.0);
       progress = Curves.easeInOutCubic.transform(progress);
 
@@ -59,9 +62,12 @@ class RippleRingClipper extends CustomClipper<Path> {
     // 3. Draw the perfectly optimized path
     Path finalPath = Path()..fillType = PathFillType.evenOdd;
     for (var interval in merged) {
-      finalPath.addOval(Rect.fromCircle(center: center, radius: interval[1])); // Outer edge
+      finalPath.addOval(
+          Rect.fromCircle(center: center, radius: interval[1])); // Outer edge
       if (interval[0] > 0) {
-        finalPath.addOval(Rect.fromCircle(center: center, radius: interval[0])); // Inner edge creates the hole
+        finalPath.addOval(Rect.fromCircle(
+            center: center,
+            radius: interval[0])); // Inner edge creates the hole
       }
     }
 
@@ -71,7 +77,6 @@ class RippleRingClipper extends CustomClipper<Path> {
   @override
   bool shouldReclip(RippleRingClipper old) => old.fraction != fraction;
 }
-
 
 /// A route that reveals the new page with the same concentric-ring wipe the
 /// Home list uses when you change category. Going back plays it in reverse.

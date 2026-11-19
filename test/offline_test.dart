@@ -239,7 +239,7 @@ void main() {
       expect(normal.opacity, 1);
       await t.tap(find.text('Rainy Night'));
       await t.pump(const Duration(milliseconds: 400));
-      expect(find.textContaining("isn't saved on the phone"), findsOneWidget);
+      expect(find.textContaining("isn't saved yet"), findsOneWidget);
       expect(p.played, isEmpty);
     });
 

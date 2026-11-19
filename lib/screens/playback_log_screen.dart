@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/noor_toast.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 
@@ -37,8 +38,7 @@ class PlaybackLogScreen extends ConsumerWidget {
               await Clipboard.setData(
                   ClipboardData(text: AppLog.instance.dump()));
               if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Log copied to clipboard')));
+                NoorToast.show(context, 'Log copied to clipboard');
               }
             },
           ),

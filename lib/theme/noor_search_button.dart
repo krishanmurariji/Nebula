@@ -58,8 +58,8 @@ class NoorCircleIconButton extends StatelessWidget {
             transitionBuilder: (child, a) => RotationTransition(
                 turns: Tween(begin: 0.75, end: 1.0).animate(a),
                 child: FadeTransition(opacity: a, child: child)),
-            child: Icon(icon,
-                key: ValueKey(icon), color: t.ac, size: size * 0.48),
+            child:
+                Icon(icon, key: ValueKey(icon), color: t.ac, size: size * 0.48),
           ),
         ),
       ),
@@ -172,19 +172,22 @@ class SearchClosePainter extends CustomPainter {
     }
     final half = 6.5 * p;
     if (half > 0.2) {
-      canvas.drawLine(at(12 + half, 12 - half), at(12 - half, 12 + half), stroke);
+      canvas.drawLine(
+          at(12 + half, 12 - half), at(12 - half, 12 + half), stroke);
     }
     canvas.restore();
   }
 
   @override
-  bool shouldRepaint(SearchClosePainter old) => old.p != p || old.color != color;
+  bool shouldRepaint(SearchClosePainter old) =>
+      old.p != p || old.color != color;
 }
 
 /// The round settings button beside search. What it opens depends on the
 /// page: Settings on Home, the search filters while searching.
 class NoorSettingsButton extends StatelessWidget {
-  const NoorSettingsButton({super.key, required this.onTap, this.label = 'Settings'});
+  const NoorSettingsButton(
+      {super.key, required this.onTap, this.label = 'Settings'});
   final VoidCallback onTap;
   final String label;
 

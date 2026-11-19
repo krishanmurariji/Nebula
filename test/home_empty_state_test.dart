@@ -148,91 +148,76 @@ void main() {
     return g;
   }
 
-  Future<ProviderContainer> arrange(WidgetTester t) async {
-    final c = await home(t);
-    // Home opens on the first card with songs: the playlist.
-    final g = await pickUp(t, Icons.queue_music_rounded);
-    await g.up();
-    await frames(t, 6);
-    return c;
-  }
-
-  testWidgets('holding a slider card shrinks the open card: all cards in a row, centred',
+  testWidgets('holding a card: it stays under the finger, the others gather round it narrow',
       (t) async {
-    await arrange(t);
+    await home(t);
+    final where = t.getCenter(find.byIcon(Icons.queue_music_rounded));
+    final g = await pickUp(t, Icons.queue_music_rounded);
+    await frames(t, 6);
     for (final icon in [
       Icons.history_rounded,
       Icons.favorite_rounded,
       Icons.download_done_rounded,
       Icons.queue_music_rounded,
     ]) {
-      expect(find.byIcon(icon), findsOneWidget);
+      expect(find.byIcon(icon), findsWidgets);
     }
-    // All the same narrow size, and centred on the screen.
-    final hist = t.getRect(find.byIcon(Icons.history_rounded));
-    final road = t.getRect(find.byIcon(Icons.queue_music_rounded));
-    final mid = (hist.center.dx + road.center.dx) / 2;
-    expect((mid - 411 / 2).abs(), lessThan(4));
-    expect(find.text('Done'), findsOneWidget);
-    await t.tap(find.text('Done'));
-    await frames(t, 6);
-    expect(find.text('Done'), findsNothing);
-  });
-
-  testWidgets('one hold flows straight into a drag', (t) async {
-    await home(t);
-    final g = await pickUp(t, Icons.queue_music_rounded);
-    await g.moveBy(const Offset(-10, 0));
-    await frames(t, 4);
-    expect(find.text('Done'), findsOneWidget); // arranging while still held
+    // The card being held is drawn under the finger, not moved away.
+    final lifted = t.getCenter(find.byIcon(Icons.queue_music_rounded).last);
+    expect((lifted.dx - where.dx).abs(), lessThan(30));
+    expect(find.text('Drag to a new place, let go to finish'), findsOneWidget);
+    expect(find.text('Done'), findsNothing); // no button: letting go finishes
     await g.up();
-    await frames(t, 4);
+    await frames(t, 6);
+    expect(find.text('Drag to a new place, let go to finish'), findsNothing);
+    expect(find.text('Road Trip'), findsOneWidget); // back to the open card
   });
 
-  testWidgets('dragging a card onto another reorders them, and it is kept', (t) async {
-    final c = await arrange(t);
-    final g = await pickUp(t, Icons.download_done_rounded);
-    await g.moveTo(t.getCenter(find.byIcon(Icons.history_rounded)));
+  testWidgets('drag over another card to swap places; letting go keeps it', (t) async {
+    final c = await home(t);
+    final g = await pickUp(t, Icons.queue_music_rounded);
+    await frames(t, 6);
+    await g.moveTo(t.getCenter(find.byIcon(Icons.history_rounded).first));
     await frames(t, 3);
     await g.up();
     await frames(t, 6);
-    expect(c.read(homeOrderProvider).take(2), ['music', 'hist']);
-    expect(t.getCenter(find.byIcon(Icons.download_done_rounded)).dx,
-        lessThan(t.getCenter(find.byIcon(Icons.history_rounded)).dx));
+    expect(c.read(homeOrderProvider).first, 'p1');
   });
 
-  testWidgets('a playlist dropped on the bin at the top falls in and is deleted; Undo brings it back',
+  testWidgets('a playlist let go over the wormhole at the top is swallowed and deleted; Undo brings it back',
       (t) async {
-    final c = await arrange(t);
-    // Hidden (slid up, untouchable) until a playlist is picked up.
+    final c = await home(t);
     expect(find.text('Drag here to delete the playlist').hitTestable(), findsNothing);
     final g = await pickUp(t, Icons.queue_music_rounded);
     await g.moveBy(const Offset(0, -10));
     await frames(t, 4);
     final zone = find.text('Drag here to delete the playlist');
     expect(zone.hitTestable(), findsOneWidget); // faint, at the top
-    expect(t.getRect(zone).top, lessThan(120));
+    expect(t.getRect(zone).top, lessThan(140));
     await g.moveTo(t.getCenter(zone));
     await frames(t, 3);
     expect(find.text('Let go to delete'), findsOneWidget); // turned red
     await g.up();
-    await frames(t, 14); // lid opens, card falls in, lid closes
+    await frames(t, 12); // spirals in and vanishes
     expect(c.read(playlistProvider), isEmpty);
-    expect(find.text('Undo'), findsOneWidget);
+    // The message: a capsule at the top, with Undo.
+    expect(find.text('"Road Trip" deleted'), findsOneWidget);
+    expect(t.getRect(find.text('"Road Trip" deleted')).top, lessThan(80));
     await t.tap(find.text('Undo'));
-    await frames(t, 4);
+    await frames(t, 6);
     expect(c.read(playlistProvider).single.name, 'Road Trip');
   });
 
-  testWidgets('My History, Favorites and Music cannot be binned', (t) async {
-    await arrange(t);
-    final g = await pickUp(t, Icons.history_rounded);
+  testWidgets('My History, Favorites and Music cannot be deleted', (t) async {
+    await home(t);
+    final g = await pickUp(t, Icons.download_done_rounded);
     await g.moveBy(const Offset(0, -10));
     await frames(t, 4);
     expect(find.text('Drag here to delete the playlist').hitTestable(), findsNothing);
     await g.up();
     await frames(t, 4);
   });
+
 
 
 }

@@ -1,4 +1,5 @@
 import 'dart:math';
+import '../widgets/noor_toast.dart';
 import '../providers/gesture_settings_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -300,9 +301,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
 
   void _openNaming() async {
     if (ref.read(playlistProvider.notifier).isFull) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('You can have up to $kMaxPlaylists playlists.'),
-          behavior: SnackBarBehavior.floating));
+      NoorToast.show(context, 'You can have up to $kMaxPlaylists playlists.');
       return;
     }
     HapticFeedback.selectionClick();
@@ -328,9 +327,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
     final name = _nameCtrl.text.trim();
     if (name.isEmpty) return;
     if (ref.read(playlistProvider.notifier).nameTaken(name)) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('A playlist with this name already exists.'),
-          behavior: SnackBarBehavior.floating));
+      NoorToast.show(context, 'A playlist with this name already exists.');
       return;
     }
     HapticFeedback.mediumImpact();
@@ -341,9 +338,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
     if (!mounted) return;
     setState(() => _panelState = _PanelState.none);
     _nameCtrl.clear();
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Created and added to ${pl.name} ✓'),
-        behavior: SnackBarBehavior.floating));
+    NoorToast.show(context, 'Created and added to ${pl.name} ✓');
   }
 
   Future<void> _closeAll() async {
@@ -627,9 +622,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
                             .addSong(pl.id, song);
                         _closeList();
                         if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                              content: Text('Added to ${pl.name} ✓'),
-                              behavior: SnackBarBehavior.floating));
+                          NoorToast.show(context, 'Added to ${pl.name} ✓');
                         }
                       },
                     ),

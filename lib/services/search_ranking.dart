@@ -24,7 +24,8 @@ class SearchCandidate {
 }
 
 class RankedCandidate {
-  const RankedCandidate(this.candidate, this.score, this.official, this.reasons);
+  const RankedCandidate(
+      this.candidate, this.score, this.official, this.reasons);
   final SearchCandidate candidate;
   final double score;
 
@@ -43,47 +44,150 @@ class RankedCandidate {
 /// Record labels and music companies whose channels are the genuine source of
 /// a release. Matched against the normalised channel name.
 const Set<String> kKnownLabels = {
-  't series', 't series regional', 'tseries', 'zee music company',
-  'zee music', 'sony music india', 'sony music', 'saregama music',
-  'saregama', 'tips official', 'tips music', 'speed records', 'times music',
-  'lahari music', 'white hill music', 'desi melodies', 'geet mp3',
-  'rhythm boyz', 'humble music', 'brown studios', 'sidhu moose wala',
-  'universal music', 'warner music', 'atlantic records', 'columbia records',
-  'republic records', 'rca records', 'interscope records', 'def jam recordings',
-  'capitol records', 'island records', 'emi', 'aditya music', 'lahari',
-  'think music india', 'junglee music', 'eros now music', 'yrf',
-  'vevo', 'hybe labels', 'sm town', 'jyp entertainment', 'yg entertainment',
+  't series',
+  't series regional',
+  'tseries',
+  'zee music company',
+  'zee music',
+  'sony music india',
+  'sony music',
+  'saregama music',
+  'saregama',
+  'tips official',
+  'tips music',
+  'speed records',
+  'times music',
+  'lahari music',
+  'white hill music',
+  'desi melodies',
+  'geet mp3',
+  'rhythm boyz',
+  'humble music',
+  'brown studios',
+  'sidhu moose wala',
+  'universal music',
+  'warner music',
+  'atlantic records',
+  'columbia records',
+  'republic records',
+  'rca records',
+  'interscope records',
+  'def jam recordings',
+  'capitol records',
+  'island records',
+  'emi',
+  'aditya music',
+  'lahari',
+  'think music india',
+  'junglee music',
+  'eros now music',
+  'yrf',
+  'vevo',
+  'hybe labels',
+  'sm town',
+  'jyp entertainment',
+  'yg entertainment',
 };
 
 // Modifiers that mark a fan edit / derivative. Penalised unless the user asked
 // for them. Matched as whole words or phrases on the normalised title.
 const Map<String, double> _derivativePenalty = {
-  'lyrics': 22, 'lyric': 22, 'lyrical': 22,
-  '8d': 45, '16d': 45, '8d audio': 45, '3d audio': 40,
-  'slowed': 45, 'reverb': 40, 'sped up': 45, 'speed up': 45, 'nightcore': 45,
-  'bass boosted': 40, 'bass boost': 40, 'bassboosted': 40,
-  'remix': 38, 'remixed': 38, 'mashup': 40, 'mix': 18, 'dj': 18,
-  'cover': 40, 'karaoke': 45, 'instrumental': 30, 'reaction': 50,
-  'status': 35, 'whatsapp': 35, 'ringtone': 40, 'jukebox': 30,
-  'lofi': 30, 'lo fi': 30, 'live': 12, 'concert': 12, 'acoustic': 10,
-  'tutorial': 40, 'lesson': 40, 'how to': 40, 'trailer': 30, 'teaser': 25,
-  'shorts': 25, 'edit': 20, 'fan made': 30, 'fanmade': 30, 'dance': 15,
-  'choreography': 25, 'gameplay': 40, 'full album': 30, 'compilation': 30,
-  'playlist': 30, 'nonstop': 25, 'non stop': 25, 'loop': 25, 'hour': 25,
-  'hours': 25, 'reupload': 30, 'reuploaded': 30, 'copyright free': 30,
-  'no copyright': 30, 'dhol': 15, 'extended': 15,
+  'lyrics': 22,
+  'lyric': 22,
+  'lyrical': 22,
+  '8d': 45,
+  '16d': 45,
+  '8d audio': 45,
+  '3d audio': 40,
+  'slowed': 45,
+  'reverb': 40,
+  'sped up': 45,
+  'speed up': 45,
+  'nightcore': 45,
+  'bass boosted': 40,
+  'bass boost': 40,
+  'bassboosted': 40,
+  'remix': 38,
+  'remixed': 38,
+  'mashup': 40,
+  'mix': 18,
+  'dj': 18,
+  'cover': 40,
+  'karaoke': 45,
+  'instrumental': 30,
+  'reaction': 50,
+  'status': 35,
+  'whatsapp': 35,
+  'ringtone': 40,
+  'jukebox': 30,
+  'lofi': 30,
+  'lo fi': 30,
+  'live': 12,
+  'concert': 12,
+  'acoustic': 10,
+  'tutorial': 40,
+  'lesson': 40,
+  'how to': 40,
+  'trailer': 30,
+  'teaser': 25,
+  'shorts': 25,
+  'edit': 20,
+  'fan made': 30,
+  'fanmade': 30,
+  'dance': 15,
+  'choreography': 25,
+  'gameplay': 40,
+  'full album': 30,
+  'compilation': 30,
+  'playlist': 30,
+  'nonstop': 25,
+  'non stop': 25,
+  'loop': 25,
+  'hour': 25,
+  'hours': 25,
+  'reupload': 30,
+  'reuploaded': 30,
+  'copyright free': 30,
+  'no copyright': 30,
+  'dhol': 15,
+  'extended': 15,
 };
 
 const List<String> _fanChannelWords = [
-  'lyrics', 'lyrical', 'fan', 'fans', 'edits', 'edit', 'status', 'whatsapp',
-  'remix', 'remixes', 'reaction', 'covers', 'cover', 'dj', 'bass', '8d',
-  'slowed', 'nightcore', 'lofi', 'beat', 'beats', 'tune tube', 'roadshow',
+  'lyrics',
+  'lyrical',
+  'fan',
+  'fans',
+  'edits',
+  'edit',
+  'status',
+  'whatsapp',
+  'remix',
+  'remixes',
+  'reaction',
+  'covers',
+  'cover',
+  'dj',
+  'bass',
+  '8d',
+  'slowed',
+  'nightcore',
+  'lofi',
+  'beat',
+  'beats',
+  'tune tube',
+  'roadshow',
 ];
 
 const Map<String, double> _officialTitleBonus = {
-  'official audio': 25, 'official video': 22, 'official music video': 25,
-  'official mv': 22, 'official lyric video': 10, 'official visualizer': 15,
-  'official video song': 22, 'official song': 20,
+  'official audio': 25,
+  'official video': 22,
+  'official music video': 25,
+  'official mv': 22,
+  'official lyric video': 10,
+  'official visualizer': 15,
+  'official video song': 22,
+  'official song': 20,
 };
 
 String normalizeForRanking(String s) => s
@@ -148,16 +252,21 @@ List<RankedCandidate> rankCandidates(
         trusted = true;
       }
     }
-    final fanHits = _fanChannelWords.where((w) => _containsPhrase(author, w)).length;
-    if (fanHits > 0) add(-min<double>(35, 18.0 * fanHits), 'fan/edit-style channel name');
+    final fanHits =
+        _fanChannelWords.where((w) => _containsPhrase(author, w)).length;
+    if (fanHits > 0)
+      add(-min<double>(35, 18.0 * fanHits), 'fan/edit-style channel name');
 
     // ── Title says "official" (only believed from a trusted channel) ──────
     var claimsOfficial = false;
     for (final e in _officialTitleBonus.entries) {
       if (_containsPhrase(title, e.key)) {
         claimsOfficial = true;
-        add(trusted ? e.value : e.value * 0.2,
-            trusted ? 'title: ${e.key}' : 'title says "${e.key}" but the channel is not trusted');
+        add(
+            trusted ? e.value : e.value * 0.2,
+            trusted
+                ? 'title: ${e.key}'
+                : 'title says "${e.key}" but the channel is not trusted');
         break;
       }
     }
@@ -174,7 +283,8 @@ List<RankedCandidate> rankCandidates(
         penalty += p;
       }
     }
-    if (penalty > 0) add(-min<double>(80, penalty), 'fan-edit markers: ${matched.join(', ')}');
+    if (penalty > 0)
+      add(-min<double>(80, penalty), 'fan-edit markers: ${matched.join(', ')}');
     // The user explicitly asked for a modifier: reward titles that have it.
     for (final key in _derivativePenalty.keys) {
       if (_containsPhrase(q, key) && _containsPhrase(title, key)) {
@@ -192,9 +302,12 @@ List<RankedCandidate> rankCandidates(
     // ── Relevance to what was typed ────────────────────────────────────────
     if (qTokens.isNotEmpty) {
       final hay = '$title $author';
-      final hit = qTokens.where((t) => _containsPhrase(hay, t) || hay.contains(t)).length;
+      final hit = qTokens
+          .where((t) => _containsPhrase(hay, t) || hay.contains(t))
+          .length;
       add(20.0 * hit / qTokens.length, 'matches the query');
-      if (qTokens.every((t) => title.contains(t))) add(8, 'title has every query word');
+      if (qTokens.every((t) => title.contains(t)))
+        add(8, 'title has every query word');
     }
 
     // ── Shape of the video ─────────────────────────────────────────────────
@@ -209,7 +322,9 @@ List<RankedCandidate> rankCandidates(
       }
     }
     if (c.isLive) add(-60, 'live stream');
-    final symbols = c.title.runes.where((r) => r > 0x2000 && r < 0x1FFFF && !_isLetterish(r)).length;
+    final symbols = c.title.runes
+        .where((r) => r > 0x2000 && r < 0x1FFFF && !_isLetterish(r))
+        .length;
     if (symbols >= 3) add(-8, 'emoji/symbol clutter');
     if ('#'.allMatches(c.title).length >= 2) add(-6, 'hashtags');
 

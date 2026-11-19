@@ -77,13 +77,15 @@ class YoutubeSearchService {
       try {
         // The query is sent as typed: adding "music" used to attract fan
         // channels with "Music" in their name.
-        final first = await _yt.search.search(q).timeout(const Duration(seconds: 15));
+        final first =
+            await _yt.search.search(q).timeout(const Duration(seconds: 15));
         var candidates = _toCandidates(first);
         var ranked = rankCandidates(q, candidates);
 
         if (!isConfident(ranked)) {
           try {
-            final more = await first.nextPage().timeout(const Duration(seconds: 10));
+            final more =
+                await first.nextPage().timeout(const Duration(seconds: 10));
             if (more != null) {
               final seen = {for (final c in candidates) c.videoId};
               candidates = [
@@ -123,7 +125,8 @@ class YoutubeSearchService {
               'YouTube is limiting requests from your network. '
               'Please wait a few minutes and try again.');
         }
-        if (attempt == 0) await Future<void>.delayed(const Duration(milliseconds: 600));
+        if (attempt == 0)
+          await Future<void>.delayed(const Duration(milliseconds: 600));
       }
     }
     throw SearchException(last is TimeoutException

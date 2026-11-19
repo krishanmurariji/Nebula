@@ -28,7 +28,8 @@ String? normalizeInstanceUrl(String raw) {
   if (!RegExp(r'^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$').hasMatch(host)) return null;
   if (!host.contains('.')) return null; // "localhost", bare names
   if (host.endsWith('.local') || host.endsWith('.internal')) return null;
-  final ip = RegExp(r'^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$').firstMatch(host);
+  final ip =
+      RegExp(r'^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$').firstMatch(host);
   if (ip != null) {
     final a = int.parse(ip[1]!), b = int.parse(ip[2]!);
     final isPrivate = a == 10 ||
@@ -155,8 +156,8 @@ class FallbackStreamFetcher {
       final dead = _deadUntil[base];
       if (dead != null && _now().isBefore(dead)) continue;
       try {
-        final r = await _fromInstance(base, videoId)
-            .timeout(perInstanceTimeout * 2);
+        final r =
+            await _fromInstance(base, videoId).timeout(perInstanceTimeout * 2);
         if (r != null) {
           nlog('[N] backup ok via ${Uri.parse(base).host}');
           return r;
@@ -170,8 +171,7 @@ class FallbackStreamFetcher {
   }
 
   Future<Object?> _getJson(String url) async {
-    final res =
-        await _client.get(Uri.parse(url)).timeout(perInstanceTimeout);
+    final res = await _client.get(Uri.parse(url)).timeout(perInstanceTimeout);
     if (res.statusCode != 200) return null;
     return jsonDecode(res.body);
   }

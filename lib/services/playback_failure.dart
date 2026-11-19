@@ -73,7 +73,6 @@ Duration retryDelay(int attempt) {
   return Duration(milliseconds: ms > 6000 ? 6000 : ms);
 }
 
-
 /// The HTTP status a media/API server answered with, taken from an error
 /// message such as "HTTP 403 from rr6---sn-x.googlevideo.com", or null when no
 /// server answer is mentioned.
