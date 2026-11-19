@@ -5,11 +5,11 @@ import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'package:nebula_music_player/services/audio_cache.dart';
-import 'package:nebula_music_player/services/playback_failure.dart';
-import 'package:nebula_music_player/services/resolved_stream.dart';
-import 'package:nebula_music_player/services/song_acquirer.dart';
-import 'package:nebula_music_player/services/stream_resolver.dart';
+import 'package:noor/services/audio_cache.dart';
+import 'package:noor/services/playback_failure.dart';
+import 'package:noor/services/resolved_stream.dart';
+import 'package:noor/services/song_acquirer.dart';
+import 'package:noor/services/stream_resolver.dart';
 
 // Named like the real library's exceptions: the classifier recognises them by name.
 class RequestLimitExceededException implements Exception {}

@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:nebula_music_player/services/youtube_clients.dart';
+import 'package:noor/services/youtube_clients.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 
 void main() {

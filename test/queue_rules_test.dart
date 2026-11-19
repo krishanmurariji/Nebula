@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:nebula_music_player/models/song.dart';
-import 'package:nebula_music_player/providers/library_provider.dart';
-import 'package:nebula_music_player/providers/queue_rules.dart';
+import 'package:noor/models/song.dart';
+import 'package:noor/providers/library_provider.dart';
+import 'package:noor/providers/queue_rules.dart';
 
 Song s(String id) => Song(videoId: id.padRight(11, 'x'), title: id, artist: 'a', thumbnailUrl: '');
 

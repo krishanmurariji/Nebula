@@ -2,10 +2,10 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:nebula_music_player/services/playback_failure.dart';
-import 'package:nebula_music_player/services/progressive_download.dart';
-import 'package:nebula_music_player/services/resolved_stream.dart';
-import 'package:nebula_music_player/services/stream_resolver.dart';
+import 'package:noor/services/playback_failure.dart';
+import 'package:noor/services/progressive_download.dart';
+import 'package:noor/services/resolved_stream.dart';
+import 'package:noor/services/stream_resolver.dart';
 
 const _t = [Duration(seconds: 5), Duration(seconds: 5), Duration(seconds: 5)];
 

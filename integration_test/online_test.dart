@@ -8,10 +8,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
-import 'package:nebula_music_player/main.dart' as app;
-import 'package:nebula_music_player/theme/noor_play_pause.dart';
-import 'package:nebula_music_player/widgets/song_details_panel.dart';
-import 'package:nebula_music_player/widgets/song_row.dart';
+import 'package:noor/main.dart' as app;
+import 'package:noor/theme/noor_play_pause.dart';
+import 'package:noor/widgets/song_details_panel.dart';
+import 'package:noor/widgets/song_row.dart';
 
 import 'helpers.dart';
 

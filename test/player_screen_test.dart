@@ -2,10 +2,10 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:nebula_music_player/models/song.dart';
-import 'package:nebula_music_player/providers/player_provider.dart';
-import 'package:nebula_music_player/screens/player_screen.dart';
-import 'package:nebula_music_player/theme/noor_turntable.dart';
+import 'package:noor/models/song.dart';
+import 'package:noor/providers/player_provider.dart';
+import 'package:noor/screens/player_screen.dart';
+import 'package:noor/theme/noor_turntable.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class _P extends StateNotifier<NebulaPlayerState> implements PlayerNotifier {

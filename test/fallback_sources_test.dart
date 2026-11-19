@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'package:nebula_music_player/services/fallback_sources.dart';
+import 'package:noor/services/fallback_sources.dart';
 
 const _piped = {
   'audioStreams': [

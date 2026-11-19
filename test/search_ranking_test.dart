@@ -1,8 +1,8 @@
 import 'dart:math';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:nebula_music_player/services/search_ranking.dart';
-import 'package:nebula_music_player/services/youtube_search_service.dart';
+import 'package:noor/services/search_ranking.dart';
+import 'package:noor/services/youtube_search_service.dart';
 
 SearchCandidate c(String id, String author, String title, int views, String mmss,
     {bool live = false}) {

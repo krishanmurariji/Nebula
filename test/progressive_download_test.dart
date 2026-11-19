@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:nebula_music_player/services/progressive_download.dart';
+import 'package:noor/services/progressive_download.dart';
 
 Uint8List _data(int n) => Uint8List.fromList(List.generate(n, (i) => i % 251));
 

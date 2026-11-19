@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:nebula_music_player/services/latest_wins_runner.dart';
+import 'package:noor/services/latest_wins_runner.dart';
 
 void main() {
   test('50 rapid submissions: one in flight, 48 dropped, last one wins', () async {

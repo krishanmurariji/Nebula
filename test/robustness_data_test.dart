@@ -2,8 +2,8 @@ import 'dart:convert';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:nebula_music_player/models/song.dart';
-import 'package:nebula_music_player/providers/library_provider.dart';
+import 'package:noor/models/song.dart';
+import 'package:noor/providers/library_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 Future<void> settle() => Future<void>.delayed(const Duration(milliseconds: 60));

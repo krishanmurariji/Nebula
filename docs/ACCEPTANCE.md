@@ -34,7 +34,7 @@ update the client definitions, …). It does **not** test sound: use section 2.
 | Swipe away | Swipe the app from recents, reopen | Opens and plays normally |
 | Queue edits | Reorder / remove in Up Next | Plays in the order shown |
 
-If "Screen off" fails: Settings → Apps → Nebula → Battery → **Unrestricted**.
+If "Screen off" fails: Settings → Apps → Noor → Battery → **Unrestricted**.
 
 ## 3. What is covered automatically
 `flutter test` (347 tests, no phone needed): corrupt data, hostile servers,

@@ -4,15 +4,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:nebula_music_player/models/song.dart';
-import 'package:nebula_music_player/providers/library_provider.dart';
-import 'package:nebula_music_player/providers/local_music_provider.dart';
-import 'package:nebula_music_player/providers/player_provider.dart';
-import 'package:nebula_music_player/screens/home_screen.dart';
-import 'package:nebula_music_player/screens/mini_player.dart';
-import 'package:nebula_music_player/screens/player_screen.dart';
-import 'package:nebula_music_player/screens/search_screen.dart';
-import 'package:nebula_music_player/widgets/song_row.dart';
+import 'package:noor/models/song.dart';
+import 'package:noor/providers/library_provider.dart';
+import 'package:noor/providers/local_music_provider.dart';
+import 'package:noor/providers/player_provider.dart';
+import 'package:noor/screens/home_screen.dart';
+import 'package:noor/screens/mini_player.dart';
+import 'package:noor/screens/player_screen.dart';
+import 'package:noor/screens/search_screen.dart';
+import 'package:noor/widgets/song_row.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 Song s(String id, String t) =>

@@ -1,4 +1,4 @@
-package com.nebula.nebula_music_player
+package com.noor.music
 
 import android.content.ContentUris
 import android.graphics.Bitmap

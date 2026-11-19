@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:nebula_music_player/services/network_diagnostics.dart';
+import 'package:noor/services/network_diagnostics.dart';
 
 final _addr = [InternetAddress('1.2.3.4')];
 

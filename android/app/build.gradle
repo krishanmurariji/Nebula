@@ -19,7 +19,7 @@ if (keystorePropertiesFile.exists()) {
     keystorePropertiesFile.withReader("UTF-8") { reader -> keystoreProperties.load(reader) }
 }
 android {
-    namespace "com.nebula.nebula_music_player"
+    namespace "com.noor.music"
     compileSdk 36
     ndkVersion flutter.ndkVersion
     compileOptions {
@@ -29,7 +29,7 @@ android {
     kotlinOptions { jvmTarget = "17" }
     sourceSets { main.java.srcDirs += "src/main/kotlin" }
     defaultConfig {
-        applicationId "com.nebula.nebula_music_player"
+        applicationId "com.noor.music"
         minSdkVersion flutter.minSdkVersion
         targetSdk 36
         versionCode flutterVersionCode.toInteger()

@@ -2,11 +2,11 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:nebula_music_player/models/song.dart';
-import 'package:nebula_music_player/providers/last_played_provider.dart';
-import 'package:nebula_music_player/providers/library_provider.dart';
-import 'package:nebula_music_player/providers/player_provider.dart';
-import 'package:nebula_music_player/widgets/song_row.dart';
+import 'package:noor/models/song.dart';
+import 'package:noor/providers/last_played_provider.dart';
+import 'package:noor/providers/library_provider.dart';
+import 'package:noor/providers/player_provider.dart';
+import 'package:noor/widgets/song_row.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 Song song(String id, String title) =>

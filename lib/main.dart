@@ -73,7 +73,7 @@ Future<void> _removeLegacyApiKey() async {
 Future<NebulaAudioHandler> _initAudio() => AudioService.init<NebulaAudioHandler>(
       builder: () => NebulaAudioHandler(),
       config: const AudioServiceConfig(
-        androidNotificationChannelId: 'com.nebula.nebula_music_player.audio',
+        androidNotificationChannelId: 'com.noor.music.audio',
         androidNotificationChannelName: 'Noor Music',
         androidNotificationOngoing: true,
         androidStopForegroundOnPause: true,

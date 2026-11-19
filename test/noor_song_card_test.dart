@@ -2,11 +2,11 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:nebula_music_player/models/song.dart';
-import 'package:nebula_music_player/providers/player_provider.dart';
-import 'package:nebula_music_player/screens/upnext_screen.dart';
-import 'package:nebula_music_player/theme/noor_play_pause.dart';
-import 'package:nebula_music_player/theme/noor_song_card.dart';
+import 'package:noor/models/song.dart';
+import 'package:noor/providers/player_provider.dart';
+import 'package:noor/screens/upnext_screen.dart';
+import 'package:noor/theme/noor_play_pause.dart';
+import 'package:noor/theme/noor_song_card.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 Widget host(Widget child) => MaterialApp(home: Scaffold(body: Center(child: child)));
