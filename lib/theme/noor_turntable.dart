@@ -10,7 +10,9 @@ import 'noor_artwork.dart';
 /// * [armDown]: the stylus rests on the record (lifted and swung out when
 ///   false);
 /// * [discShift]: moves the record sideways, as a fraction of the size
-///   (used when one record is swapped for the next).
+///   (used when one record is swapped for the next);
+/// * [incomingArtUrl] / [incomingShift]: a second record (not turning) at
+///   that shift, the one sliding in while the record is swiped.
 class NoorTurntable extends StatefulWidget {
   const NoorTurntable({
     super.key,
@@ -19,8 +21,12 @@ class NoorTurntable extends StatefulWidget {
     required this.spinning,
     required this.armDown,
     this.discShift = 0,
+    this.incomingArtUrl,
+    this.incomingShift = 0,
   });
 
+  final String? incomingArtUrl;
+  final double incomingShift;
   final double size;
   final String artUrl;
   final bool spinning;
@@ -74,38 +80,11 @@ class _NoorTurntableState extends State<NoorTurntable>
         clipBehavior: Clip.none,
         children: [
           Positioned.fill(child: CustomPaint(painter: _PlinthPainter())),
+          if (widget.incomingArtUrl != null)
+            _record(s, d, c, widget.incomingShift, widget.incomingArtUrl!,
+                turning: false),
           // The record (and its artwork label) turns and slides.
-          Positioned(
-            left: c.dx * s - d / 2 + widget.discShift * s,
-            top: c.dy * s - d / 2,
-            width: d,
-            height: d,
-            child: RotationTransition(
-              turns: _spin,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  CustomPaint(painter: _VinylPainter()),
-                  Center(
-                    child: SizedBox(
-                      width: d * 0.41,
-                      height: d * 0.41,
-                      child: ClipOval(
-                        child: Stack(fit: StackFit.expand, children: [
-                          const ColoredBox(color: Color(0xFFE8673F)),
-                          if (widget.artUrl.isNotEmpty)
-                            NoorArtwork(url: widget.artUrl),
-                        ]),
-                      ),
-                    ),
-                  ),
-                  // Light sheen over the label so it sits under the same
-                  // lighting as the vinyl.
-                  CustomPaint(painter: _SheenPainter()),
-                ],
-              ),
-            ),
-          ),
+          _record(s, d, c, widget.discShift, widget.artUrl, turning: true),
           // Spindle (does not turn visibly, so outside the rotation).
           Positioned(
             left: c.dx * s - s * 0.014 + widget.discShift * s,
@@ -136,6 +115,37 @@ class _NoorTurntableState extends State<NoorTurntable>
           ),
         ],
       ),
+    );
+  }
+  Widget _record(double s, double d, Offset c, double shift, String art,
+      {required bool turning}) {
+    final record = Stack(
+      fit: StackFit.expand,
+      children: [
+        CustomPaint(painter: _VinylPainter()),
+        Center(
+          child: SizedBox(
+            width: d * 0.41,
+            height: d * 0.41,
+            child: ClipOval(
+              child: Stack(fit: StackFit.expand, children: [
+                const ColoredBox(color: Color(0xFFE8673F)),
+                if (art.isNotEmpty) NoorArtwork(url: art),
+              ]),
+            ),
+          ),
+        ),
+        // Light sheen over the label so it sits under the same lighting as
+        // the vinyl.
+        CustomPaint(painter: _SheenPainter()),
+      ],
+    );
+    return Positioned(
+      left: c.dx * s - d / 2 + shift * s,
+      top: c.dy * s - d / 2,
+      width: d,
+      height: d,
+      child: turning ? RotationTransition(turns: _spin, child: record) : record,
     );
   }
 }

@@ -197,6 +197,28 @@ void main() {
       expect(p.played, ['Gamma']); // wraps round from the first
     });
 
+    testWidgets('while the card is dragged, the next song slides in beside it', (t) async {
+      final p = await withCard(t);
+      final g = await t.startGesture(t.getCenter(card()));
+      for (var i = 0; i < 8; i++) {
+        await g.moveBy(const Offset(-12, 0), timeStamp: Duration(milliseconds: 60 * (i + 1)));
+        await t.pump(const Duration(milliseconds: 16));
+      }
+      final next = find.descendant(of: find.byType(MiniPlayer), matching: find.text('Beta'));
+      expect(next, findsOneWidget);
+      expect(t.getTopLeft(next).dx, greaterThan(t.getTopLeft(card()).dx));
+      expect(p.played, isEmpty);
+      // Brought back: nothing changes and the next card goes away.
+      for (var i = 0; i < 8; i++) {
+        await g.moveBy(const Offset(12, 0), timeStamp: Duration(milliseconds: 600 + 60 * i));
+        await t.pump(const Duration(milliseconds: 16));
+      }
+      await g.up();
+      await settle(t, 8);
+      expect(p.played, isEmpty);
+      expect(next, findsNothing);
+    });
+
     testWidgets('swipe up on the card opens the player', (t) async {
       await withCard(t);
       await t.fling(card(), const Offset(0, -200), 1200);

@@ -73,8 +73,8 @@
 | Home | Swipe down (or pull the list down) | Home sinks away and search drops in |
 | Search box | Type | Your recent searches (clock) and YouTube's suggestions drop down; tap one to search it, tap ↖ to put it in the box and keep typing, swipe a recent one away to forget it |
 | Home, a playlist card | Long press | Delete the playlist (its songs stay in Favorites and History) |
-| Bottom player | Swipe left / right | Next / previous song |
-| Player record | Swipe left / right | Next / previous song, with the record swap |
+| Bottom player | Swipe left / right | Next / previous song: the next card slides in beside it; let go early or drag back to cancel |
+| Player record | Swipe left / right | Next / previous song: the next record slides in under your finger; let go early or drag back to cancel |
 | Player | Swipe down | The song's details drop from the top |
 | Player | Swipe up | Up next rises from the bottom |
 | Anywhere | Back | Closes one layer at a time (menu, actions, search) |

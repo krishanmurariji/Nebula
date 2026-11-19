@@ -19,7 +19,9 @@ import '../theme/noor_song_card.dart';
 ///
 /// * tap: opens the player;
 /// * swipe left / right: next / previous song (playlist > favorites >
-///   history; the same song again when there is no other);
+///   history; the same song again when there is no other). The next card
+///   slides in beside the one being dragged; let go early, or drag back,
+///   and both return;
 /// * double tap: like / unlike.
 class MiniPlayer extends ConsumerStatefulWidget {
   const MiniPlayer({super.key, this.onOpen});
@@ -51,36 +53,44 @@ class _MiniPlayerState extends ConsumerState<MiniPlayer>
 
   void _dragUpdate(DragUpdateDetails d) {
     if (_changing) return;
-    // A little resistance, so the card feels attached to the finger.
-    _dx.value += d.primaryDelta! * 0.9;
+    // The card stays under the finger.
+    _dx.value += d.primaryDelta!;
   }
+
+  /// Space between the card and the one sliding in beside it.
+  static const double _gap = 36; // room for its half-out record
 
   Future<void> _dragEnd(DragEndDetails d, Song song) async {
     if (_changing) return;
     final v = d.primaryVelocity ?? 0;
     final x = _dx.value;
-    final far = x.abs() > _width * 0.28;
+    final far = x.abs() > _width * 0.33;
     final fling = v.abs() > 700 && v.sign == x.sign;
     if (!(far || fling) || x == 0) {
-      // Not far enough: spring back.
+      // Let go too early, or dragged back: both cards return.
       await _dx.animateTo(0,
-          duration: const Duration(milliseconds: 380),
-          curve: Curves.elasticOut);
+          duration: const Duration(milliseconds: 420),
+          curve: Curves.easeOutBack);
       return;
     }
     _changing = true;
     final dir = x.sign; // swiped right (+1): previous; left (-1): next
-    // Out it goes...
-    await _dx.animateTo(dir * (_width + 40),
-        duration: const Duration(milliseconds: 200), curve: Curves.easeInCubic);
+    // The incoming card slides into place...
+    final left = 1 - x.abs() / (_width + _gap);
+    await _dx.animateTo(dir * (_width + _gap),
+        duration: Duration(milliseconds: (140 + 300 * left).round()),
+        curve: Curves.easeOutCubic);
     if (!mounted) return;
+    // ...and becomes the card: same place, now the song that plays.
     _step(song, dir > 0 ? -1 : 1);
-    // ...and the new song comes in from the other side.
-    _dx.value = -dir * (_width + 40);
-    await _dx.animateTo(0,
-        duration: const Duration(milliseconds: 420), curve: Curves.easeOutBack);
+    _dx.value = 0;
     _changing = false;
   }
+
+  Song _neighbour(Song current, int step) => neighbourOf(current, step,
+      playlists: ref.read(playlistProvider),
+      liked: ref.read(likedSongsProvider),
+      history: ref.read(historyProvider));
 
   void _openPlayer() => widget.onOpen != null
       ? widget.onOpen!()
@@ -97,11 +107,7 @@ class _MiniPlayerState extends ConsumerState<MiniPlayer>
 
   void _step(Song current, int step) {
     HapticFeedback.selectionClick();
-    final target = neighbourOf(current, step,
-        playlists: ref.read(playlistProvider),
-        liked: ref.read(likedSongsProvider),
-        history: ref.read(historyProvider));
-    _start(target);
+    _start(_neighbour(current, step));
   }
 
   @override
@@ -177,48 +183,21 @@ class _MiniPlayerState extends ConsumerState<MiniPlayer>
                 return Stack(
                   clipBehavior: Clip.none,
                   children: [
-                    // Behind the card: which way the swipe goes.
+                    // Beside the card: the song a swipe this way plays,
+                    // sliding in with it.
                     if (x != 0)
                       Positioned.fill(
-                        child: Opacity(
-                          opacity: (p * 2.2).clamp(0.0, 1.0),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 22),
-                            decoration: BoxDecoration(
-                              borderRadius:
-                                  BorderRadius.circular(kNoorCardRadius),
-                              border: Border.all(
-                                  color: t.ac.withOpacity(0.35), width: 0.8),
-                            ),
-                            alignment: x > 0
-                                ? Alignment.centerLeft
-                                : Alignment.centerRight,
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                    x > 0
-                                        ? Icons.skip_previous_rounded
-                                        : Icons.skip_next_rounded,
-                                    color: t.ac,
-                                    size: 26),
-                                const SizedBox(width: 6),
-                                Text(x > 0 ? 'Previous' : 'Next',
-                                    style: TextStyle(
-                                        color: t.ac,
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w600)),
-                              ],
-                            ),
-                          ),
+                        child: Transform.translate(
+                          offset: Offset(x - x.sign * (_width + _gap), 0),
+                          child: _PeekCard(
+                              song: _neighbour(song, x > 0 ? -1 : 1),
+                              height: height,
+                              disc: disc),
                         ),
                       ),
                     Transform.translate(
                       offset: Offset(x, 0),
-                      child: Transform.rotate(
-                        angle: x / _width * 0.06,
-                        child: Opacity(opacity: 1 - p * 0.45, child: card),
-                      ),
+                      child: Opacity(opacity: 1 - p * 0.3, child: card),
                     ),
                   ],
                 );
@@ -308,6 +287,66 @@ class _MiniPlayerState extends ConsumerState<MiniPlayer>
             ),
           );
         }),
+      ),
+    );
+  }
+}
+
+/// The card of the song a swipe would play: the bottom card's look with
+/// the record resting half outside, as it shows while that song loads.
+class _PeekCard extends StatelessWidget {
+  const _PeekCard(
+      {required this.song, required this.height, required this.disc});
+  final Song song;
+  final double height;
+  final double disc;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = NoorTheme.of(context);
+    return IgnorePointer(
+      child: Container(
+        height: height,
+        decoration: BoxDecoration(
+          color: t.bg,
+          borderRadius: BorderRadius.circular(kNoorCardRadius),
+          border: Border.all(color: t.ac, width: 1),
+        ),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 78,
+              height: height,
+              child: Stack(clipBehavior: Clip.none, children: [
+                Positioned(
+                  left: -disc / 2,
+                  top: (height - 2 - disc) / 2,
+                  child: NoorDisc(url: song.thumbnailUrl, size: disc),
+                ),
+              ]),
+            ),
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(song.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: noorSongTitleStyle(t.ac, size: 19)),
+                  const SizedBox(height: 2),
+                  Text(song.artist,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: noorArtistStyle(t.mute)),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            NoorPlayPauseButton(playing: false, loading: false, onTap: () {}),
+            const SizedBox(width: 12),
+          ],
+        ),
       ),
     );
   }

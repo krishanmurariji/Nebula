@@ -70,4 +70,61 @@ void main() {
     await settle(t);
     expect(p.played, ['Three']);
   });
+
+  /// Drags the record in [steps] slow moves of [dx] (slow, so letting go is
+  /// not a fling).
+  Future<void> drag(WidgetTester t, TestGesture g, double dx, int steps) async {
+    for (var i = 0; i < steps; i++) {
+      await g.moveBy(Offset(dx, 0), timeStamp: Duration(milliseconds: 60 * (i + 1)));
+      await t.pump(const Duration(milliseconds: 16));
+    }
+  }
+
+  NoorTurntable table(WidgetTester t) => t.widget<NoorTurntable>(find.byType(NoorTurntable));
+
+  testWidgets('while swiping, the next record slides in beside the current one', (t) async {
+    final p = await open(t);
+    final g = await t.startGesture(t.getCenter(find.byType(NoorTurntable)));
+    await drag(t, g, -12, 10);
+    expect(table(t).discShift, lessThan(0));
+    expect(table(t).incomingArtUrl, isNotNull);
+    expect(table(t).incomingShift, greaterThan(table(t).discShift));
+    expect(table(t).armDown, isFalse);
+    expect(p.played, isEmpty); // nothing changes until the swipe is finished
+    await g.up();
+    await settle(t);
+  });
+
+  testWidgets('letting go early puts the record back; nothing changes', (t) async {
+    final p = await open(t);
+    final g = await t.startGesture(t.getCenter(find.byType(NoorTurntable)));
+    await drag(t, g, -8, 10); // a short way
+    await g.up();
+    await settle(t);
+    expect(p.played, isEmpty);
+    expect(table(t).discShift, 0);
+    expect(table(t).incomingArtUrl, isNull);
+  });
+
+  testWidgets('dragging back takes the swipe back', (t) async {
+    final p = await open(t);
+    final g = await t.startGesture(t.getCenter(find.byType(NoorTurntable)));
+    await drag(t, g, -14, 20); // well past half way...
+    expect(table(t).discShift, lessThan(-0.5));
+    await drag(t, g, 14, 20); // ...and back
+    await g.up();
+    await settle(t);
+    expect(p.played, isEmpty);
+    expect(table(t).discShift, 0);
+  });
+
+  testWidgets('a slow swipe past a third finishes the change', (t) async {
+    final p = await open(t);
+    final g = await t.startGesture(t.getCenter(find.byType(NoorTurntable)));
+    await drag(t, g, 12, 16); // right: the previous song
+    await g.up();
+    await settle(t);
+    expect(p.played, ['One']);
+    expect(table(t).discShift, 0);
+  });
 }

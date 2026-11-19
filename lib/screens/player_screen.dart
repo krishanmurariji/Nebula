@@ -62,13 +62,19 @@ class PlayerScreen extends ConsumerStatefulWidget {
 
 class _PlayerScreenState extends ConsumerState<PlayerScreen>
     with TickerProviderStateMixin {
-  // Record swap: phase out (old record leaves), then phase in.
-  late final AnimationController _slide = AnimationController(
-      vsync: this, duration: const Duration(milliseconds: 360));
-  bool _swapping = false;
-  bool _inPhase = false;
-  int _outDir = -1; // -1: leaves to the left (next), 1: to the right
-  String? _artOverride;
+  // Record swap. The record follows the finger and the next (or previous)
+  // record slides in beside it, so a swipe can be finished or taken back.
+  // -1: the next record has fully replaced it (swiped left); 1: the
+  // previous one (swiped right); 0: at rest.
+  late final AnimationController _swipe =
+      AnimationController.unbounded(vsync: this);
+  bool _swapping = false; // a change is being committed
+  bool _dragging = false;
+  final Map<int, Song> _peek = {}; // step (1 next, -1 previous) -> song
+
+  /// How far the records travel for a full swap, as a fraction of the size.
+  static const double _travel = 1.25;
+  double _recordSize = 300;
 
   late final AnimationController _heartCtrl = AnimationController(
       vsync: this, duration: const Duration(milliseconds: 900));
@@ -114,7 +120,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
 
   @override
   void dispose() {
-    _slide.dispose();
+    _swipe.dispose();
     _heartCtrl.dispose();
     _listPanelCtrl.dispose();
     _namePanelCtrl.dispose();
@@ -143,31 +149,78 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
         history: ref.read(historyProvider));
   }
 
-  Future<void> _change(int step) async {
+  /// The song a swipe (or button) in this direction would play; the same
+  /// one for the whole gesture, even with shuffle.
+  Song? _peekFor(int step) {
     final current = ref.read(playerProvider).displaySong;
-    if (current == null || _swapping) return;
+    if (current == null) return null;
+    return _peek[step] ??= _target(current, step);
+  }
+
+  void _dragStart(DragStartDetails d) {
+    if (_swapping || ref.read(playerProvider).displaySong == null) return;
+    _swipe.stop();
+    _peek.clear();
+    setState(() => _dragging = true);
+  }
+
+  void _dragUpdate(DragUpdateDetails d) {
+    if (!_dragging) return;
+    final v = (_swipe.value + d.primaryDelta! / (_recordSize * _travel))
+        .clamp(-1.0, 1.0);
+    if (v != 0 && _swipe.value.sign != v.sign) {
+      HapticFeedback.selectionClick(); // a new record comes into view
+    }
+    _swipe.value = v;
+  }
+
+  Future<void> _dragEnd(DragEndDetails d) async {
+    if (!_dragging) return;
+    _dragging = false;
+    final v = _swipe.value;
+    final speed = d.primaryVelocity ?? 0;
+    final far = v.abs() > 0.32;
+    final fling = speed.abs() > 450 && speed.sign == v.sign;
+    if (v == 0 && speed.abs() > 450) {
+      // A quick flick that barely moved: still a swipe.
+      return _change(speed < 0 ? 1 : -1);
+    }
+    if ((far || fling) && v != 0) {
+      return _commit(v < 0 ? 1 : -1);
+    }
+    // Let go too early, or brought back: the record returns.
+    await _swipe.animateTo(0,
+        duration: const Duration(milliseconds: 420), curve: Curves.easeOutBack);
+    if (mounted) setState(() {});
+  }
+
+  /// Buttons: the same motion as a full swipe.
+  Future<void> _change(int step) async {
+    if (_swapping || _dragging) return;
+    if (ref.read(playerProvider).displaySong == null) return;
+    _peek.clear();
     HapticFeedback.selectionClick();
-    final target = _target(current, step);
-    setState(() {
-      _swapping = true;
-      _inPhase = false;
-      _outDir = step > 0 ? -1 : 1;
-      _artOverride = current.thumbnailUrl;
-    });
-    _slide.value = 0;
-    await Future<void>.delayed(const Duration(milliseconds: 320)); // arm lifts
-    if (!mounted) return;
-    await _slide.forward(from: 0); // old record leaves
+    await _commit(step);
+  }
+
+  /// Finishes the swap: the incoming record slides to the middle, then that
+  /// song plays and becomes the record at rest.
+  Future<void> _commit(int step) async {
+    final target = _peekFor(step);
+    if (target == null) return;
+    setState(() => _swapping = true);
+    final end = step > 0 ? -1.0 : 1.0;
+    final left = (end - _swipe.value).abs();
+    await _swipe.animateTo(end,
+        duration: Duration(milliseconds: (160 + 360 * left).round()),
+        curve: Curves.easeOutCubic);
     if (!mounted) return;
     ref
         .read(playerProvider.notifier)
         .playSong(target, queue: _contextOf(target));
-    setState(() {
-      _inPhase = true;
-      _artOverride = null;
-    });
-    await _slide.forward(from: 0); // new record arrives
-    if (mounted) setState(() => _swapping = false);
+    _swipe.value = 0;
+    _peek.clear();
+    setState(() => _swapping = false);
   }
 
   void _togglePlay(NebulaPlayerState ps) {
@@ -375,32 +428,40 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
                           onDoubleTap: song == null
                               ? null
                               : () => _toggleLike(song, liked),
-                          onHorizontalDragEnd: (d) {
-                            final v = d.primaryVelocity ?? 0;
-                            if (v < -250) _change(1);
-                            if (v > 250) _change(-1);
+                          onHorizontalDragStart: _dragStart,
+                          onHorizontalDragUpdate: _dragUpdate,
+                          onHorizontalDragEnd: _dragEnd,
+                          onHorizontalDragCancel: () {
+                            if (_dragging) {
+                              _dragging = false;
+                              _swipe.animateTo(0,
+                                  duration: const Duration(milliseconds: 300),
+                                  curve: Curves.easeOut);
+                            }
                           },
                           child: Stack(
                             alignment: Alignment.center,
                             children: [
                               AnimatedBuilder(
-                                animation: _slide,
+                                animation: _swipe,
                                 builder: (context, _) {
-                                  final v = Curves.easeInOutCubic
-                                      .transform(_slide.value);
-                                  final shift = !_swapping
-                                      ? 0.0
-                                      : _inPhase
-                                          ? -_outDir * (1 - v) * 1.25
-                                          : _outDir * v * 1.25;
+                                  _recordSize = size;
+                                  final v = _swipe.value;
+                                  final moving =
+                                      v != 0 || _dragging || _swapping;
+                                  final shift = v * _travel;
+                                  final step = v < 0 ? 1 : -1;
+                                  final incoming =
+                                      v == 0 ? null : _peekFor(step);
                                   return NoorTurntable(
                                     size: size,
-                                    artUrl: _artOverride ??
-                                        song?.thumbnailUrl ??
-                                        '',
-                                    spinning: playing && !loading && !_swapping,
-                                    armDown: playing && !loading && !_swapping,
+                                    artUrl: song?.thumbnailUrl ?? '',
+                                    spinning: playing && !loading && !moving,
+                                    armDown: playing && !loading && !moving,
                                     discShift: shift,
+                                    incomingArtUrl: incoming?.thumbnailUrl,
+                                    incomingShift:
+                                        shift + (v < 0 ? _travel : -_travel),
                                   );
                                 },
                               ),
