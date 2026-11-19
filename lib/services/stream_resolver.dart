@@ -136,7 +136,8 @@ class StreamResolver<T> {
     _rateLimitStreak++;
     final secs = min(20 * pow(2, _rateLimitStreak - 1).toInt(), 600);
     _rateLimitedUntil = _now().add(Duration(seconds: secs));
-    log?.call('YouTube is rate limiting this network: pausing lookups for ${secs}s');
+    log?.call(
+        'YouTube is rate limiting this network: pausing lookups for ${secs}s');
   }
 
   void _onHardFail(int i) {
@@ -192,7 +193,8 @@ class StreamResolver<T> {
       if (superseded == null) return await flight.future;
       return await Future.any<ResolveResult<T>>([
         flight.future,
-        superseded.then((_) => const ResolveResult.failed(FailureKind.cancelled)),
+        superseded
+            .then((_) => const ResolveResult.failed(FailureKind.cancelled)),
       ]);
     } finally {
       flight.waiters--;

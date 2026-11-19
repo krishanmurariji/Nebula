@@ -43,9 +43,9 @@ class NoorAlbumTile extends StatefulWidget {
 
   static const double _cover = 62;
   static const double _disc = 58;
-  static const double _overlap = 28; // how much of the record hides under the cover
+  static const double _overlap =
+      28; // how much of the record hides under the cover
   static const double _top = 10; // where the border starts
-
 }
 
 const Color _likeRed = Color(0xFFE5393F);
@@ -80,10 +80,14 @@ class _NoorAlbumTileState extends State<NoorAlbumTile>
             final start = _becomingLiked ? Colors.white : _likeRed;
             final end = _becomingLiked ? _likeRed : Colors.white;
             final color = Color.lerp(
-                start, end, Curves.easeInOut.transform(((v - 0.28) / 0.3).clamp(0.0, 1.0)))!;
+                start,
+                end,
+                Curves.easeInOut
+                    .transform(((v - 0.28) / 0.3).clamp(0.0, 1.0)))!;
             final scale = 0.35 +
                 0.85 * Curves.easeOutBack.transform((v / 0.3).clamp(0.0, 1.0));
-            final opacity = v < 0.72 ? 1.0 : (1 - (v - 0.72) / 0.28).clamp(0.0, 1.0);
+            final opacity =
+                v < 0.72 ? 1.0 : (1 - (v - 0.72) / 0.28).clamp(0.0, 1.0);
             return Center(
               child: Opacity(
                 opacity: opacity,
@@ -109,7 +113,8 @@ class _NoorAlbumTileState extends State<NoorAlbumTile>
     final t = NoorTheme.of(context);
 
     final art = SizedBox(
-      width: NoorAlbumTile._disc + NoorAlbumTile._cover - NoorAlbumTile._overlap,
+      width:
+          NoorAlbumTile._disc + NoorAlbumTile._cover - NoorAlbumTile._overlap,
       height: NoorAlbumTile._cover,
       child: Stack(
         clipBehavior: Clip.none,
@@ -119,7 +124,11 @@ class _NoorAlbumTileState extends State<NoorAlbumTile>
           Positioned(
             left: 0,
             top: (NoorAlbumTile._cover - NoorAlbumTile._disc) / 2,
-            child: NoorDisc(url: widget.thumbnailUrl, size: NoorAlbumTile._disc, dim: 0.5, zoom: 2.2),
+            child: NoorDisc(
+                url: widget.thumbnailUrl,
+                size: NoorAlbumTile._disc,
+                dim: 0.5,
+                zoom: 2.2),
           ),
           // The cover sits on top and casts a soft shadow onto the record.
           Positioned(
@@ -144,7 +153,10 @@ class _NoorAlbumTileState extends State<NoorAlbumTile>
                       borderRadius: BorderRadius.circular(14),
                       border: Border.all(color: t.ac, width: 1),
                     ),
-                    child: NoorArt(url: widget.thumbnailUrl, size: NoorAlbumTile._cover, radius: 13),
+                    child: NoorArt(
+                        url: widget.thumbnailUrl,
+                        size: NoorAlbumTile._cover,
+                        radius: 13),
                   ),
                   if (widget.loading)
                     Container(
@@ -226,7 +238,8 @@ class _NoorAlbumTileState extends State<NoorAlbumTile>
         clipBehavior: Clip.none,
         children: [
           Padding(
-            padding: EdgeInsets.only(top: widget.isOfficial ? NoorAlbumTile._top : 2),
+            padding: EdgeInsets.only(
+                top: widget.isOfficial ? NoorAlbumTile._top : 2),
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
               onTap: widget.onPlay,

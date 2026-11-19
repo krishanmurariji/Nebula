@@ -38,7 +38,8 @@ final homeOrderProvider =
 
 /// [ids] in the saved [order]: the ones the user placed first, in their
 /// order, then any others (a new playlist) in their default order.
-List<T> applyHomeOrder<T>(List<T> items, String Function(T) id, List<String> order) {
+List<T> applyHomeOrder<T>(
+    List<T> items, String Function(T) id, List<String> order) {
   if (order.isEmpty) return items;
   final pos = {for (var i = 0; i < order.length; i++) order[i]: i};
   final placed = items.where((x) => pos.containsKey(id(x))).toList()

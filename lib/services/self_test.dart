@@ -25,11 +25,17 @@ const kSelfTestVideoId = 'jNQXAC9IVRw';
 /// Recognises the audio containers YouTube serves.
 String? sniffAudioContainer(List<int> head) {
   if (head.length >= 8 &&
-      head[4] == 0x66 && head[5] == 0x74 && head[6] == 0x79 && head[7] == 0x70) {
+      head[4] == 0x66 &&
+      head[5] == 0x74 &&
+      head[6] == 0x79 &&
+      head[7] == 0x70) {
     return 'mp4/m4a';
   }
   if (head.length >= 4 &&
-      head[0] == 0x1A && head[1] == 0x45 && head[2] == 0xDF && head[3] == 0xA3) {
+      head[0] == 0x1A &&
+      head[1] == 0x45 &&
+      head[2] == 0xDF &&
+      head[3] == 0xA3) {
     return 'webm/opus';
   }
   return null;
@@ -50,8 +56,13 @@ Future<List<SelfTestStep>> runSelfTest({
 
   await ensureCache?.call();
   final store = cache();
-  steps.add(SelfTestStep('Disk cache', store != null, 0,
-      store != null ? 'available' : 'unavailable: songs will stream without caching'));
+  steps.add(SelfTestStep(
+      'Disk cache',
+      store != null,
+      0,
+      store != null
+          ? 'available'
+          : 'unavailable: songs will stream without caching'));
 
   // Test the network path, not a leftover from an earlier test.
   await store?.remove(videoId);
@@ -63,8 +74,8 @@ Future<List<SelfTestStep>> runSelfTest({
         .acquire(videoId, superseded: Completer<void>().future)
         .timeout(timeout);
   } on ResolveFailure catch (e) {
-    steps.add(SelfTestStep('Find the audio stream', false, t.elapsedMilliseconds,
-        _resolveAdvice(e.kind)));
+    steps.add(SelfTestStep('Find the audio stream', false,
+        t.elapsedMilliseconds, _resolveAdvice(e.kind)));
   } on DownloadFailure catch (e) {
     steps.add(SelfTestStep('Download the audio', false, t.elapsedMilliseconds,
         _downloadAdvice(e.cause)));
@@ -83,20 +94,24 @@ Future<List<SelfTestStep>> runSelfTest({
           'stream address found (the player will stream it; not cached)'));
     } else {
       final size = await file.length();
-      steps.add(SelfTestStep('Find and download', true, t.elapsedMilliseconds,
-          '$size bytes'));
+      steps.add(SelfTestStep(
+          'Find and download', true, t.elapsedMilliseconds, '$size bytes'));
 
       final head = await _readHead(file);
       final kind = sniffAudioContainer(head);
-      steps.add(SelfTestStep('File is real audio', kind != null && size > 10000, 0,
-          kind ?? 'not a recognised audio file'));
-      steps.add(SelfTestStep('Saved for offline', store?.contains(videoId) ?? false, 0,
+      steps.add(SelfTestStep('File is real audio', kind != null && size > 10000,
+          0, kind ?? 'not a recognised audio file'));
+      steps.add(SelfTestStep(
+          'Saved for offline',
+          store?.contains(videoId) ?? false,
+          0,
           store?.contains(videoId) == true ? 'in the cache' : 'not cached'));
     }
   }
 
   await store?.remove(videoId); // leave no trace of the test
-  steps.add(SelfTestStep('Total', steps.every((s) => s.ok), total.elapsedMilliseconds, ''));
+  steps.add(SelfTestStep(
+      'Total', steps.every((s) => s.ok), total.elapsedMilliseconds, ''));
   return steps;
 }
 

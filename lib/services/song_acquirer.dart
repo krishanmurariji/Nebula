@@ -165,8 +165,8 @@ class SongAcquirer {
           info.totalBytes > maxDownloadFirstBytes) {
         return false;
       }
-      final bytes = await _downloadBytes(info, Completer<void>().future,
-          prefetch: true);
+      final bytes =
+          await _downloadBytes(info, Completer<void>().future, prefetch: true);
       await store.put(videoId, bytes, protect: protect);
       return store.contains(videoId);
     } catch (e) {
@@ -177,9 +177,8 @@ class SongAcquirer {
 
   AcquiredSong _stream(ResolvedStream info) => AcquiredSong.stream(
         info.url,
-        headers: info.userAgent == null
-            ? const {}
-            : {'User-Agent': info.userAgent!},
+        headers:
+            info.userAgent == null ? const {} : {'User-Agent': info.userAgent!},
       );
 
   /// Two strategies, in order. Throws [AcquireSuperseded] or [DownloadFailure].

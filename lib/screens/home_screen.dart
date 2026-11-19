@@ -1,4 +1,5 @@
 import 'dart:math';
+import 'dart:math' as math;
 import '../providers/gesture_settings_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -20,6 +21,7 @@ import '../theme/noor_artwork.dart';
 import '../theme/noor_song_card.dart';
 import '../theme/ripple_ring_clipper.dart';
 import '../widgets/song_row.dart';
+import '../widgets/noor_toast.dart';
 import '../widgets/offline_pill.dart';
 import '../theme/noor_watermark.dart';
 import '../theme/noor_search_button.dart';
@@ -80,6 +82,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   @override
   void dispose() {
     _binDrop.dispose();
+    _vortex.dispose();
     _query.dispose();
     _queryFocus.dispose();
     super.dispose();
@@ -176,11 +179,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   /// The card being dragged, if any.
   String? _draggingId;
 
-  void _startArranging(List<HomeCategory> cats) {
+  /// Where the finger last touched a slider card (global x), and where the
+  /// held card's place in the row was when arranging began: the row is
+  /// laid out so that place stays under the finger.
+  double _pointerX = 0;
+  double _anchorX = 0;
+  int _heldIndex = 0;
+
+  void _startArranging(List<HomeCategory> cats, String heldId) {
     HapticFeedback.mediumImpact();
     setState(() {
       _arranging = true;
       _arrangeOrder = [for (final c in cats) c.id];
+      _anchorX = _pointerX;
+      _heldIndex = _arrangeOrder.indexOf(heldId).clamp(0, cats.length);
     });
   }
 
@@ -204,23 +216,32 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     });
   }
 
+  /// Letting go ends arranging (no Done button): the order is kept.
   void _dragEnded() {
-    setState(() => _draggingId = null);
     ref.read(homeOrderProvider.notifier).set(_arrangeOrder);
+    if (_falling != null) {
+      setState(() => _draggingId = null); // the wormhole finishes first
+      return;
+    }
+    _stopArranging();
   }
 
   // ── The bin at the top of the screen ──────────────────────────────────
 
-  /// Drop animation: the lid opens, the card falls in, the lid closes.
+  /// Drop animation: the card spirals into the wormhole and vanishes.
   late final AnimationController _binDrop = AnimationController(
-      vsync: this, duration: const Duration(milliseconds: 950));
+      vsync: this, duration: const Duration(milliseconds: 900));
+
+  /// The wormhole's slow turn while it is open.
+  late final AnimationController _vortex = AnimationController(
+      vsync: this, duration: const Duration(milliseconds: 2400));
   HomeCategory? _falling; // the playlist card dropping into the bin
   Offset _fallFrom = Offset.zero; // where it was let go (global)
 
   /// Where the bin sits (global), for the falling card to aim at.
   Offset _binCentre(BuildContext context) => Offset(
       MediaQuery.sizeOf(context).width / 2,
-      MediaQuery.paddingOf(context).top + 34);
+      MediaQuery.paddingOf(context).top + 36);
 
   Future<void> _dropOnBin(HomeCategory c, Offset from) async {
     HapticFeedback.mediumImpact();
@@ -241,109 +262,111 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     setState(() {
       _falling = null;
       _arrangeOrder = left;
+      _arranging = false;
       if (_selectedId == c.id) _selectedId = null;
     });
     _binDrop.value = 0;
     ref.read(homeOrderProvider.notifier).set(left);
-    ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(
-      content: Text('"${c.title}" deleted. Its songs stay in your history.'),
-      behavior: SnackBarBehavior.floating,
-      duration: const Duration(seconds: 4),
-      action: removed == null
+    NoorToast.show(
+      context,
+      '"${c.title}" deleted',
+      action: removed == null ? null : 'Undo',
+      onAction: removed == null
           ? null
-          : SnackBarAction(
-              label: 'Undo',
-              onPressed: () async {
-                await ref.read(playlistProvider.notifier).restore(removed, at);
-                if (!mounted) return;
-                setState(() => _arrangeOrder = orderBefore);
-                ref.read(homeOrderProvider.notifier).set(orderBefore);
-              },
-            ),
-    ));
+          : () async {
+              await ref.read(playlistProvider.notifier).restore(removed, at);
+              if (!mounted) return;
+              setState(() => _arrangeOrder = orderBefore);
+              ref.read(homeOrderProvider.notifier).set(orderBefore);
+            },
+    );
   }
 
   /// The delete area across the top of the screen, shown while a playlist
-  /// is held: faint at first, red when the card is over it.
+  /// is held: a faint wormhole whose glow fades out at its edges; it turns
+  /// red and spins faster when the card is over it.
   Widget _binZone(NoorTheme t, Map<String, HomeCategory> byId) {
     final show =
         (_draggingId != null && !kFixedHomeCards.contains(_draggingId)) ||
             _falling != null;
+    if (show && !_vortex.isAnimating) _vortex.repeat();
+    if (!show && _vortex.isAnimating) _vortex.stop();
     const red = Color(0xFFD64545);
     final top = MediaQuery.paddingOf(context).top;
     return IgnorePointer(
       ignoring: !show,
-      child: AnimatedSlide(
-        duration: const Duration(milliseconds: 260),
-        curve: Curves.easeOutCubic,
-        offset: show ? Offset.zero : const Offset(0, -1),
-        child: AnimatedOpacity(
-          duration: const Duration(milliseconds: 220),
-          opacity: show ? 1 : 0,
-          child: DragTarget<String>(
-            onWillAcceptWithDetails: (d) => !kFixedHomeCards.contains(d.data),
-            onAcceptWithDetails: (d) {
-              final c = byId[d.data];
-              if (c != null) _dropOnBin(c, d.offset + const Offset(25, 80));
-            },
-            builder: (context, hovering, _) {
-              final hot = hovering.isNotEmpty || _falling != null;
-              return AnimatedContainer(
-                duration: const Duration(milliseconds: 180),
-                height: top + 92,
-                padding: EdgeInsets.only(top: top + 8),
-                decoration: BoxDecoration(
-                  color: Color.lerp(t.bg, red, hot ? 0.16 : 0.05),
-                  borderRadius:
-                      const BorderRadius.vertical(bottom: Radius.circular(28)),
-                  border: Border(
-                      bottom: BorderSide(
-                          color: red.withOpacity(hot ? 0.75 : 0.25), width: 1)),
+      child: AnimatedOpacity(
+        duration: const Duration(milliseconds: 240),
+        opacity: show ? 1 : 0,
+        child: DragTarget<String>(
+          onWillAcceptWithDetails: (d) => !kFixedHomeCards.contains(d.data),
+          onAcceptWithDetails: (d) {
+            final c = byId[d.data];
+            if (c != null) _dropOnBin(c, d.offset + const Offset(25, 80));
+          },
+          builder: (context, hovering, _) {
+            final hot = hovering.isNotEmpty || _falling != null;
+            return AnimatedContainer(
+              duration: const Duration(milliseconds: 220),
+              height: top + 110,
+              padding: EdgeInsets.only(top: top + 4),
+              // No hard edge: the glow fades out towards the sides and
+              // the bottom.
+              decoration: BoxDecoration(
+                gradient: RadialGradient(
+                  center: const Alignment(0, -0.35),
+                  radius: 1.25,
+                  colors: [
+                    red.withOpacity(hot ? 0.30 : 0.10),
+                    red.withOpacity(hot ? 0.12 : 0.04),
+                    red.withOpacity(0),
+                  ],
+                  stops: const [0, 0.45, 1],
                 ),
-                child: Column(children: [
-                  AnimatedBuilder(
-                    animation: _binDrop,
-                    builder: (_, __) {
-                      // Lid: ajar while hovering; wide open, then shut,
-                      // while a card drops in.
-                      final v = _binDrop.value;
-                      final drop = _falling == null
-                          ? 0.0
-                          : v < 0.25
-                              ? v / 0.25
-                              : v < 0.68
-                                  ? 1.0
-                                  : (1 - (v - 0.68) / 0.24).clamp(0.0, 1.0);
-                      final lid = _falling != null ? drop : (hot ? 0.45 : 0.0);
-                      return SizedBox(
-                        width: 44,
-                        height: 50,
-                        child: CustomPaint(
-                            painter: _BinPainter(
-                                lid: lid,
-                                color: red.withOpacity(hot ? 1 : 0.5))),
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                      hot
-                          ? 'Let go to delete'
-                          : 'Drag here to delete the playlist',
-                      style: TextStyle(
-                          color: red.withOpacity(hot ? 1 : 0.6),
-                          fontSize: 12.5,
-                          fontWeight: FontWeight.w600)),
-                ]),
-              );
-            },
-          ),
+              ),
+              child: Column(children: [
+                AnimatedBuilder(
+                  animation: Listenable.merge([_vortex, _binDrop]),
+                  builder: (_, __) {
+                    // Swallowing a card: the hole flares, then settles.
+                    final v = _binDrop.value;
+                    final gulp = _falling == null
+                        ? 0.0
+                        : (v < 0.7 ? v / 0.7 : (1 - (v - 0.7) / 0.3))
+                            .clamp(0.0, 1.0);
+                    return SizedBox(
+                      width: 64,
+                      height: 64,
+                      child: CustomPaint(
+                        painter: _WormholePainter(
+                          turn: _vortex.value * (hot ? 2 : 1),
+                          strength: hot ? 1 : 0.45,
+                          gulp: gulp,
+                          color: red,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(height: 2),
+                Text(
+                    hot
+                        ? 'Let go to delete'
+                        : 'Drag here to delete the playlist',
+                    style: TextStyle(
+                        color: red.withOpacity(hot ? 1 : 0.55),
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w600)),
+              ]),
+            );
+          },
         ),
       ),
     );
   }
 
-  /// The card falling into the bin (drawn above everything).
+  /// The card being swallowed: it spirals into the wormhole, turning,
+  /// shrinking and fading until it is gone.
   Widget _fallingCard() {
     final c = _falling;
     if (c == null) return const SizedBox.shrink();
@@ -352,23 +375,25 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       child: AnimatedBuilder(
         animation: _binDrop,
         builder: (_, __) {
-          // Falls between 15% and 70% of the animation.
           final f = Curves.easeInCubic
-              .transform(((_binDrop.value - 0.15) / 0.55).clamp(0.0, 1.0));
+              .transform((_binDrop.value / 0.8).clamp(0.0, 1.0));
           if (f >= 1) return const SizedBox.shrink();
-          final pos = Offset.lerp(_fallFrom, to + const Offset(0, 6), f)!;
-          final scale = 1 - 0.8 * f;
+          // A curved path: it swings round the hole as it falls in.
+          final straight = Offset.lerp(_fallFrom, to, f)!;
+          final swirl =
+              Offset(math.cos(f * 2 * math.pi), math.sin(f * 2 * math.pi)) *
+                  (40 * (1 - f) * f * 4);
+          final pos = straight + swirl;
           return Stack(children: [
             Positioned(
               left: pos.dx - 24,
               top: pos.dy - 76,
               child: Opacity(
-                opacity: (1 - f * 0.6).clamp(0.0, 1.0),
+                opacity: (1 - f * f).clamp(0.0, 1.0),
                 child: Transform.rotate(
-                  angle: 0.5 * f,
+                  angle: f * 3 * 2 * math.pi,
                   child: Transform.scale(
-                    scale: scale,
-                    alignment: Alignment.bottomCenter,
+                    scale: (1 - f).clamp(0.02, 1.0),
                     child: SizedBox(
                       width: 48,
                       height: 152,
@@ -437,8 +462,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
           maxSimultaneousDrags: visible ? 1 : 0,
           delay: const Duration(milliseconds: 380),
           hapticFeedbackOnStart: true,
+          // The lifted card sits centred under the finger.
+          dragAnchorStrategy: (_, __, ___) => const Offset(25.4, 80.6),
           onDragStarted: () {
-            if (!_arranging) _startArranging(cats);
+            if (!_arranging) _startArranging(cats, c.id);
             setState(() => _draggingId = c.id);
           },
           onDragEnd: (_) => _dragEnded(),
@@ -455,9 +482,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
               ),
             ),
           ),
-          child: GestureDetector(
-            onTap: _arranging ? null : () => _select(c.id),
-            child: box,
+          child: Listener(
+            onPointerDown: (e) => _pointerX = e.position.dx,
+            child: GestureDetector(
+              onTap: _arranging ? null : () => _select(c.id),
+              child: box,
+            ),
           ),
         ),
       );
@@ -497,10 +527,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                   child: ConstrainedBox(
                     constraints: BoxConstraints(minWidth: box.maxWidth - 24),
                     child: Row(
-                      mainAxisAlignment: _arranging
-                          ? MainAxisAlignment.center
-                          : MainAxisAlignment.start,
-                      children: [for (final c in shown) card(c)],
+                      children: [
+                        // Arranging: the narrow cards gather round the held
+                        // one, whose place stays under the finger.
+                        AnimatedContainer(
+                          duration: const Duration(milliseconds: 450),
+                          curve: Curves.easeOutCubic,
+                          width: !_arranging
+                              ? 0
+                              : (_anchorX - 12 - _heldIndex * 60 - 30).clamp(
+                                  0.0,
+                                  math.max(0.0,
+                                      box.maxWidth - 24 - shown.length * 60.0)),
+                        ),
+                        for (final c in shown) card(c),
+                      ],
                     ),
                   ),
                 ),
@@ -509,39 +550,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
           ),
           AnimatedSwitcher(
             duration: const Duration(milliseconds: 200),
-            child: _arranging
-                ? Padding(
-                    key: const ValueKey('arranging'),
-                    padding: const EdgeInsets.fromLTRB(20, 0, 14, 0),
-                    child: SizedBox(
-                      height: 30,
-                      child: Row(children: [
-                        Expanded(
-                          child: Text('Hold a card and drag it to a new place',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(color: t.mute, fontSize: 12.5)),
-                        ),
-                        TextButton(
-                          onPressed: _stopArranging,
-                          style: TextButton.styleFrom(
-                            foregroundColor: t.ac,
-                            minimumSize: const Size(0, 30),
-                            padding: const EdgeInsets.symmetric(horizontal: 16),
-                            shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(16),
-                                side: BorderSide(color: t.ac, width: 0.8)),
-                          ),
-                          child: const Text('Done',
-                              style: TextStyle(fontWeight: FontWeight.w700)),
-                        ),
-                      ]),
-                    ),
-                  )
-                : SizedBox(
-                    key: const ValueKey('title'),
-                    height: 30,
-                    child: Center(child: NoorLinedLabel(current.title))),
+            child: SizedBox(
+              key: ValueKey(_arranging),
+              height: 30,
+              child: Center(
+                child: _arranging
+                    ? Text('Drag to a new place, let go to finish',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(color: t.mute, fontSize: 12.5))
+                    : NoorLinedLabel(current.title),
+              ),
+            ),
           ),
           const SizedBox(height: 8),
         ],
@@ -707,18 +727,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                   // ── Slider ────────────────────────────────────────────────
                                   // The top of Home does not scroll, so it takes the swipe
                                   // down that opens search.
-                                  if (_arranging)
-                                    PopScope(
-                                      canPop: false,
-                                      onPopInvokedWithResult: (didPop, _) {
-                                        if (!didPop) _stopArranging();
-                                      },
-                                      child: _slider(
-                                          cats, index, activeWidth, current, t),
-                                    )
-                                  else
-                                    _slider(
+                                  // One wrapper in both modes, so starting to
+                                  // arrange never rebuilds the card being held.
+                                  PopScope(
+                                    canPop: !_arranging,
+                                    onPopInvokedWithResult: (didPop, _) {
+                                      if (!didPop && _arranging) {
+                                        _stopArranging();
+                                      }
+                                    },
+                                    child: _slider(
                                         cats, index, activeWidth, current, t),
+                                  ),
 
                                   // ── Songs (ring-wipe reveal when the card changes) ─────────
                                   Expanded(
@@ -1116,50 +1136,70 @@ class _PhoneAccessPill extends ConsumerWidget {
   }
 }
 
-/// A bin seen from the front: a tapered body with ribs and a lid hinged on
-/// its right end. [lid] = 0 shut, 1 swung fully open.
-class _BinPainter extends CustomPainter {
-  _BinPainter({required this.lid, required this.color});
-  final double lid;
+/// A wormhole: spiral arms turning round a dark centre, in [color].
+/// [strength] 0..1 is how vivid it is; [gulp] flares it while swallowing.
+class _WormholePainter extends CustomPainter {
+  _WormholePainter({
+    required this.turn,
+    required this.strength,
+    required this.gulp,
+    required this.color,
+  });
+
+  final double turn;
+  final double strength;
+  final double gulp;
   final Color color;
 
   @override
   void paint(Canvas canvas, Size size) {
-    final w = size.width, h = size.height;
-    final line = Paint()
-      ..color = color
+    final c = size.center(Offset.zero);
+    final r = size.shortestSide / 2 * (1 + 0.18 * gulp);
+    // A soft glow under the arms.
+    canvas.drawCircle(
+        c,
+        r,
+        Paint()
+          ..shader = RadialGradient(colors: [
+            color.withOpacity(0.55 * strength),
+            color.withOpacity(0.18 * strength),
+            color.withOpacity(0),
+          ], stops: const [
+            0,
+            0.55,
+            1
+          ]).createShader(Rect.fromCircle(center: c, radius: r)));
+    // Spiral arms, each curling into the centre.
+    final arm = Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 2
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round;
-    // Body.
-    final top = h * 0.36, bottom = h * 0.96;
-    final body = Path()
-      ..moveTo(w * 0.18, top)
-      ..lineTo(w * 0.26, bottom)
-      ..lineTo(w * 0.74, bottom)
-      ..lineTo(w * 0.82, top);
-    canvas.drawPath(body, line);
-    for (final x in [0.4, 0.5, 0.6]) {
-      canvas.drawLine(Offset(w * x, top + h * 0.12),
-          Offset(w * (0.5 + (x - 0.5) * 0.9), bottom - h * 0.1), line);
+      ..strokeCap = StrokeCap.round;
+    const arms = 4;
+    for (var a = 0; a < arms; a++) {
+      final path = Path();
+      for (var i = 0; i <= 40; i++) {
+        final k = i / 40; // 0 outside .. 1 centre
+        final ang = turn * 2 * math.pi + a * 2 * math.pi / arms + k * 2.6;
+        final rr = r * 0.95 * (1 - k);
+        final p = c + Offset(math.cos(ang), math.sin(ang)) * rr;
+        i == 0 ? path.moveTo(p.dx, p.dy) : path.lineTo(p.dx, p.dy);
+      }
+      arm
+        ..strokeWidth = 1.6
+        ..color = color.withOpacity((0.35 + 0.5 * strength).clamp(0.0, 1.0));
+      canvas.drawPath(path, arm);
     }
-    // Lid, turning about its right end.
-    final hinge = Offset(w * 0.88, h * 0.28);
-    canvas.save();
-    canvas.translate(hinge.dx, hinge.dy);
-    canvas.rotate(-1.05 * lid);
-    canvas.translate(-hinge.dx, -hinge.dy);
-    canvas.drawLine(Offset(w * 0.1, h * 0.28), hinge, line);
-    final handle = Path()
-      ..moveTo(w * 0.38, h * 0.28)
-      ..lineTo(w * 0.42, h * 0.16)
-      ..lineTo(w * 0.58, h * 0.16)
-      ..lineTo(w * 0.62, h * 0.28);
-    canvas.drawPath(handle, line);
-    canvas.restore();
+    // The dark eye.
+    canvas.drawCircle(
+        c,
+        r * (0.16 + 0.08 * gulp),
+        Paint()
+          ..color = const Color(0xFF2B1A12).withOpacity(0.85 * strength + 0.1));
   }
 
   @override
-  bool shouldRepaint(_BinPainter old) => old.lid != lid || old.color != color;
+  bool shouldRepaint(_WormholePainter old) =>
+      old.turn != turn ||
+      old.strength != strength ||
+      old.gulp != gulp ||
+      old.color != color;
 }

@@ -31,7 +31,8 @@ Stream<List<int>> openRangedDownload(
   try {
     var pos = 0;
     while (pos < totalBytes) {
-      final end = (pos + chunkBytes < totalBytes ? pos + chunkBytes : totalBytes) - 1;
+      final end =
+          (pos + chunkBytes < totalBytes ? pos + chunkBytes : totalBytes) - 1;
       final req = http.Request('GET', url)
         ..headers['Range'] = 'bytes=$pos-$end'
         ..headers['Accept'] = '*/*'

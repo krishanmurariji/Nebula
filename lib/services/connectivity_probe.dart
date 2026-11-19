@@ -24,11 +24,15 @@ class ConnectivityProbe {
     final done = Completer<bool>();
     var pending = hosts.length;
     for (final host in hosts) {
-      InternetAddress.lookup(host).timeout(const Duration(seconds: 6)).then((r) {
-        if (r.isNotEmpty && !done.isCompleted) done.complete(true);
-      }).catchError((Object _) {}).whenComplete(() {
-        if (--pending == 0 && !done.isCompleted) done.complete(false);
-      });
+      InternetAddress.lookup(host)
+          .timeout(const Duration(seconds: 6))
+          .then((r) {
+            if (r.isNotEmpty && !done.isCompleted) done.complete(true);
+          })
+          .catchError((Object _) {})
+          .whenComplete(() {
+            if (--pending == 0 && !done.isCompleted) done.complete(false);
+          });
     }
     return done.future;
   }

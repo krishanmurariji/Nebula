@@ -47,8 +47,18 @@ class SongDetails {
   }
 
   static const _months = [
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec'
   ];
 
   /// "Mar 2013".
@@ -88,7 +98,12 @@ class SongDetails {
   }
 
   static const creditOrder = [
-    'Singer', 'Lyrics', 'Music', 'Starring', 'Album', 'Label'
+    'Singer',
+    'Lyrics',
+    'Music',
+    'Starring',
+    'Album',
+    'Label'
   ];
 
   // Longest phrases first: "music director" must win over "music".
@@ -105,7 +120,6 @@ class SongDetails {
     'Album': _key(r'album|movie|film'),
     'Label': _key(r'record label|music label|music on|label'),
   };
-
 
   /// Reads "Key: value" style credit lines from a video description. The
   /// first line found for each kind wins; links and over-long values are
@@ -126,8 +140,10 @@ class SongDetails {
             .firstMatch(rest);
         // "Music by Pritam", "Music on T-Series", "feat. X" need none.
         final k = m.group(0)!.toLowerCase();
-        final open = k.endsWith('by') || k.endsWith(' on') ||
-            k.startsWith('feat') || k.startsWith('ft');
+        final open = k.endsWith('by') ||
+            k.endsWith(' on') ||
+            k.startsWith('feat') ||
+            k.startsWith('ft');
         if (sep == null && !open) continue;
         if (sep != null) rest = rest.substring(sep.end).trim();
         rest = rest.replaceAll(RegExp(r'\s+'), ' ');
@@ -165,7 +181,8 @@ class YoutubeSongDetailsSource implements SongDetailsSource {
   Future<SongDetails?> fetch(String videoId) async {
     try {
       final yt = _yt ??= YoutubeExplode();
-      final v = await yt.videos.get(videoId).timeout(const Duration(seconds: 12));
+      final v =
+          await yt.videos.get(videoId).timeout(const Duration(seconds: 12));
       final music = v.musicData.isNotEmpty ? v.musicData.first : null;
       return SongDetails(
         videoId: videoId,

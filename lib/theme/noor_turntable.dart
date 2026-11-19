@@ -43,8 +43,8 @@ class NoorTurntable extends StatefulWidget {
 
 class _NoorTurntableState extends State<NoorTurntable>
     with SingleTickerProviderStateMixin {
-  late final AnimationController _spin =
-      AnimationController(vsync: this, duration: const Duration(milliseconds: 1800));
+  late final AnimationController _spin = AnimationController(
+      vsync: this, duration: const Duration(milliseconds: 1800));
 
   @override
   void initState() {
@@ -98,7 +98,12 @@ class _NoorTurntableState extends State<NoorTurntable>
                   center: Alignment(-0.4, -0.4),
                   colors: [Color(0xFFE6E6E6), Color(0xFF8C8C8C)],
                 ),
-                boxShadow: [BoxShadow(color: Colors.black38, blurRadius: 2, offset: Offset(0.5, 1))],
+                boxShadow: [
+                  BoxShadow(
+                      color: Colors.black38,
+                      blurRadius: 2,
+                      offset: Offset(0.5, 1))
+                ],
               ),
             ),
           ),
@@ -117,6 +122,7 @@ class _NoorTurntableState extends State<NoorTurntable>
       ),
     );
   }
+
   Widget _record(double s, double d, Offset c, double shift, String art,
       {required bool turning}) {
     final record = Stack(
@@ -156,7 +162,8 @@ class _PlinthPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final s = size.width;
-    final body = RRect.fromRectAndRadius(Offset.zero & size, Radius.circular(s * 0.1));
+    final body =
+        RRect.fromRectAndRadius(Offset.zero & size, Radius.circular(s * 0.1));
 
     // Shadow under the body.
     canvas.drawRRect(
@@ -189,7 +196,8 @@ class _PlinthPainter extends CustomPainter {
     );
 
     // Grey well: square on the left (clipped to the body), round on the right.
-    final c = Offset(NoorTurntable.discCentre.dx * s, NoorTurntable.discCentre.dy * s);
+    final c = Offset(
+        NoorTurntable.discCentre.dx * s, NoorTurntable.discCentre.dy * s);
     final r = s * 0.42;
     final well = Path()
       ..addRect(Rect.fromLTRB(0, c.dy - r, c.dx, c.dy + r))
@@ -219,7 +227,11 @@ class _VinylPainter extends CustomPainter {
     final r = size.width / 2;
     final c = Offset(r, r);
     canvas.drawCircle(
-        c, r + 1, Paint()..color = Colors.black.withOpacity(0.35)..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4));
+        c,
+        r + 1,
+        Paint()
+          ..color = Colors.black.withOpacity(0.35)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4));
     canvas.drawCircle(c, r, Paint()..color = const Color(0xFF111213));
     final groove = Paint()
       ..style = PaintingStyle.stroke
@@ -293,7 +305,8 @@ class _ControlsPainter extends CustomPainter {
     final top = s * 0.42, bottom = s * 0.60;
     canvas.drawRRect(
       RRect.fromRectAndRadius(
-          Rect.fromLTRB(x - s * 0.006, top, x + s * 0.006, bottom), Radius.circular(s * 0.006)),
+          Rect.fromLTRB(x - s * 0.006, top, x + s * 0.006, bottom),
+          Radius.circular(s * 0.006)),
       Paint()..color = const Color(0xFF3A3B3D),
     );
     final tick = Paint()..color = const Color(0xFF7F8590);
@@ -302,7 +315,8 @@ class _ControlsPainter extends CustomPainter {
       final long = i % 3 == 0;
       canvas.drawRRect(
         RRect.fromRectAndRadius(
-            Rect.fromLTWH(x - s * (long ? 0.03 : 0.022), y - s * 0.002, s * (long ? 0.012 : 0.004), s * 0.004),
+            Rect.fromLTWH(x - s * (long ? 0.03 : 0.022), y - s * 0.002,
+                s * (long ? 0.012 : 0.004), s * 0.004),
             Radius.circular(s * 0.002)),
         tick,
       );
@@ -310,27 +324,41 @@ class _ControlsPainter extends CustomPainter {
     // Slider cap with a red dot.
     final capY = top + (bottom - top) * 0.58;
     final cap = RRect.fromRectAndRadius(
-        Rect.fromCenter(center: Offset(x, capY), width: s * 0.026, height: s * 0.05), Radius.circular(s * 0.006));
-    canvas.drawRRect(cap.shift(Offset(0, s * 0.004)), Paint()..color = Colors.black26);
+        Rect.fromCenter(
+            center: Offset(x, capY), width: s * 0.026, height: s * 0.05),
+        Radius.circular(s * 0.006));
+    canvas.drawRRect(
+        cap.shift(Offset(0, s * 0.004)), Paint()..color = Colors.black26);
     canvas.drawRRect(
         cap,
         Paint()
-          ..shader = const LinearGradient(colors: [Color(0xFFF2F2F2), Color(0xFFCFCFCF)])
+          ..shader = const LinearGradient(
+                  colors: [Color(0xFFF2F2F2), Color(0xFFCFCFCF)])
               .createShader(cap.outerRect));
-    canvas.drawCircle(Offset(x, capY), s * 0.004, Paint()..color = const Color(0xFFD2412F));
+    canvas.drawCircle(
+        Offset(x, capY), s * 0.004, Paint()..color = const Color(0xFFD2412F));
 
     // Knob.
     final k = Offset(s * 0.84, s * 0.80);
     final kr = s * 0.075;
-    canvas.drawCircle(k + Offset(0, s * 0.008), kr,
-        Paint()..color = Colors.black.withOpacity(0.18)..maskFilter = MaskFilter.blur(BlurStyle.normal, s * 0.01));
+    canvas.drawCircle(
+        k + Offset(0, s * 0.008),
+        kr,
+        Paint()
+          ..color = Colors.black.withOpacity(0.18)
+          ..maskFilter = MaskFilter.blur(BlurStyle.normal, s * 0.01));
     canvas.drawCircle(
         k,
         kr,
         Paint()
           ..shader = const SweepGradient(colors: [
-            Color(0xFFB9BCC4), Color(0xFFE9EAEE), Color(0xFF9DA1AA), Color(0xFFDADCE1),
-            Color(0xFFA4A8B0), Color(0xFFE6E7EB), Color(0xFFB9BCC4),
+            Color(0xFFB9BCC4),
+            Color(0xFFE9EAEE),
+            Color(0xFF9DA1AA),
+            Color(0xFFDADCE1),
+            Color(0xFFA4A8B0),
+            Color(0xFFE6E7EB),
+            Color(0xFFB9BCC4),
           ]).createShader(Rect.fromCircle(center: k, radius: kr)));
     canvas.drawCircle(
         k,
@@ -347,7 +375,8 @@ class _ControlsPainter extends CustomPainter {
           ..strokeWidth = s * 0.006
           ..strokeCap = StrokeCap.round
           ..color = const Color(0xFF5D616A));
-    canvas.drawCircle(k + Offset(kr * 1.05, -kr * 1.05), s * 0.008, Paint()..color = const Color(0xFF4A4C50));
+    canvas.drawCircle(k + Offset(kr * 1.05, -kr * 1.05), s * 0.008,
+        Paint()..color = const Color(0xFF4A4C50));
   }
 
   @override
@@ -365,11 +394,18 @@ class _ArmPainter extends CustomPainter {
     final pivot = Offset(s * 0.84, s * 0.16);
 
     // Base (does not move).
-    canvas.drawCircle(pivot + Offset(0, s * 0.006), s * 0.095,
-        Paint()..color = Colors.black.withOpacity(0.12)..maskFilter = MaskFilter.blur(BlurStyle.normal, s * 0.01));
-    canvas.drawCircle(pivot, s * 0.095, Paint()..color = const Color(0xFF8D9097));
-    canvas.drawCircle(pivot, s * 0.078, Paint()..color = const Color(0xFFB8BBC1));
-    canvas.drawCircle(pivot, s * 0.064, Paint()..color = const Color(0xFF9A9DA3));
+    canvas.drawCircle(
+        pivot + Offset(0, s * 0.006),
+        s * 0.095,
+        Paint()
+          ..color = Colors.black.withOpacity(0.12)
+          ..maskFilter = MaskFilter.blur(BlurStyle.normal, s * 0.01));
+    canvas.drawCircle(
+        pivot, s * 0.095, Paint()..color = const Color(0xFF8D9097));
+    canvas.drawCircle(
+        pivot, s * 0.078, Paint()..color = const Color(0xFFB8BBC1));
+    canvas.drawCircle(
+        pivot, s * 0.064, Paint()..color = const Color(0xFF9A9DA3));
 
     canvas.save();
     canvas.translate(pivot.dx, pivot.dy);
@@ -384,10 +420,16 @@ class _ArmPainter extends CustomPainter {
     final cw = Paint()
       ..strokeWidth = s * 0.042
       ..strokeCap = StrokeCap.butt
-      ..shader = const LinearGradient(colors: [Color(0xFFD9D9D9), Color(0xFFF7F7F7), Color(0xFFC8C8C8)])
+      ..shader = const LinearGradient(
+              colors: [Color(0xFFD9D9D9), Color(0xFFF7F7F7), Color(0xFFC8C8C8)])
           .createShader(Rect.fromPoints(cwStart, cwEnd));
     canvas.drawLine(cwStart, cwEnd, cw);
-    canvas.drawLine(cwEnd - cwDir * s * 0.012, cwEnd, Paint()..strokeWidth = s * 0.046..color = const Color(0xFFBEBEBE));
+    canvas.drawLine(
+        cwEnd - cwDir * s * 0.012,
+        cwEnd,
+        Paint()
+          ..strokeWidth = s * 0.046
+          ..color = const Color(0xFFBEBEBE));
 
     // Tube: from the pivot down, bending left into the headshell.
     final p1 = pivot + Offset(-s * 0.012, s * 0.07);
@@ -422,9 +464,14 @@ class _ArmPainter extends CustomPainter {
           ..color = Colors.white.withOpacity(0.45));
 
     // Pivot cap on top of the tube.
-    canvas.drawCircle(pivot, s * 0.044,
-        Paint()..shader = const RadialGradient(center: Alignment(-0.3, -0.3), colors: [Color(0xFFF5F5F5), Color(0xFFBDBDBD)])
-            .createShader(Rect.fromCircle(center: pivot, radius: s * 0.044)));
+    canvas.drawCircle(
+        pivot,
+        s * 0.044,
+        Paint()
+          ..shader = const RadialGradient(
+                  center: Alignment(-0.3, -0.3),
+                  colors: [Color(0xFFF5F5F5), Color(0xFFBDBDBD)])
+              .createShader(Rect.fromCircle(center: pivot, radius: s * 0.044)));
 
     // Headshell: a white block angled along the end of the tube, a blue
     // cartridge and the finger lift.
@@ -432,14 +479,23 @@ class _ArmPainter extends CustomPainter {
     canvas.translate(p3.dx, p3.dy);
     canvas.rotate(0.92);
     final shell = RRect.fromRectAndRadius(
-        Rect.fromLTWH(-s * 0.03, -s * 0.004, s * 0.06, s * 0.075), Radius.circular(s * 0.006));
-    canvas.drawRRect(shell.shift(Offset(s * 0.004, s * 0.006)), Paint()..color = Colors.black26);
+        Rect.fromLTWH(-s * 0.03, -s * 0.004, s * 0.06, s * 0.075),
+        Radius.circular(s * 0.006));
+    canvas.drawRRect(shell.shift(Offset(s * 0.004, s * 0.006)),
+        Paint()..color = Colors.black26);
     canvas.drawRRect(shell, Paint()..color = const Color(0xFFF1F1F1));
     canvas.drawRRect(
-        RRect.fromRectAndRadius(Rect.fromLTWH(-s * 0.022, s * 0.045, s * 0.034, s * 0.036), Radius.circular(s * 0.004)),
+        RRect.fromRectAndRadius(
+            Rect.fromLTWH(-s * 0.022, s * 0.045, s * 0.034, s * 0.036),
+            Radius.circular(s * 0.004)),
         Paint()..color = const Color(0xFF8DB8DE));
-    canvas.drawLine(Offset(s * 0.022, s * 0.05), Offset(s * 0.05, s * 0.095),
-        Paint()..strokeWidth = s * 0.006..strokeCap = StrokeCap.round..color = const Color(0xFFF4F4F4));
+    canvas.drawLine(
+        Offset(s * 0.022, s * 0.05),
+        Offset(s * 0.05, s * 0.095),
+        Paint()
+          ..strokeWidth = s * 0.006
+          ..strokeCap = StrokeCap.round
+          ..color = const Color(0xFFF4F4F4));
     canvas.restore();
 
     canvas.restore();

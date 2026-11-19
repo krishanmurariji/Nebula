@@ -6,7 +6,8 @@ import 'noor_widgets.dart';
 /// Square artwork with softly rounded corners. YouTube thumbnails carry black
 /// bars, so the picture is scaled up a little to crop them away.
 class NoorArt extends StatelessWidget {
-  const NoorArt({super.key, required this.url, this.size = 54, this.radius = 14});
+  const NoorArt(
+      {super.key, required this.url, this.size = 54, this.radius = 14});
   final String url;
   final double size;
   final double radius;

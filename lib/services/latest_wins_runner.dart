@@ -36,7 +36,8 @@ class LatestWinsRunner<T> {
   bool get isBusy => _running || _hasPending;
 
   /// Completes when nothing is running or queued.
-  Future<void> get idle => isBusy ? (_idle ??= Completer<void>()).future : Future.value();
+  Future<void> get idle =>
+      isBusy ? (_idle ??= Completer<void>()).future : Future.value();
 
   /// Replaces any queued request and signals the running one to give up.
   void submit(T request) {

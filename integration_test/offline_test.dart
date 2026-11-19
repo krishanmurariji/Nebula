@@ -26,11 +26,16 @@ void main() {
     report('offline: pill shown');
 
     // My Music with the permission granted: no permission button.
-    // On a fresh install the slider opens on My Favorites, so step along it
-    // (My History, then My Music) to bring My Music on screen.
-    final history = find.byIcon(Icons.history_rounded);
-    if (history.evaluate().isNotEmpty) {
-      await t.tap(history.first);
+    // The slider is My History, My Favorites, My Music; Home opens on
+    // whichever card first has songs, which can be History or Music
+    // depending on when the phone's music finishes loading. Step right
+    // (tap the card beside the open one) until My Music is on screen.
+    for (var i = 0;
+        i < 3 && find.byIcon(Icons.download_done_rounded).evaluate().isEmpty;
+        i++) {
+      final fav = find.byIcon(Icons.favorite_rounded);
+      if (fav.evaluate().isEmpty) break;
+      await t.tap(fav.first);
       await idle(t, const Duration(seconds: 2));
     }
     final music = find.byIcon(Icons.download_done_rounded);

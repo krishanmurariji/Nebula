@@ -70,7 +70,8 @@ Future<void> _removeLegacyApiKey() async {
   } catch (_) {}
 }
 
-Future<NebulaAudioHandler> _initAudio() => AudioService.init<NebulaAudioHandler>(
+Future<NebulaAudioHandler> _initAudio() =>
+    AudioService.init<NebulaAudioHandler>(
       builder: () => NebulaAudioHandler(),
       config: const AudioServiceConfig(
         androidNotificationChannelId: 'com.noor.music.audio',
@@ -114,7 +115,8 @@ class _BootstrapState extends State<_Bootstrap> {
             icon: Icons.error_outline_rounded,
             title: 'Audio could not start',
             message: 'Noor could not start the audio service on this device.',
-            action: FilledButton(onPressed: _retry, child: const Text('Try again')),
+            action:
+                FilledButton(onPressed: _retry, child: const Text('Try again')),
           );
         }
         // While the audio service starts: the same white screen with the
@@ -146,7 +148,10 @@ class _UnsupportedPlatformApp extends StatelessWidget {
 
 class _MessageApp extends StatelessWidget {
   const _MessageApp(
-      {required this.icon, required this.title, required this.message, this.action});
+      {required this.icon,
+      required this.title,
+      required this.message,
+      this.action});
   final IconData icon;
   final String title, message;
   final Widget? action;
@@ -174,7 +179,10 @@ class _MessageApp extends StatelessWidget {
                             fontSize: 22, fontWeight: FontWeight.w800)),
                     const SizedBox(height: 12),
                     Text(message, textAlign: TextAlign.center),
-                    if (action != null) ...[const SizedBox(height: 24), action!],
+                    if (action != null) ...[
+                      const SizedBox(height: 24),
+                      action!
+                    ],
                   ],
                 ),
               ),

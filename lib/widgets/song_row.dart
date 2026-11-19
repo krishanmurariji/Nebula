@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'noor_toast.dart';
 import '../providers/gesture_settings_provider.dart';
 import 'dart:math';
 
@@ -243,22 +244,13 @@ class _NoorSongRowState extends ConsumerState<NoorSongRow>
     if (!mounted) return;
     await ref.read(historyProvider.notifier).remove(id);
     if (!mounted) return;
-    ScaffoldMessenger.maybeOf(context)?.showSnackBar(const SnackBar(
-        content: Text('Removed from your history'),
-        behavior: SnackBarBehavior.floating,
-        duration: Duration(seconds: 2)));
+    NoorToast.show(context, 'Removed from your history');
     _close();
   }
 
   void _needsInternet() {
     HapticFeedback.selectionClick();
-    final m = ScaffoldMessenger.maybeOf(context);
-    m?.hideCurrentSnackBar();
-    m?.showSnackBar(const SnackBar(
-        content:
-            Text("You're offline. This song isn't saved on the phone yet."),
-        behavior: SnackBarBehavior.floating,
-        duration: Duration(seconds: 2)));
+    NoorToast.show(context, "You're offline. This song isn't saved yet.");
   }
 
   // ── Radial menu ───────────────────────────────────────────────────────────
