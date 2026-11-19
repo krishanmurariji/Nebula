@@ -66,7 +66,8 @@ class HomeScreen extends ConsumerStatefulWidget {
   ConsumerState<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends ConsumerState<HomeScreen> {
+class _HomeScreenState extends ConsumerState<HomeScreen>
+    with TickerProviderStateMixin {
   String? _selectedId;
 
   /// Picks which song's artwork fills each slider card; new every launch.
@@ -78,6 +79,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   @override
   void dispose() {
+    _binDrop.dispose();
     _query.dispose();
     _queryFocus.dispose();
     super.dispose();
@@ -163,40 +165,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     return false;
   }
 
-  /// Long press on a playlist card: offer to delete the playlist.
-  Future<void> _confirmDeletePlaylist(HomeCategory c) async {
-    if (!ref.read(playlistProvider).any((p) => p.id == c.id)) return;
-    HapticFeedback.mediumImpact();
-    final t = NoorTheme.of(context);
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: t.bg,
-        shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(24),
-            side: BorderSide(color: t.ac, width: 0.8)),
-        title: Text('Delete "${c.title}"?',
-            style: TextStyle(color: t.ac, fontWeight: FontWeight.w700)),
-        content: Text(
-            'The playlist goes away. Its songs stay in your favorites and history.',
-            style: TextStyle(color: t.mute)),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: Text('Keep', style: TextStyle(color: t.mute))),
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: Text('Delete',
-                  style: TextStyle(color: t.ac, fontWeight: FontWeight.w700))),
-        ],
-      ),
-    );
-    if (ok == true) {
-      await ref.read(playlistProvider.notifier).delete(c.id);
-      if (mounted && _selectedId == c.id) setState(() => _selectedId = null);
-    }
-  }
-
   // ── Arranging the slider ───────────────────────────────────────────────
 
   /// True while the cards are laid out side by side to be dragged.
@@ -241,162 +209,342 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     ref.read(homeOrderProvider.notifier).set(_arrangeOrder);
   }
 
-  Future<void> _dropOnBin(HomeCategory c) async {
-    setState(() => _draggingId = null);
-    await _confirmDeletePlaylist(c);
+  // ── The bin at the top of the screen ──────────────────────────────────
+
+  /// Drop animation: the lid opens, the card falls in, the lid closes.
+  late final AnimationController _binDrop = AnimationController(
+      vsync: this, duration: const Duration(milliseconds: 950));
+  HomeCategory? _falling; // the playlist card dropping into the bin
+  Offset _fallFrom = Offset.zero; // where it was let go (global)
+
+  /// Where the bin sits (global), for the falling card to aim at.
+  Offset _binCentre(BuildContext context) => Offset(
+      MediaQuery.sizeOf(context).width / 2,
+      MediaQuery.paddingOf(context).top + 34);
+
+  Future<void> _dropOnBin(HomeCategory c, Offset from) async {
+    HapticFeedback.mediumImpact();
+    setState(() {
+      _draggingId = null;
+      _falling = c;
+      _fallFrom = from;
+    });
+    await _binDrop.forward(from: 0);
     if (!mounted) return;
+    final playlists = ref.read(playlistProvider);
+    final at = playlists.indexWhere((p) => p.id == c.id);
+    final removed = at < 0 ? null : playlists[at];
+    final orderBefore = _arrangeOrder;
+    await ref.read(playlistProvider.notifier).delete(c.id);
     final left = _arrangeOrder.where((id) => id != c.id).toList();
-    if (ref.read(playlistProvider).every((p) => p.id != c.id)) {
-      setState(() => _arrangeOrder = left);
-      ref.read(homeOrderProvider.notifier).set(left);
-    }
+    if (!mounted) return;
+    setState(() {
+      _falling = null;
+      _arrangeOrder = left;
+      if (_selectedId == c.id) _selectedId = null;
+    });
+    _binDrop.value = 0;
+    ref.read(homeOrderProvider.notifier).set(left);
+    ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(
+      content: Text('"${c.title}" deleted. Its songs stay in your history.'),
+      behavior: SnackBarBehavior.floating,
+      duration: const Duration(seconds: 4),
+      action: removed == null
+          ? null
+          : SnackBarAction(
+              label: 'Undo',
+              onPressed: () async {
+                await ref.read(playlistProvider.notifier).restore(removed, at);
+                if (!mounted) return;
+                setState(() => _arrangeOrder = orderBefore);
+                ref.read(homeOrderProvider.notifier).set(orderBefore);
+              },
+            ),
+    ));
   }
 
-  /// The slider while arranging: every card side by side. Hold one and
-  /// drag it; a playlist can also be dropped on the bin that appears.
-  Widget _arrangeArea(List<HomeCategory> cats, NoorTheme t) {
-    final byId = {for (final c in cats) c.id: c};
-    final order = [
-      for (final id in _arrangeOrder)
-        if (byId.containsKey(id)) id,
-      for (final c in cats)
-        if (!_arrangeOrder.contains(c.id)) c.id,
-    ];
-    final draggingPlaylist =
-        _draggingId != null && !kFixedHomeCards.contains(_draggingId);
-
-    Widget tile(HomeCategory c, {bool lifted = false}) => SizedBox(
-          width: 86,
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            SizedBox(
-              width: 76,
-              height: 96,
-              child: Transform.scale(
-                scale: lifted ? 1.08 : 1,
-                child: _CategoryCard(
-                    icon: _iconFor(c.id), artUrl: _artFor(c), active: true),
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(c.title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                    color: t.ac, fontSize: 11.5, fontWeight: FontWeight.w600)),
-          ]),
-        );
-
-    return PopScope(
-      canPop: false,
-      onPopInvokedWithResult: (didPop, _) {
-        if (!didPop) _stopArranging();
-      },
-      child: SizedBox(
-        height: 196,
-        child: Column(children: [
-          SizedBox(
-            height: 130,
-            child: ListView(
-              scrollDirection: Axis.horizontal,
-              physics: const BouncingScrollPhysics(),
-              padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-              children: [
-                for (final id in order)
-                  DragTarget<String>(
-                    key: ValueKey('arrange_$id'),
-                    onWillAcceptWithDetails: (d) {
-                      _moveCard(d.data, id);
-                      return d.data != id;
+  /// The delete area across the top of the screen, shown while a playlist
+  /// is held: faint at first, red when the card is over it.
+  Widget _binZone(NoorTheme t, Map<String, HomeCategory> byId) {
+    final show =
+        (_draggingId != null && !kFixedHomeCards.contains(_draggingId)) ||
+            _falling != null;
+    const red = Color(0xFFD64545);
+    final top = MediaQuery.paddingOf(context).top;
+    return IgnorePointer(
+      ignoring: !show,
+      child: AnimatedSlide(
+        duration: const Duration(milliseconds: 260),
+        curve: Curves.easeOutCubic,
+        offset: show ? Offset.zero : const Offset(0, -1),
+        child: AnimatedOpacity(
+          duration: const Duration(milliseconds: 220),
+          opacity: show ? 1 : 0,
+          child: DragTarget<String>(
+            onWillAcceptWithDetails: (d) => !kFixedHomeCards.contains(d.data),
+            onAcceptWithDetails: (d) {
+              final c = byId[d.data];
+              if (c != null) _dropOnBin(c, d.offset + const Offset(25, 80));
+            },
+            builder: (context, hovering, _) {
+              final hot = hovering.isNotEmpty || _falling != null;
+              return AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                height: top + 92,
+                padding: EdgeInsets.only(top: top + 8),
+                decoration: BoxDecoration(
+                  color: Color.lerp(t.bg, red, hot ? 0.16 : 0.05),
+                  borderRadius:
+                      const BorderRadius.vertical(bottom: Radius.circular(28)),
+                  border: Border(
+                      bottom: BorderSide(
+                          color: red.withOpacity(hot ? 0.75 : 0.25), width: 1)),
+                ),
+                child: Column(children: [
+                  AnimatedBuilder(
+                    animation: _binDrop,
+                    builder: (_, __) {
+                      // Lid: ajar while hovering; wide open, then shut,
+                      // while a card drops in.
+                      final v = _binDrop.value;
+                      final drop = _falling == null
+                          ? 0.0
+                          : v < 0.25
+                              ? v / 0.25
+                              : v < 0.68
+                                  ? 1.0
+                                  : (1 - (v - 0.68) / 0.24).clamp(0.0, 1.0);
+                      final lid = _falling != null ? drop : (hot ? 0.45 : 0.0);
+                      return SizedBox(
+                        width: 44,
+                        height: 50,
+                        child: CustomPaint(
+                            painter: _BinPainter(
+                                lid: lid,
+                                color: red.withOpacity(hot ? 1 : 0.5))),
+                      );
                     },
-                    builder: (context, _, __) => LongPressDraggable<String>(
-                      data: id,
-                      delay: const Duration(milliseconds: 180),
-                      hapticFeedbackOnStart: true,
-                      onDragStarted: () => setState(() => _draggingId = id),
-                      onDragEnd: (_) => _dragEnded(),
-                      onDraggableCanceled: (_, __) => _dragEnded(),
-                      feedback: Material(
-                          type: MaterialType.transparency,
-                          child: tile(byId[id]!, lifted: true)),
-                      childWhenDragging:
-                          Opacity(opacity: 0.25, child: tile(byId[id]!)),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 3),
-                        child: tile(byId[id]!),
-                      ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                      hot
+                          ? 'Let go to delete'
+                          : 'Drag here to delete the playlist',
+                      style: TextStyle(
+                          color: red.withOpacity(hot ? 1 : 0.6),
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w600)),
+                ]),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// The card falling into the bin (drawn above everything).
+  Widget _fallingCard() {
+    final c = _falling;
+    if (c == null) return const SizedBox.shrink();
+    final to = _binCentre(context);
+    return IgnorePointer(
+      child: AnimatedBuilder(
+        animation: _binDrop,
+        builder: (_, __) {
+          // Falls between 15% and 70% of the animation.
+          final f = Curves.easeInCubic
+              .transform(((_binDrop.value - 0.15) / 0.55).clamp(0.0, 1.0));
+          if (f >= 1) return const SizedBox.shrink();
+          final pos = Offset.lerp(_fallFrom, to + const Offset(0, 6), f)!;
+          final scale = 1 - 0.8 * f;
+          return Stack(children: [
+            Positioned(
+              left: pos.dx - 24,
+              top: pos.dy - 76,
+              child: Opacity(
+                opacity: (1 - f * 0.6).clamp(0.0, 1.0),
+                child: Transform.rotate(
+                  angle: 0.5 * f,
+                  child: Transform.scale(
+                    scale: scale,
+                    alignment: Alignment.bottomCenter,
+                    child: SizedBox(
+                      width: 48,
+                      height: 152,
+                      child: _CategoryCard(
+                          icon: _iconFor(c.id),
+                          artUrl: _artFor(c),
+                          active: false),
                     ),
                   ),
-              ],
+                ),
+              ),
+            ),
+          ]);
+        },
+      ),
+    );
+  }
+
+  // ── The slider ──────────────────────────────────────────────────────────
+
+  /// One row of cards for both modes, so a hold flows straight into a
+  /// drag. Normally: the open card wide, its neighbours as narrow strips.
+  /// Arranging: every card a narrow strip, centred, in the order being
+  /// arranged.
+  Widget _slider(List<HomeCategory> cats, int index, double activeWidth,
+      HomeCategory current, NoorTheme t) {
+    final byId = {for (final c in cats) c.id: c};
+    final shown = !_arranging
+        ? cats
+        : [
+            for (final id in _arrangeOrder)
+              if (byId.containsKey(id)) byId[id]!,
+            for (final c in cats)
+              if (!_arrangeOrder.contains(c.id)) c,
+          ];
+    final indexOf = {for (var i = 0; i < cats.length; i++) cats[i].id: i};
+
+    Widget card(HomeCategory c) {
+      final i = indexOf[c.id]!;
+      final active = !_arranging && i == index;
+      final adjacent = !_arranging && (i - index).abs() == 1;
+      final visible = _arranging || active || adjacent;
+      final box = AnimatedContainer(
+        duration: const Duration(milliseconds: 450),
+        curve: Curves.easeOutCubic,
+        width: _arranging ? 48 : (active ? activeWidth : (adjacent ? 48 : 0)),
+        margin: EdgeInsets.symmetric(horizontal: visible ? 6 : 0, vertical: 8),
+        child: visible
+            ? AnimatedOpacity(
+                duration: const Duration(milliseconds: 150),
+                opacity: _draggingId == c.id ? 0.25 : 1,
+                child: _CategoryCard(
+                    icon: _iconFor(c.id), artUrl: _artFor(c), active: active),
+              )
+            : const SizedBox.shrink(),
+      );
+      return DragTarget<String>(
+        key: ValueKey('slide_${c.id}'),
+        onWillAcceptWithDetails: (d) {
+          if (!_arranging || d.data == c.id) return false;
+          _moveCard(d.data, c.id);
+          return true;
+        },
+        builder: (context, _, __) => LongPressDraggable<String>(
+          data: c.id,
+          maxSimultaneousDrags: visible ? 1 : 0,
+          delay: const Duration(milliseconds: 380),
+          hapticFeedbackOnStart: true,
+          onDragStarted: () {
+            if (!_arranging) _startArranging(cats);
+            setState(() => _draggingId = c.id);
+          },
+          onDragEnd: (_) => _dragEnded(),
+          onDraggableCanceled: (_, __) => _dragEnded(),
+          feedback: Material(
+            type: MaterialType.transparency,
+            child: Transform.scale(
+              scale: 1.06,
+              child: SizedBox(
+                width: 48,
+                height: 152,
+                child: _CategoryCard(
+                    icon: _iconFor(c.id), artUrl: _artFor(c), active: false),
+              ),
             ),
           ),
+          child: GestureDetector(
+            onTap: _arranging ? null : () => _select(c.id),
+            child: box,
+          ),
+        ),
+      );
+    }
+
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onVerticalDragEnd: _arranging ? null : _onTopVerticalSwipe,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
           SizedBox(
-            height: 62,
-            child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 200),
-              child: draggingPlaylist
-                  // The bin: only for playlists.
-                  ? DragTarget<String>(
-                      key: const ValueKey('bin'),
-                      onWillAcceptWithDetails: (d) =>
-                          !kFixedHomeCards.contains(d.data),
-                      onAcceptWithDetails: (d) {
-                        final c = byId[d.data];
-                        if (c != null) _dropOnBin(c);
-                      },
-                      builder: (context, hover, _) => AnimatedContainer(
-                        duration: const Duration(milliseconds: 160),
-                        margin: const EdgeInsets.fromLTRB(24, 6, 24, 6),
-                        padding: const EdgeInsets.symmetric(horizontal: 14),
-                        decoration: BoxDecoration(
-                          color: hover.isNotEmpty ? t.ac : t.bg,
-                          borderRadius: BorderRadius.circular(26),
-                          border: Border.all(color: t.ac, width: 1),
-                        ),
-                        alignment: Alignment.center,
-                        child: Row(mainAxisSize: MainAxisSize.min, children: [
-                          Icon(Icons.delete_outline_rounded,
-                              color: hover.isNotEmpty ? t.bg : t.ac),
-                          const SizedBox(width: 8),
-                          Flexible(
-                            child: Text('Drop here to delete the playlist',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                    color: hover.isNotEmpty ? t.bg : t.ac,
-                                    fontWeight: FontWeight.w600)),
-                          ),
-                        ]),
-                      ),
-                    )
-                  : Padding(
-                      key: const ValueKey('hint'),
-                      padding: const EdgeInsets.fromLTRB(20, 6, 14, 6),
+            height: 168,
+            child: GestureDetector(
+              onHorizontalDragEnd: _arranging
+                  ? null
+                  : (d) {
+                      final v = d.primaryVelocity ?? 0;
+                      if (v < -200) {
+                        if (index < cats.length - 1)
+                          _select(cats[index + 1].id);
+                      } else if (v > 200) {
+                        if (index > 0) {
+                          _select(cats[index - 1].id);
+                        } else if (_swipeSearchOn) {
+                          _openSearch(); // before the first card
+                        }
+                      }
+                    },
+              child: LayoutBuilder(
+                builder: (context, box) => SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  physics: _arranging
+                      ? const BouncingScrollPhysics()
+                      : const NeverScrollableScrollPhysics(),
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(minWidth: box.maxWidth - 24),
+                    child: Row(
+                      mainAxisAlignment: _arranging
+                          ? MainAxisAlignment.center
+                          : MainAxisAlignment.start,
+                      children: [for (final c in shown) card(c)],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 200),
+            child: _arranging
+                ? Padding(
+                    key: const ValueKey('arranging'),
+                    padding: const EdgeInsets.fromLTRB(20, 0, 14, 0),
+                    child: SizedBox(
+                      height: 30,
                       child: Row(children: [
                         Expanded(
-                          child: Text(
-                              'Hold a card and drag it. Drop a playlist on the bin to delete it.',
-                              style: TextStyle(
-                                  color: t.mute, fontSize: 12, height: 1.3)),
+                          child: Text('Hold a card and drag it to a new place',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(color: t.mute, fontSize: 12.5)),
                         ),
-                        const SizedBox(width: 10),
                         TextButton(
                           onPressed: _stopArranging,
                           style: TextButton.styleFrom(
                             foregroundColor: t.ac,
+                            minimumSize: const Size(0, 30),
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
                             shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(20),
+                                borderRadius: BorderRadius.circular(16),
                                 side: BorderSide(color: t.ac, width: 0.8)),
-                            padding: const EdgeInsets.symmetric(horizontal: 18),
                           ),
                           child: const Text('Done',
                               style: TextStyle(fontWeight: FontWeight.w700)),
                         ),
                       ]),
                     ),
-            ),
+                  )
+                : SizedBox(
+                    key: const ValueKey('title'),
+                    height: 30,
+                    child: Center(child: NoorLinedLabel(current.title))),
           ),
-        ]),
+          const SizedBox(height: 8),
+        ],
       ),
     );
   }
@@ -560,90 +708,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                   // The top of Home does not scroll, so it takes the swipe
                                   // down that opens search.
                                   if (_arranging)
-                                    _arrangeArea(cats, t)
+                                    PopScope(
+                                      canPop: false,
+                                      onPopInvokedWithResult: (didPop, _) {
+                                        if (!didPop) _stopArranging();
+                                      },
+                                      child: _slider(
+                                          cats, index, activeWidth, current, t),
+                                    )
                                   else
-                                    GestureDetector(
-                                      behavior: HitTestBehavior.translucent,
-                                      onVerticalDragEnd: _onTopVerticalSwipe,
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          SizedBox(
-                                            height: 168,
-                                            child: GestureDetector(
-                                              onHorizontalDragEnd: (d) {
-                                                final v =
-                                                    d.primaryVelocity ?? 0;
-                                                if (v < -200) {
-                                                  if (index < cats.length - 1) {
-                                                    _select(cats[index + 1].id);
-                                                  }
-                                                } else if (v > 200) {
-                                                  if (index > 0) {
-                                                    _select(cats[index - 1].id);
-                                                  } else {
-                                                    // before the first card
-                                                    if (_swipeSearchOn)
-                                                      _openSearch();
-                                                  }
-                                                }
-                                              },
-                                              child: ListView.builder(
-                                                scrollDirection:
-                                                    Axis.horizontal,
-                                                physics:
-                                                    const NeverScrollableScrollPhysics(),
-                                                padding:
-                                                    const EdgeInsets.symmetric(
-                                                        horizontal: 12),
-                                                itemCount: cats.length,
-                                                itemBuilder: (context, i) {
-                                                  final active = i == index;
-                                                  final adjacent =
-                                                      (i - index).abs() == 1;
-                                                  return GestureDetector(
-                                                    onTap: () =>
-                                                        _select(cats[i].id),
-                                                    // Hold: arrange the cards (and
-                                                    // drop a playlist on the bin).
-                                                    onLongPress: () =>
-                                                        _startArranging(cats),
-                                                    child: AnimatedContainer(
-                                                      duration: const Duration(
-                                                          milliseconds: 500),
-                                                      curve:
-                                                          Curves.easeOutCubic,
-                                                      width: active
-                                                          ? activeWidth
-                                                          : (adjacent ? 48 : 0),
-                                                      margin: EdgeInsets.symmetric(
-                                                          horizontal: (active ||
-                                                                  adjacent)
-                                                              ? 6
-                                                              : 0,
-                                                          vertical: 8),
-                                                      child: (active ||
-                                                              adjacent)
-                                                          ? _CategoryCard(
-                                                              icon: _iconFor(
-                                                                  cats[i].id),
-                                                              artUrl: _artFor(
-                                                                  cats[i]),
-                                                              active: active)
-                                                          : const SizedBox
-                                                              .shrink(),
-                                                    ),
-                                                  );
-                                                },
-                                              ),
-                                            ),
-                                          ),
-                                          NoorLinedLabel(current.title),
-                                          const SizedBox(height: 8),
-                                        ],
-                                      ),
-                                    ),
+                                    _slider(
+                                        cats, index, activeWidth, current, t),
 
                                   // ── Songs (ring-wipe reveal when the card changes) ─────────
                                   Expanded(
@@ -797,6 +872,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 ),
               ),
             const Positioned(left: 0, right: 0, bottom: 0, child: MiniPlayer()),
+            // While a playlist is held: the delete area across the top.
+            Positioned(
+                left: 0,
+                right: 0,
+                top: 0,
+                child: _binZone(t, {for (final c in cats) c.id: c})),
+            Positioned.fill(child: _fallingCard()),
           ],
         ),
       ),
@@ -1032,4 +1114,52 @@ class _PhoneAccessPill extends ConsumerWidget {
       ),
     );
   }
+}
+
+/// A bin seen from the front: a tapered body with ribs and a lid hinged on
+/// its right end. [lid] = 0 shut, 1 swung fully open.
+class _BinPainter extends CustomPainter {
+  _BinPainter({required this.lid, required this.color});
+  final double lid;
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width, h = size.height;
+    final line = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+    // Body.
+    final top = h * 0.36, bottom = h * 0.96;
+    final body = Path()
+      ..moveTo(w * 0.18, top)
+      ..lineTo(w * 0.26, bottom)
+      ..lineTo(w * 0.74, bottom)
+      ..lineTo(w * 0.82, top);
+    canvas.drawPath(body, line);
+    for (final x in [0.4, 0.5, 0.6]) {
+      canvas.drawLine(Offset(w * x, top + h * 0.12),
+          Offset(w * (0.5 + (x - 0.5) * 0.9), bottom - h * 0.1), line);
+    }
+    // Lid, turning about its right end.
+    final hinge = Offset(w * 0.88, h * 0.28);
+    canvas.save();
+    canvas.translate(hinge.dx, hinge.dy);
+    canvas.rotate(-1.05 * lid);
+    canvas.translate(-hinge.dx, -hinge.dy);
+    canvas.drawLine(Offset(w * 0.1, h * 0.28), hinge, line);
+    final handle = Path()
+      ..moveTo(w * 0.38, h * 0.28)
+      ..lineTo(w * 0.42, h * 0.16)
+      ..lineTo(w * 0.58, h * 0.16)
+      ..lineTo(w * 0.62, h * 0.28);
+    canvas.drawPath(handle, line);
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(_BinPainter old) => old.lid != lid || old.color != color;
 }
