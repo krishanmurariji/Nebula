@@ -162,6 +162,9 @@ void main() {
 
     testWidgets('My Music without access offers the permission button', (t) async {
       await openHome(t);
+      // History, Favorites, Music: step along to My Music.
+      await t.tap(find.byIcon(Icons.favorite_rounded));
+      await settle(t, 8);
       await t.tap(find.byIcon(Icons.download_done_rounded));
       await settle(t, 20);
       expect(find.bySemanticsLabel('Allow access'), findsOneWidget);

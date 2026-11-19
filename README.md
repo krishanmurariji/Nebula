@@ -72,12 +72,14 @@
 | Home slider | Swipe or tap a side card | Open that list |
 | Home | Swipe down (or pull the list down) | Home sinks away and search drops in |
 | Search box | Type | Your recent searches (clock) and YouTube's suggestions drop down; tap one to search it, tap ↖ to put it in the box and keep typing, swipe a recent one away to forget it |
-| Home, a playlist card | Long press | Delete the playlist (its songs stay in Favorites and History) |
+| Home slider | Hold a card | Arrange the cards: drag to reorder; drop a playlist on the bin to delete it (its songs stay in Favorites and History) |
 | Bottom player | Swipe left / right | Next / previous song: the next card slides in beside it; let go early or drag back to cancel |
 | Player record | Swipe left / right | Next / previous song: the next record slides in under your finger; let go early or drag back to cancel |
 | Player | Swipe down | The song's details drop from the top |
 | Player | Swipe up | Up next rises from the bottom |
 | Anywhere | Back | Closes one layer at a time (menu, actions, search) |
+
+Every swipe that has a button or tap doing the same can be switched off in **Settings → Gestures**. The settings button beside search opens Settings on Home, and the result filters (Best match / Official only / All) while searching.
 
 **Which song comes next?** The list the song belongs to: its playlist first (a song lives in one playlist), then My Favorites, then My History. With nothing else to play, the same song plays again.
 
