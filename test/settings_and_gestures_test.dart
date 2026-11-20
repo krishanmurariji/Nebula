@@ -29,28 +29,33 @@ void main() {
     });
 
     test('an unreadable saved value keeps everything on', () async {
-      SharedPreferences.setMockInitialValues({GestureSettingsNotifier.key: '{bad'});
+      SharedPreferences.setMockInitialValues(
+          {GestureSettingsNotifier.key: '{bad'});
       final n = GestureSettingsNotifier();
       await Future<void>.delayed(Duration.zero);
       expect(n.state, NoorGesture.values.toSet());
     });
 
-    testWidgets('bottom card swipe switched off: dragging does not change the song',
+    testWidgets(
+        'bottom card swipe switched off: dragging does not change the song',
         (t) async {
       final p = await openHome(t,
-          player: NebulaPlayerState(song: songs[0], status: NebulaPlayerStatus.playing),
+          player: NebulaPlayerState(
+              song: songs[0], status: NebulaPlayerStatus.playing),
           prefs: {
             'nebula_history': jsonEncode(songs.map((x) => x.toMap()).toList()),
             GestureSettingsNotifier.key: jsonEncode(['bottomCardSwipe']),
           });
       await t.drag(
-          find.descendant(of: find.byType(MiniPlayer), matching: find.text('Alpha')),
+          find.descendant(
+              of: find.byType(MiniPlayer), matching: find.text('Alpha')),
           const Offset(-220, 0));
       await settle(t, 10);
       expect(p.played, isEmpty);
     });
 
-    testWidgets('swipe-down search switched off: Home stays as it is', (t) async {
+    testWidgets('swipe-down search switched off: Home stays as it is',
+        (t) async {
       await openHome(t, prefs: {
         'nebula_history': jsonEncode(songs.map((x) => x.toMap()).toList()),
         GestureSettingsNotifier.key: jsonEncode(['homeSwipeDownSearch']),
@@ -79,7 +84,9 @@ void main() {
       await openSettings(t);
       final gestures = t.getTopLeft(find.text('Gestures')).dy;
       expect(gestures, lessThan(t.getTopLeft(find.text('Library')).dy));
-      expect(find.byType(NoorToggle), findsNWidgets(NoorGesture.values.length));
+      // One switch per gesture, plus "Play when Noor opens".
+      expect(find.byType(NoorToggle),
+          findsNWidgets(NoorGesture.values.length + 1));
       for (final g in NoorGesture.values) {
         expect(find.text(g.title), findsOneWidget);
       }
@@ -87,7 +94,8 @@ void main() {
 
     testWidgets('a switch turns its gesture off and on again', (t) async {
       await openSettings(t);
-      final c = ProviderScope.containerOf(t.element(find.byType(SettingsScreen)));
+      final c =
+          ProviderScope.containerOf(t.element(find.byType(SettingsScreen)));
       await t.tap(find.byType(NoorToggle).first);
       await t.pump(const Duration(milliseconds: 300));
       expect(c.read(gestureOnProvider(NoorGesture.values.first)), isFalse);
@@ -98,7 +106,8 @@ void main() {
 
     testWidgets('the version line shows what this build really is', (t) async {
       await openSettings(t);
-      final label = t.widget<Text>(find.byKey(const ValueKey('app-version'))).data;
+      final label =
+          t.widget<Text>(find.byKey(const ValueKey('app-version'))).data;
       // Tests run without the release workflow's values.
       expect(label, AppVersion.label);
       expect(label, 'Development build');

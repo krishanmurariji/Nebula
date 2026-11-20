@@ -13,6 +13,7 @@ import 'providers/library_provider.dart';
 import 'theme/noor_palette.dart';
 import 'services/app_log.dart';
 import 'services/audio_handler.dart';
+import 'services/launch_requests.dart';
 
 /// Platforms the audio stack (just_audio + audio_service) really supports.
 bool get isSupportedPlatform {
@@ -91,9 +92,17 @@ class _Bootstrap extends StatefulWidget {
 }
 
 class _BootstrapState extends State<_Bootstrap> {
-  late Future<NebulaAudioHandler> _future = _initAudio();
+  late Future<NebulaAudioHandler> _future = _started(_initAudio());
 
-  void _retry() => setState(() => _future = _initAudio());
+  /// Once the audio service is up: play what Noor was opened for (a voice
+  /// request or a shortcut), or carry on if "Play when Noor opens" is on.
+  static Future<NebulaAudioHandler> _started(Future<NebulaAudioHandler> f) =>
+      f.then((h) {
+        LaunchRequests.start(h);
+        return h;
+      });
+
+  void _retry() => setState(() => _future = _started(_initAudio()));
 
   @override
   Widget build(BuildContext context) {
