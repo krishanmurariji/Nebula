@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:noor/theme/noor_like_burst.dart';
 import 'package:noor/theme/noor_gap_border.dart';
 import 'package:noor/models/song.dart';
 import 'package:noor/providers/player_provider.dart';
@@ -25,7 +26,6 @@ void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
   Finder heartIcon() => find.byIcon(Icons.favorite_rounded);
-  Color heartColor(WidgetTester t) => t.widget<Icon>(heartIcon()).color!;
 
   group('NoorSongCard', () {
     testWidgets('title, artist and the play button; no heart until a double tap', (t) async {
@@ -57,11 +57,18 @@ void main() {
       expect(toggles, 1);
     });
 
-    testWidgets('double tap on an unliked song: a white heart turns red, then fades', (t) async {
+    NoorLikeBurst burst(WidgetTester t) => t.widget<NoorLikeBurst>(find.byType(NoorLikeBurst));
+    bool drawing(WidgetTester t) => find
+        .descendant(of: find.byType(NoorLikeBurst), matching: find.byType(CustomPaint))
+        .evaluate()
+        .isNotEmpty;
+
+    testWidgets('double tap on an unliked song: the like animation plays, then clears', (t) async {
       var likes = 0, plays = 0;
       await t.pumpWidget(host(NoorSongCard(
           thumbnailUrl: '', title: 'A', artist: 'c',
           onTap: () => plays++, onToggleLike: () => likes++)));
+      expect(drawing(t), isFalse); // nothing while idle
       await t.tap(find.text('A'));
       await t.pump(const Duration(milliseconds: 40));
       await t.tap(find.text('A'));
@@ -69,14 +76,14 @@ void main() {
       await t.pump(const Duration(milliseconds: 60));
       expect(likes, 1);
       expect(plays, 0);
-      expect(heartColor(t).value, Colors.white.value);
-      await t.pump(const Duration(milliseconds: 500));
-      expect(heartColor(t).green, lessThan(120)); // red now
-      await t.pump(const Duration(milliseconds: 900));
-      expect(heartIcon(), findsNothing);
+      expect(burst(t).liked, isTrue);
+      expect(burst(t).trigger, 1);
+      expect(drawing(t), isTrue);
+      await t.pump(const Duration(milliseconds: 1000));
+      expect(drawing(t), isFalse);
     });
 
-    testWidgets('double tap on a liked song: a red heart turns white', (t) async {
+    testWidgets('double tap on a liked song: the unlike (breaking heart) plays', (t) async {
       await t.pumpWidget(host(NoorSongCard(
           thumbnailUrl: '', title: 'A', artist: 'c', liked: true, onTap: () {}, onToggleLike: () {})));
       await t.tap(find.text('A'));
@@ -84,10 +91,10 @@ void main() {
       await t.tap(find.text('A'));
       await t.pump();
       await t.pump(const Duration(milliseconds: 60));
-      expect(heartColor(t).green, lessThan(120)); // starts red
-      await t.pump(const Duration(milliseconds: 500));
-      expect(heartColor(t).green, greaterThan(200)); // ends white
-      await t.pump(const Duration(milliseconds: 900));
+      expect(burst(t).liked, isFalse);
+      expect(drawing(t), isTrue);
+      await t.pump(const Duration(milliseconds: 1000));
+      expect(drawing(t), isFalse);
     });
   });
 

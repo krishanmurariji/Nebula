@@ -761,6 +761,16 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
 
   /// [newIndex] is the position after the item has been removed (as the UI
   /// already adjusts it for ReorderableListView).
+  /// Takes [songs] as the new play order (Up next was rearranged), keeping
+  /// the current song playing where it now stands.
+  void setQueueOrder(List<Song> songs) {
+    final current = _current;
+    if (current == null || !songs.contains(current)) return;
+    _queue = List.of(songs);
+    _idx = _queue.indexOf(current);
+    _publishQueue();
+  }
+
   void reorderQueue(int oldIndex, int newIndex) {
     if (oldIndex < 0 || oldIndex >= _queue.length) return;
     final current = _current;

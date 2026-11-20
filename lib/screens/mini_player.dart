@@ -10,6 +10,7 @@ import '../providers/queue_rules.dart';
 import '../screens/player_screen.dart';
 import '../theme/noor_disc.dart';
 import '../theme/noor_gap_border.dart';
+import '../theme/noor_like_burst.dart';
 import '../theme/noor_palette.dart';
 import '../theme/noor_play_pause.dart';
 import '../theme/noor_song_card.dart';
@@ -45,6 +46,10 @@ class _MiniPlayerState extends ConsumerState<MiniPlayer>
       AnimationController.unbounded(vsync: this);
   double _width = 360;
   bool _changing = false;
+
+  /// Bumped on each double tap: the shared like / unlike animation.
+  int _likeTick = 0;
+  bool _becomingLiked = true;
 
   @override
   void dispose() {
@@ -96,8 +101,7 @@ class _MiniPlayerState extends ConsumerState<MiniPlayer>
 
   void _openPlayer() => widget.onOpen != null
       ? widget.onOpen!()
-      : Navigator.push(
-          context, MaterialPageRoute(builder: (_) => const PlayerScreen()));
+      : Navigator.push(context, PlayerRoute()); // pops out of the bottom card
 
   List<Song> _context(Song s) => contextListFor(s,
       playlists: ref.read(playlistProvider),
@@ -171,6 +175,10 @@ class _MiniPlayerState extends ConsumerState<MiniPlayer>
             onTap: _openPlayer,
             onDoubleTap: () {
               HapticFeedback.mediumImpact();
+              setState(() {
+                _becomingLiked = !ref.read(isLikedProvider(song.videoId));
+                _likeTick++;
+              });
               ref.read(likedProvider.notifier).toggle(song);
             },
             // Each gesture can be switched off in Settings (the buttons
@@ -213,6 +221,17 @@ class _MiniPlayerState extends ConsumerState<MiniPlayer>
                     Transform.translate(
                       offset: Offset(x, 0),
                       child: Opacity(opacity: 1 - p * 0.3, child: card),
+                    ),
+                    // Double tap: the same like / unlike animation as
+                    // everywhere else.
+                    Positioned.fill(
+                      child: OverflowBox(
+                        maxHeight: 140,
+                        child: NoorLikeBurst(
+                            trigger: _likeTick,
+                            liked: _becomingLiked,
+                            size: 38),
+                      ),
                     ),
                   ],
                 );

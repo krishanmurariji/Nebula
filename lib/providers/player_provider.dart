@@ -215,6 +215,13 @@ class PlayerNotifier extends StateNotifier<NebulaPlayerState> {
     }
   }
 
+  /// The list the current song plays from was rearranged: what plays next
+  /// follows the new order.
+  Future<void> setQueueOrder(List<Song> songs) async {
+    _handler.setQueueOrder(songs);
+    _syncQueue();
+  }
+
   /// [newIndex] is the position after removal (the UI already adjusts it).
   Future<void> reorderQueue(int oldIndex, int newIndex) async {
     _handler.reorderQueue(oldIndex, newIndex);

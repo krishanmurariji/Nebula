@@ -57,6 +57,17 @@ final likedSongsProvider = likedProvider;
 final isLikedProvider = Provider.family<bool, String>(
     (ref, id) => ref.watch(likedProvider).any((s) => s.videoId == id));
 
+/// [list] with the song [videoId] moved to [to] (an index in the list as it
+/// is before the move, the way a dragged row reports it).
+List<Song> moveSongInList(List<Song> list, String videoId, int to) {
+  final from = list.indexWhere((s) => s.videoId == videoId);
+  if (from < 0) return list;
+  final out = [...list];
+  final song = out.removeAt(from);
+  out.insert(to.clamp(0, out.length), song);
+  return out;
+}
+
 class LikedNotifier extends StateNotifier<List<Song>> {
   LikedNotifier() : super([]) {
     loaded = _load();
@@ -73,6 +84,12 @@ class LikedNotifier extends StateNotifier<List<Song>> {
     if (!mounted) return;
     // Merge: keep anything the user liked while this was still loading.
     state = [...state, ...loaded.where((s) => !state.contains(s))];
+  }
+
+  /// Moves a song within My Favorites (Up next: hold and drag).
+  Future<void> move(String videoId, int to) async {
+    state = moveSongInList(state, videoId, to);
+    await _save();
   }
 
   Future<void> _save() async {
@@ -159,6 +176,17 @@ class PlaylistNotifier extends StateNotifier<List<Playlist>> {
         onCorrupt: (_) => _backupCorrupt(p, _kPlaylists, raw));
     if (!mounted) return;
     state = [...state, ...loaded.where((l) => !state.any((s) => s.id == l.id))];
+  }
+
+  /// Moves a song within a playlist (Up next: hold and drag).
+  Future<void> moveSong(String playlistId, String videoId, int to) async {
+    state = [
+      for (final p in state)
+        p.id == playlistId
+            ? p.copyWith(songs: moveSongInList(p.songs, videoId, to))
+            : p
+    ];
+    await _save();
   }
 
   Future<void> _save() async {
@@ -265,6 +293,12 @@ class HistoryNotifier extends StateNotifier<List<Song>> {
     state = [...state, ...loaded.where((s) => !state.contains(s))]
         .take(30)
         .toList();
+  }
+
+  /// Moves a song within My History (Up next: hold and drag).
+  Future<void> move(String videoId, int to) async {
+    state = moveSongInList(state, videoId, to);
+    await _save();
   }
 
   Future<void> _save() async {

@@ -14,6 +14,7 @@ import '../services/song_details.dart';
 import '../theme/noor_palette.dart';
 import '../theme/noor_play_pause.dart';
 import '../theme/noor_search_button.dart';
+import '../theme/noor_like_burst.dart';
 import '../theme/noor_song_card.dart';
 import '../theme/noor_turntable.dart';
 import '../theme/noor_widgets.dart';
@@ -42,6 +43,45 @@ class _SlideUpRoute extends PageRouteBuilder {
                     reverseCurve: Curves.easeInCubic)),
             child: child,
           ),
+        );
+}
+
+/// Opens the player as if it pops out of the bottom card: it rises from
+/// the bottom, growing from slightly smaller with rounded corners into the
+/// full page (and sinks back the same way when closed).
+class PlayerRoute extends PageRouteBuilder<void> {
+  PlayerRoute()
+      : super(
+          pageBuilder: (_, __, ___) => const PlayerScreen(),
+          transitionDuration: const Duration(milliseconds: 460),
+          reverseTransitionDuration: const Duration(milliseconds: 340),
+          transitionsBuilder: (context, anim, _, child) {
+            final c = CurvedAnimation(
+                parent: anim,
+                curve: Curves.easeOutCubic,
+                reverseCurve: Curves.easeInCubic);
+            return AnimatedBuilder(
+              animation: c,
+              child: child,
+              builder: (context, child) {
+                final v = c.value;
+                return FractionalTranslation(
+                  translation: Offset(0, 0.35 * (1 - v)),
+                  child: Transform.scale(
+                    scale: 0.86 + 0.14 * v,
+                    alignment: Alignment.bottomCenter,
+                    child: Opacity(
+                      opacity: (v * 1.6).clamp(0.0, 1.0),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(36 * (1 - v)),
+                        child: child,
+                      ),
+                    ),
+                  ),
+                );
+              },
+            );
+          },
         );
 }
 
@@ -79,8 +119,8 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
   static const double _travel = 1.25;
   double _recordSize = 300;
 
-  late final AnimationController _heartCtrl = AnimationController(
-      vsync: this, duration: const Duration(milliseconds: 900));
+  /// Bumped on each like / unlike: plays the shared heart animation.
+  int _likeTick = 0;
   bool _heartBecomingLiked = true;
 
   bool _shuffle = false;
@@ -124,7 +164,6 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
   @override
   void dispose() {
     _swipe.dispose();
-    _heartCtrl.dispose();
     _listPanelCtrl.dispose();
     _namePanelCtrl.dispose();
     _nameCtrl.dispose();
@@ -238,9 +277,11 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
 
   void _toggleLike(Song song, bool liked) {
     HapticFeedback.mediumImpact();
-    _heartBecomingLiked = !liked;
+    setState(() {
+      _heartBecomingLiked = !liked;
+      _likeTick++;
+    });
     ref.read(likedProvider.notifier).toggle(song);
-    _heartCtrl.forward(from: 0);
   }
 
   void _applyMode() {
@@ -663,35 +704,8 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
 
   /// Heart shown over the turntable on double tap: an empty heart turns red
   /// when liking, a red heart turns empty when unliking.
-  Widget _heartBurst() => IgnorePointer(
-        child: AnimatedBuilder(
-          animation: _heartCtrl,
-          builder: (context, _) {
-            final v = _heartCtrl.value;
-            if (v == 0 || v == 1) return const SizedBox.shrink();
-            final mix =
-                Curves.easeInOut.transform(((v - 0.25) / 0.3).clamp(0.0, 1.0));
-            final fill = _heartBecomingLiked ? mix : 1 - mix;
-            final scale = 0.4 +
-                0.8 * Curves.easeOutBack.transform((v / 0.3).clamp(0.0, 1.0));
-            final opacity =
-                v < 0.7 ? 1.0 : (1 - (v - 0.7) / 0.3).clamp(0.0, 1.0);
-            return Opacity(
-              opacity: opacity,
-              child: Transform.scale(
-                scale: scale,
-                child: Icon(Icons.favorite_rounded,
-                    size: 84,
-                    color:
-                        Color.lerp(Colors.white, const Color(0xFFE5393F), fill),
-                    shadows: const [
-                      Shadow(color: Colors.black38, blurRadius: 18)
-                    ]),
-              ),
-            );
-          },
-        ),
-      );
+  Widget _heartBurst() =>
+      NoorLikeBurst(trigger: _likeTick, liked: _heartBecomingLiked, size: 110);
 
   String _fmt(Duration d) {
     final m = d.inMinutes.remainder(60).toString().padLeft(2, '0');

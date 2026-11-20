@@ -15,6 +15,7 @@ import '../providers/library_provider.dart';
 import '../providers/player_provider.dart';
 import '../theme/noor_palette.dart';
 import '../theme/noor_song_card.dart';
+import '../theme/noor_like_burst.dart';
 import 'song_details_panel.dart';
 
 /// Which song row has its actions open (only one at a time). Holds the
@@ -68,7 +69,12 @@ class NoorSongRow extends ConsumerStatefulWidget {
     this.playing = false,
     this.loading = false,
     this.expandable = false,
+    this.actions = true,
   });
+
+  /// False where a hold means something else (Up next: hold to move the
+  /// song): no swipe-left actions and no long press.
+  final bool actions;
 
   /// Search results: a tap on the card (not its play button) grows it to
   /// show the song's details, and a tap folds it again.
@@ -224,8 +230,16 @@ class _NoorSongRowState extends ConsumerState<NoorSongRow>
 
   // ── Actions ───────────────────────────────────────────────────────────────
 
+  /// The Like button beside the card plays the shared heart animation.
+  int _likeTick = 0;
+  bool _becomingLiked = true;
+
   void _toggleLike() {
     HapticFeedback.mediumImpact();
+    setState(() {
+      _becomingLiked = !ref.read(isLikedProvider(widget.song.videoId));
+      _likeTick++;
+    });
     ref.read(likedProvider.notifier).toggle(widget.song);
   }
 
@@ -539,8 +553,9 @@ class _NoorSongRowState extends ConsumerState<NoorSongRow>
           gestures: {
             // "Swipe a song left" can be switched off in Settings; a long
             // press still opens the actions.
-            if (_stage != _Stage.closed ||
-                ref.watch(gestureOnProvider(NoorGesture.songCardSwipe)))
+            if (widget.actions &&
+                (_stage != _Stage.closed ||
+                    ref.watch(gestureOnProvider(NoorGesture.songCardSwipe))))
               _LeftSwipeRecognizer:
                   GestureRecognizerFactoryWithHandlers<_LeftSwipeRecognizer>(
                 () => _LeftSwipeRecognizer(debugOwner: this),
@@ -579,7 +594,8 @@ class _NoorSongRowState extends ConsumerState<NoorSongRow>
                       : (needsNet ? _needsInternet : widget.onTap),
               onPlayPause: needsNet ? _needsInternet : widget.onPlayPause,
               onToggleLike: _stage == _Stage.closed ? _toggleLike : null,
-              onLongPress: _stage == _Stage.closed ? _open : null,
+              onLongPress:
+                  _stage == _Stage.closed && widget.actions ? _open : null,
             ),
           ),
         ),
@@ -610,14 +626,24 @@ class _NoorSongRowState extends ConsumerState<NoorSongRow>
               left: gap,
               child: _fade(
                 !naming,
-                _CircleAction(
-                  icon: liked
-                      ? Icons.favorite_rounded
-                      : Icons.favorite_border_rounded,
-                  label: liked ? 'Unlike' : 'Like',
-                  filled: liked,
-                  onTap: _toggleLike,
-                ),
+                Stack(clipBehavior: Clip.none, children: [
+                  _CircleAction(
+                    icon: liked
+                        ? Icons.favorite_rounded
+                        : Icons.favorite_border_rounded,
+                    label: liked ? 'Unlike' : 'Like',
+                    filled: liked,
+                    onTap: _toggleLike,
+                  ),
+                  Positioned.fill(
+                    child: OverflowBox(
+                      maxWidth: 110,
+                      maxHeight: 110,
+                      child: NoorLikeBurst(
+                          trigger: _likeTick, liked: _becomingLiked, size: 30),
+                    ),
+                  ),
+                ]),
               ),
             ),
             Positioned(
