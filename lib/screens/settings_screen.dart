@@ -6,7 +6,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import 'package:shared_preferences/shared_preferences.dart';
+
 import '../app_version.dart';
+import '../services/launch_requests.dart';
 import '../providers/gesture_settings_provider.dart';
 import '../providers/library_provider.dart';
 import '../theme/noor_palette.dart';
@@ -64,6 +67,63 @@ class SettingsScreen extends ConsumerWidget {
     if (context.mounted) {
       NoorToast.show(context, 'History cleared');
     }
+  }
+
+  /// How to use Noor by voice: what to say, and the Bixby quick command.
+  void _voiceHelp(BuildContext context) {
+    final t = NoorTheme.of(context);
+    Widget say(String text) => Padding(
+          padding: const EdgeInsets.symmetric(vertical: 3),
+          child: Text('“$text”',
+              style: TextStyle(
+                  color: t.ac, fontSize: 14, fontWeight: FontWeight.w600)),
+        );
+    Widget note(String text) => Padding(
+          padding: const EdgeInsets.only(top: 8, bottom: 4),
+          child: Text(text,
+              style: TextStyle(color: t.mute, fontSize: 12.5, height: 1.35)),
+        );
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: t.bg,
+      isScrollControlled: true,
+      shape: RoundedRectangleBorder(
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+          side: BorderSide(color: t.ac, width: 0.8)),
+      builder: (ctx) => SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(22, 18, 22, 22),
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Center(
+                child: Text('Voice commands',
+                    style: noorSongTitleStyle(t.ac, size: 26))),
+            const SizedBox(height: 10),
+            const _Section('Google Assistant or Gemini'),
+            say('Play Kesariya on Noor'),
+            say('Play my favorites on Noor'),
+            say('Shuffle my Road Trip playlist on Noor'),
+            say('Play my history on Noor'),
+            say('Play music on Noor'),
+            note(
+                'Saying “on Noor” sends the request to Noor. While a song plays, '
+                '“pause”, “next song” and “previous song” work with any assistant.'),
+            const SizedBox(height: 14),
+            const _Section('Bixby'),
+            note(
+                'Bixby only plays music in its partner apps, so it asks for Spotify. '
+                'Instead, make a quick command: Bixby settings → Quick commands → add '
+                '“Noor” with the action “Open Noor”, and turn on “Play when Noor opens” '
+                'above. Saying “Noor” then opens Noor and carries on playing.'),
+            const SizedBox(height: 14),
+            const _Section('Shortcuts'),
+            note(
+                'Hold the Noor icon on the home screen for Play, Favorites and '
+                'History. Drag one onto the home screen to keep it there.'),
+          ]),
+        ),
+      ),
+    );
   }
 
   @override
@@ -130,6 +190,33 @@ class SettingsScreen extends ConsumerWidget {
                         .read(gestureSettingsProvider.notifier)
                         .set(g, !on.contains(g)),
                   ),
+              ]),
+              const SizedBox(height: 26),
+
+              // ── Voice & start ────────────────────────────────────────────
+              const _Section('Voice & start'),
+              _Card(children: [
+                _Row(
+                  icon: Icons.play_circle_outline_rounded,
+                  title: 'Play when Noor opens',
+                  subtitle:
+                      'Carry on with the last song as soon as Noor starts',
+                  trailing: NoorToggle(
+                    value: ref.watch(playOnOpenProvider),
+                    label: 'Play when Noor opens',
+                    onChanged: (v) =>
+                        ref.read(playOnOpenProvider.notifier).set(v),
+                  ),
+                  onTap: () => ref
+                      .read(playOnOpenProvider.notifier)
+                      .set(!ref.read(playOnOpenProvider)),
+                ),
+                _Row(
+                  icon: Icons.mic_none_rounded,
+                  title: 'Voice commands',
+                  subtitle: 'Google Assistant, Gemini and Bixby',
+                  onTap: () => _voiceHelp(context),
+                ),
               ]),
               const SizedBox(height: 26),
 
@@ -245,6 +332,26 @@ class SettingsScreen extends ConsumerWidget {
     );
   }
 }
+
+/// "Play when Noor opens" (kept on the phone).
+class PlayOnOpenNotifier extends StateNotifier<bool> {
+  PlayOnOpenNotifier() : super(false) {
+    SharedPreferences.getInstance()
+        .then((p) => state = p.getBool(kPlayOnOpenKey) ?? false)
+        .catchError((_) => false);
+  }
+
+  Future<void> set(bool on) async {
+    state = on;
+    try {
+      final p = await SharedPreferences.getInstance();
+      await p.setBool(kPlayOnOpenKey, on);
+    } catch (_) {}
+  }
+}
+
+final playOnOpenProvider = StateNotifierProvider<PlayOnOpenNotifier, bool>(
+    (ref) => PlayOnOpenNotifier());
 
 /// A section title between two thin lines.
 class _Section extends StatelessWidget {

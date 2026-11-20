@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="shortcut_resume">Play</string>
+    <string name="shortcut_resume_long">Carry on playing</string>
+    <string name="shortcut_favorites">Favorites</string>
+    <string name="shortcut_favorites_long">Shuffle my favorites</string>
+    <string name="shortcut_history">History</string>
+    <string name="shortcut_history_long">Play my history</string>
+</resources>

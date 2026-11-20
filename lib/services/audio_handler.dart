@@ -1,3 +1,7 @@
+import 'dart:math' as math;
+import 'package:flutter/services.dart';
+import 'youtube_search_service.dart';
+import 'voice_requests.dart';
 import 'dart:async';
 import 'dart:io';
 import 'dart:math';
@@ -262,6 +266,82 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
   int get cacheSizeBytes => _cache?.totalBytes ?? 0;
   PlayMode get playMode => _playMode;
   int get globalCooldownSeconds => _resolver.globalCooldownSeconds;
+
+  // ── Voice requests ────────────────────────────────────────────────────────
+
+  late final VoiceRequestResolver _voice = VoiceRequestResolver(
+    searchYoutube: (q) => YoutubeSearchService().searchSongs(q),
+    phoneSongs: _phoneSongs,
+  );
+
+  /// The phone's own music (only readable while the Noor screen is open).
+  Future<List<Song>> _phoneSongs() async {
+    const channel = MethodChannel('noor/local_music');
+    final raw = await channel.invokeListMethod<Map>('list') ?? const [];
+    return [
+      for (final m in raw)
+        if (m['id'] is num && m['uri'] is String)
+          Song(
+            videoId: 'local_${m['id']}',
+            title: (m['title'] as String?) ?? 'Unknown',
+            artist: (m['artist'] as String?) ?? '',
+            thumbnailUrl: 'localart://${m['id']}',
+            localUri: m['uri'] as String,
+          ),
+    ];
+  }
+
+  /// "Play Kesariya on Noor", "play my favorites", "shuffle my Road Trip
+  /// playlist", or nothing at all (carry on): from Google Assistant /
+  /// Gemini, a home-screen shortcut, or "play when Noor opens".
+  @override
+  Future<void> playFromSearch(String query,
+      [Map<String, dynamic>? extras]) async {
+    nlog('[N] voice: "$query"');
+    final r = await _voice.resolve(query);
+    if (r == null) {
+      _notices.add(query.trim().isEmpty
+          ? 'Nothing to play yet. Search for a song first.'
+          : 'Could not find "${query.trim()}".');
+      return;
+    }
+    if (r.shuffle) setPlayMode(PlayMode.shuffle);
+    final start = r.shuffle && r.queue.length > 1
+        ? math.Random().nextInt(r.queue.length)
+        : r.start;
+    nlog(
+        '[N] voice → ${r.label} (${r.queue.length} songs${r.shuffle ? ', shuffled' : ''})');
+    _notices.add('Playing ${r.label}');
+    await playSong(r.queue[start], queue: r.queue, index: start);
+  }
+
+  @override
+  Future<void> prepareFromSearch(String query,
+          [Map<String, dynamic>? extras]) =>
+      playFromSearch(query, extras);
+
+  @override
+  Future<void> setShuffleMode(AudioServiceShuffleMode shuffleMode) async {
+    setPlayMode(shuffleMode == AudioServiceShuffleMode.none
+        ? PlayMode.repeatAll
+        : PlayMode.shuffle);
+    playbackState.add(playbackState.value.copyWith(shuffleMode: shuffleMode));
+  }
+
+  @override
+  Future<void> setRepeatMode(AudioServiceRepeatMode repeatMode) async {
+    setPlayMode(repeatMode == AudioServiceRepeatMode.one
+        ? PlayMode.repeatOne
+        : PlayMode.repeatAll);
+    playbackState.add(playbackState.value.copyWith(repeatMode: repeatMode));
+  }
+
+  @override
+  Future<void> fastForward() =>
+      seek(_player.position + const Duration(seconds: 30));
+
+  @override
+  Future<void> rewind() => seek(_player.position - const Duration(seconds: 10));
 
   void setPlayMode(PlayMode mode) {
     _playMode = mode;
@@ -830,10 +910,18 @@ class NebulaAudioHandler extends BaseAudioHandler with SeekHandler {
         if (playing) MediaControl.pause else MediaControl.play,
         MediaControl.skipToNext,
       ],
+      // What voice assistants (Google Assistant, Gemini) and car / watch
+      // controls may ask of Noor.
       systemActions: const {
         MediaAction.seek,
         MediaAction.skipToNext,
         MediaAction.skipToPrevious,
+        MediaAction.playFromSearch,
+        MediaAction.prepareFromSearch,
+        MediaAction.setShuffleMode,
+        MediaAction.setRepeatMode,
+        MediaAction.fastForward,
+        MediaAction.rewind,
       },
       androidCompactActionIndices: const [0, 1, 2],
       processingState: switching

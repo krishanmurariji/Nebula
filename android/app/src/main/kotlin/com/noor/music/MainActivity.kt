@@ -1,6 +1,9 @@
 package com.noor.music
 
+import android.app.SearchManager
 import android.content.ContentUris
+import android.content.Intent
+import android.os.Bundle
 import android.graphics.Bitmap
 import android.os.Build
 import android.os.Handler
@@ -28,8 +31,48 @@ class MainActivity : AudioServiceActivity() {
     private val io = Executors.newSingleThreadExecutor()
     private val main = Handler(Looper.getMainLooper())
 
+    /// What Noor was asked to play when it was opened: a voice request
+    /// ("play X on Noor" sends MEDIA_PLAY_FROM_SEARCH) or a home-screen
+    /// shortcut (noor://play?q=..., noor://resume). Flutter takes it once.
+    private var pendingPlay: String? = null
+    private var launch: MethodChannel? = null
+
+    private fun playRequestOf(intent: Intent?): String? {
+        if (intent == null) return null
+        if (intent.action == MediaStore.INTENT_ACTION_MEDIA_PLAY_FROM_SEARCH) {
+            return intent.getStringExtra(SearchManager.QUERY) ?: ""
+        }
+        val data = intent.data ?: return null
+        if (data.scheme != "noor") return null
+        return when (data.host) {
+            "resume" -> ""
+            "play" -> data.getQueryParameter("q") ?: ""
+            else -> null
+        }
+    }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        pendingPlay = playRequestOf(intent)
+        super.onCreate(savedInstanceState)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        val q = playRequestOf(intent) ?: return
+        // Already running: hand it straight to Flutter.
+        launch?.invokeMethod("play", q) ?: run { pendingPlay = q }
+    }
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        launch = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "noor/launch").also {
+            it.setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "take" -> { result.success(pendingPlay); pendingPlay = null }
+                    else -> result.notImplemented()
+                }
+            }
+        }
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "noor/local_music")
             .setMethodCallHandler { call, result ->
                 when (call.method) {

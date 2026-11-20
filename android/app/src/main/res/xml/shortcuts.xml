@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Long-press the Noor icon (or add these to the home screen). -->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="resume"
+        android:enabled="true"
+        android:icon="@mipmap/launcher_icon"
+        android:shortcutShortLabel="@string/shortcut_resume"
+        android:shortcutLongLabel="@string/shortcut_resume_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.noor.music"
+            android:targetClass="com.noor.music.MainActivity"
+            android:data="noor://resume" />
+    </shortcut>
+    <shortcut
+        android:shortcutId="favorites"
+        android:enabled="true"
+        android:icon="@mipmap/launcher_icon"
+        android:shortcutShortLabel="@string/shortcut_favorites"
+        android:shortcutLongLabel="@string/shortcut_favorites_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.noor.music"
+            android:targetClass="com.noor.music.MainActivity"
+            android:data="noor://play?q=shuffle%20my%20favorites" />
+    </shortcut>
+    <shortcut
+        android:shortcutId="history"
+        android:enabled="true"
+        android:icon="@mipmap/launcher_icon"
+        android:shortcutShortLabel="@string/shortcut_history"
+        android:shortcutLongLabel="@string/shortcut_history_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.noor.music"
+            android:targetClass="com.noor.music.MainActivity"
+            android:data="noor://play?q=my%20history" />
+    </shortcut>
+</shortcuts>
