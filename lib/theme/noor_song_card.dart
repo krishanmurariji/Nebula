@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'noor_disc.dart';
 import 'noor_gap_border.dart';
+import 'noor_like_burst.dart';
 import 'noor_palette.dart';
 import 'noor_play_pause.dart';
 
@@ -78,14 +79,13 @@ class NoorSongCard extends StatefulWidget {
   State<NoorSongCard> createState() => _NoorSongCardState();
 }
 
-const Color _likeRed = Color(0xFFE5393F);
-
 class _NoorSongCardState extends State<NoorSongCard>
     with TickerProviderStateMixin {
   late final AnimationController _spin =
       AnimationController(vsync: this, duration: const Duration(seconds: 8));
-  late final AnimationController _heart = AnimationController(
-      vsync: this, duration: const Duration(milliseconds: 1000));
+
+  /// Bumped on each double tap: plays the shared like / unlike animation.
+  int _likeTick = 0;
   bool _becomingLiked = true;
 
   /// The finger is on the card: it dips a little at once, so a tap never
@@ -131,51 +131,16 @@ class _NoorSongCardState extends State<NoorSongCard>
   void dispose() {
     _releaseTimer?.cancel();
     _spin.dispose();
-    _heart.dispose();
     super.dispose();
   }
 
   void _doubleTap() {
-    _becomingLiked = !widget.liked;
-    _heart.forward(from: 0);
+    setState(() {
+      _becomingLiked = !widget.liked;
+      _likeTick++;
+    });
     widget.onToggleLike?.call();
   }
-
-  Widget _burst(NoorTheme t) => Positioned.fill(
-        child: IgnorePointer(
-          child: AnimatedBuilder(
-            animation: _heart,
-            builder: (context, _) {
-              final v = _heart.value;
-              if (v == 0 || v == 1) return const SizedBox.shrink();
-              final mix = Curves.easeInOut
-                  .transform(((v - 0.28) / 0.3).clamp(0.0, 1.0));
-              // 0 = empty heart, 1 = red heart
-              final fill = _becomingLiked ? mix : 1 - mix;
-              final scale = 0.35 +
-                  0.85 *
-                      Curves.easeOutBack.transform((v / 0.3).clamp(0.0, 1.0));
-              final opacity =
-                  v < 0.72 ? 1.0 : (1 - (v - 0.72) / 0.28).clamp(0.0, 1.0);
-              return Center(
-                child: Opacity(
-                  opacity: opacity,
-                  child: Transform.scale(
-                    scale: scale,
-                    child: Stack(alignment: Alignment.center, children: [
-                      Icon(Icons.favorite_rounded,
-                          size: 44,
-                          color: Color.lerp(Colors.white, _likeRed, fill)),
-                      Icon(Icons.favorite_border_rounded,
-                          size: 44, color: Color.lerp(t.ac, _likeRed, fill)),
-                    ]),
-                  ),
-                ),
-              );
-            },
-          ),
-        ),
-      );
 
   @override
   Widget build(BuildContext context) {
@@ -275,7 +240,10 @@ class _NoorSongCardState extends State<NoorSongCard>
               ),
             ),
           ),
-          _burst(t),
+          Positioned.fill(
+            child: NoorLikeBurst(
+                trigger: _likeTick, liked: _becomingLiked, size: 40),
+          ),
         ],
       ),
     );

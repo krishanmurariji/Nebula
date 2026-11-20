@@ -2,6 +2,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../models/song.dart';
 import '../providers/library_provider.dart';
 import '../providers/player_provider.dart';
 import '../providers/queue_rules.dart';
@@ -12,9 +13,36 @@ import '../widgets/song_row.dart';
 /// Up next, rising from the bottom of the player. It lists the list the
 /// playing song belongs to: its playlist (with the playlist's name), else My
 /// Favorites, else My History (just the song itself when nothing has been
-/// played before).
+/// played before). Hold a song and drag it to change the order.
 class UpNextScreen extends ConsumerWidget {
   const UpNextScreen({super.key});
+
+  /// A song was dragged from [from] to [to] (ReorderableListView's indexes):
+  /// rearranges the list it belongs to (the playlist, My Favorites or My
+  /// History) and tells the player the new order.
+  Future<void> _move(
+      WidgetRef ref, Song current, List<Song> list, int from, int to) async {
+    if (to > from) to -= 1;
+    if (from == to || from < 0 || from >= list.length) return;
+    HapticFeedback.selectionClick();
+    final id = list[from].videoId;
+    final source = contextSourceFor(current,
+        playlists: ref.read(playlistProvider),
+        liked: ref.read(likedSongsProvider));
+    switch (source.kind) {
+      case 'playlist':
+        await ref
+            .read(playlistProvider.notifier)
+            .moveSong(source.playlistId!, id, to);
+      case 'liked':
+        await ref.read(likedProvider.notifier).move(id, to);
+      default:
+        await ref.read(historyProvider.notifier).move(id, to);
+    }
+    await ref
+        .read(playerProvider.notifier)
+        .setQueueOrder(moveSongInList(list, id, to));
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -99,11 +127,35 @@ class UpNextScreen extends ConsumerWidget {
                                       style: TextStyle(
                                           color: t.ac,
                                           fontWeight: FontWeight.w600)))
-                              : ListView.builder(
+                              // Hold a song and drag it: the list it
+                              // comes from is rearranged, and what plays
+                              // next follows.
+                              : ReorderableListView.builder(
                                   padding:
                                       const EdgeInsets.fromLTRB(0, 4, 0, 30),
                                   physics: const BouncingScrollPhysics(),
                                   itemCount: list.length,
+                                  proxyDecorator: (child, _, anim) =>
+                                      AnimatedBuilder(
+                                    animation: anim,
+                                    builder: (_, c) => Transform.scale(
+                                      scale: 1 +
+                                          0.04 *
+                                              Curves.easeOut
+                                                  .transform(anim.value),
+                                      child: Material(
+                                        color: Colors.transparent,
+                                        elevation: 6 * anim.value,
+                                        shadowColor: t.ac.withOpacity(0.35),
+                                        borderRadius: BorderRadius.circular(
+                                            kNoorCardRadius),
+                                        child: c,
+                                      ),
+                                    ),
+                                    child: child,
+                                  ),
+                                  onReorder: (from, to) =>
+                                      _move(ref, song!, list.cast(), from, to),
                                   itemBuilder: (_, i) {
                                     final s = list[i];
                                     final isCurrent =
@@ -124,6 +176,7 @@ class UpNextScreen extends ConsumerWidget {
                                     return NoorSongRow(
                                       key: ValueKey('upnext_${s.videoId}'),
                                       song: s,
+                                      actions: false,
                                       current: isCurrent,
                                       playing: isCurrent &&
                                           ps.status ==

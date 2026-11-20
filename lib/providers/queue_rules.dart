@@ -58,3 +58,18 @@ String contextTitleFor(
   if (has(history)) return 'My History';
   return 'My History';
 }
+
+/// Which list [contextListFor] picks for [song], as a kind and (for a
+/// playlist) its id, so Up next can rearrange that very list.
+({String kind, String? playlistId}) contextSourceFor(
+  Song song, {
+  required List<Playlist> playlists,
+  required List<Song> liked,
+}) {
+  bool has(List<Song> l) => l.any((s) => s.videoId == song.videoId);
+  for (final p in playlists) {
+    if (has(p.songs)) return (kind: 'playlist', playlistId: p.id);
+  }
+  if (has(liked)) return (kind: 'liked', playlistId: null);
+  return (kind: 'history', playlistId: null);
+}
