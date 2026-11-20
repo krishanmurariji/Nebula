@@ -8,6 +8,7 @@ import android.graphics.Bitmap
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.provider.MediaStore
 import android.util.Size
 import com.ryanheise.audioservice.AudioServiceActivity
@@ -51,16 +52,56 @@ class MainActivity : AudioServiceActivity() {
         }
     }
 
+    /// How Noor was opened, for the playback log (which app asked, and how).
+    private var openedBy: String = ""
+
+    private fun describe(intent: Intent?): String {
+        if (intent == null) return "no intent"
+        val keys = intent.extras?.keySet()?.joinToString(",") ?: ""
+        return "action=${intent.action} data=${intent.data} from=${referrer?.host} extras=[$keys]"
+    }
+
+    // Coming back to the front while already running: Gemini's "open Noor",
+    // the app icon or the recents screen only bring the app forward, with no
+    // new intent. onResume tells Flutter, which plays if "Play when Noor
+    // opens" is on (an explicit request in onNewIntent wins instead).
+    private var stoppedAt = 0L
+    private var returning = false
+    private var askedOnReturn = false
+
     override fun onCreate(savedInstanceState: Bundle?) {
         pendingPlay = playRequestOf(intent)
+        openedBy = describe(intent)
         super.onCreate(savedInstanceState)
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        openedBy = describe(intent)
         val q = playRequestOf(intent) ?: return
+        askedOnReturn = true
         // Already running: hand it straight to Flutter.
         launch?.invokeMethod("play", q) ?: run { pendingPlay = q }
+    }
+
+    override fun onStop() {
+        super.onStop()
+        stoppedAt = SystemClock.elapsedRealtime()
+    }
+
+    override fun onRestart() {
+        super.onRestart()
+        returning = true
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (returning && !askedOnReturn) {
+            val away = (SystemClock.elapsedRealtime() - stoppedAt) / 1000
+            launch?.invokeMethod("opened", mapOf("away" to away, "how" to openedBy))
+        }
+        returning = false
+        askedOnReturn = false
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -69,6 +110,7 @@ class MainActivity : AudioServiceActivity() {
             it.setMethodCallHandler { call, result ->
                 when (call.method) {
                     "take" -> { result.success(pendingPlay); pendingPlay = null }
+                    "how" -> result.success(openedBy)
                     else -> result.notImplemented()
                 }
             }

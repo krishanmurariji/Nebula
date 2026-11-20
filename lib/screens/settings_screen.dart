@@ -106,8 +106,10 @@ class SettingsScreen extends ConsumerWidget {
             say('Play my history on Noor'),
             say('Play music on Noor'),
             note(
-                'Saying “on Noor” sends the request to Noor. While a song plays, '
-                '“pause”, “next song” and “previous song” work with any assistant.'),
+                'Google Assistant sends these straight to Noor. Gemini only plays '
+                'songs in its own partner apps, so with Gemini say “Open Noor”: with '
+                '“Play when Noor opens” on, Noor carries on playing. While a song '
+                'plays, “pause”, “next song” and “previous song” work with any assistant.'),
             const SizedBox(height: 14),
             const _Section('Bixby'),
             note(
